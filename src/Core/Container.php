@@ -288,7 +288,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * 调用反射执行方法，支持依赖注入。
    *
    * @access public
-   * @param array|string $method 方法[class,method]|class::method
+   * @param array|string $method 方法[object|class,method]|class::method
    * @param array $params 参数
    * @return mixed
    * @throws NotFoundException
