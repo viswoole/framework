@@ -17,7 +17,7 @@ namespace Viswoole\Core\Service;
 
 use ViSwoole\Core\App;
 
-abstract class ServiceProvider
+abstract class Provider
 {
   /**
    * @var string[] 重写该属性，可批量注册服务
