@@ -38,15 +38,10 @@ class Env implements ArrayAccess
     'on' => true,
   ];
 
-  /**
-   * 环境变量管理类构造函数
-   *
-   * @param string $envPath 环境变量定义文件路径
-   */
-  public function __construct(public readonly string $envPath)
+  public function __construct(App $app)
   {
     $this->data = $_ENV;
-    $this->load($this->envPath);
+    $this->load($app->getEnvPath());
   }
 
   /**
@@ -57,7 +52,7 @@ class Env implements ArrayAccess
    */
   protected function load(string $file): void
   {
-    if (is_file($this->envPath)) {
+    if (is_file($file)) {
       $env = parse_ini_file($file, true, INI_SCANNER_RAW) ?: [];
     } else {
       $env = [];
