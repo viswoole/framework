@@ -396,9 +396,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     if (is_string($concrete) || $concrete instanceof Closure) {
       $this->bindings[$abstract] = $concrete;
     } else {
-      $class = get_class($concrete);
-      $this->bindings[$abstract] = $class;
-      $this->instances[$class] = $concrete;
+      $this->instances[$abstract] = $concrete;
     }
   }
 
