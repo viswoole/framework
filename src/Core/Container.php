@@ -155,15 +155,18 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    */
   public function make(string $abstract, array $params = []): object
   {
-    // 获取绑定
-    $abstract = $this->getBind($abstract);
-    if (is_string($abstract)) {
-      $instance = $this->getSingleton($abstract);
-      if ($instance) return $instance;
-      $instance = $this->invokeClass($abstract, $params);
-    } else {
-      $instance = $this->invokeFunction($abstract, $params);
-    }
+    // 获取绑定的实现类
+    $concrete = $this->getBind($abstract);
+    // 如果得到的不是闭包则赋值给$abstract
+    if (is_string($concrete)) $abstract = $concrete;
+    // 获取单例
+    $instance = $this->getSingleton($abstract);
+    // 存在单实例则返回
+    if ($instance) return $instance;
+    // 反射实例
+    $instance = is_string($concrete)
+      ? $this->invokeClass($concrete, $params)
+      : $this->invokeFunction($concrete, $params);
     // 缓存单实例
     $this->setSingleInstance($abstract, $instance);
     return $instance;
