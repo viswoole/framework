@@ -425,4 +425,47 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   {
     return count($this->bindings);
   }
+
+  public function __unset($name)
+  {
+    $this->remove($name);
+  }
+
+  /**
+   * 删除容器中的服务实例
+   *
+   * @access public
+   * @param string $abstract
+   * @return void
+   */
+  public function remove(string $abstract): void
+  {
+    $abstract = $this->getBind($abstract);
+
+    if (isset($this->instances[$abstract])) unset($this->instances[$abstract]);
+  }
+
+  /**
+   * 获取容器中的服务实例
+   *
+   * @param string $name
+   * @return mixed
+   * @throws NotFoundException
+   */
+  public function __get(string $name)
+  {
+    return $this->make($name);
+  }
+
+  /**
+   * 绑定服务到容器
+   *
+   * @param string $name
+   * @param $value
+   * @return void
+   */
+  public function __set(string $name, $value): void
+  {
+    $this->bind($name, $value);
+  }
 }
