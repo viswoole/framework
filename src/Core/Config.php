@@ -42,16 +42,11 @@ class Config
    */
   protected array $config = [];
 
-  /**
-   * @param string $path 配置文件所在目录
-   * @param string $ext 需加载的配置文件扩展名支持json和php,默认为*全部加载
-   * @param bool $matchCase 是否区分大小写
-   */
-  public function __construct(string $path, string $ext = '*', bool $matchCase = true)
+  public function __construct(App $app)
   {
-    $this->path = rtrim($path, DIRECTORY_SEPARATOR);
-    $this->ext = $ext;
-    $this->matchCase = $matchCase;
+    $this->path = $app->getConfigPath();
+    $this->ext = '*';
+    $this->matchCase = true;
     $this->load();
   }
 
