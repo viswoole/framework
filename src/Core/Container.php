@@ -441,9 +441,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    */
   public function remove(string $abstract): void
   {
-    $abstract = $this->getBind($abstract);
-
-    if (isset($this->instances[$abstract])) unset($this->instances[$abstract]);
+    $class = $this->getBind($abstract);
+    unset($this->instances[is_string($class) ? $class : $abstract]);
   }
 
   /**
