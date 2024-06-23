@@ -39,7 +39,7 @@ class Facade extends Command
       $reflector = new ReflectionClass($namespace);
       $line = $reflector->getStartLine() - 1;
       $file = $reflector->getFileName();
-      $method = $reflector->getMethod('getFacadeClass');
+      $method = $reflector->getMethod('getMappingClass');
       // 得到映射的类
       $mapClass = $method->invoke(null);
       $mapClassReflector = new ReflectionClass($mapClass);
