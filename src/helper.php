@@ -14,6 +14,7 @@
 declare (strict_types=1);
 
 use Viswoole\Core\App;
+use Viswoole\Core\Console\Output;
 use Viswoole\Core\Exception\NotFoundException;
 
 if (!function_exists('getRootPath')) {
@@ -106,5 +107,80 @@ if (!function_exists('config')) {
   function config(string $name = null, mixed $default = null): mixed
   {
     return App::factory()->config->get($name, $default);
+  }
+}
+if (!function_exists('dump')) {
+  /**
+   * 打印变量
+   *
+   * @access public
+   * @param mixed $data 变量内容
+   * @param string $title 标题
+   * @param string $color 颜色
+   * @param int $backtrace 1为输出调用源，0为不输出
+   * @return void
+   */
+  function dump(
+    mixed  $data,
+    string $title = 'variable output',
+    string $color = Output::COLORS['GREEN'],
+    int    $backtrace = 1
+  ): void
+  {
+    Output::dump($data, $title, $color, $backtrace === 0 ? 0 : 2);
+  }
+}
+if (!function_exists('echo_log')) {
+  /**
+   * 输出一个日志到控制台
+   *
+   * @access public
+   * @param int|string $message 日志消息
+   * @param string $color 颜色
+   * @param int $backtrace 1为输出调用源，0为不输出
+   * @return void
+   */
+  function echo_log(
+    int|string $message,
+    string     $color = Output::COLORS['GREEN'],
+    int        $backtrace = 1
+  ): void
+  {
+    Output::echo($message, $color, $backtrace === 0 ? 0 : 2);
+  }
+}
+if (!function_exists('getAllPhpFiles')) {
+  /**
+   * 获取目录下所有PHP文件(包括子目录)
+   * @param string $dir
+   * @return array
+   */
+  function getAllPhpFiles(string $dir): array
+  {
+    $phpFiles = [];
+
+    // 打开目录
+    if ($handle = opendir($dir)) {
+      $dir = rtrim($dir, DIRECTORY_SEPARATOR);
+      // 逐个检查目录中的条目
+      while (false !== ($entry = readdir($handle))) {
+        if ($entry != '.' && $entry != '..') {
+          $path = $dir . '/' . $entry;
+
+          // 如果是目录，递归调用该函数
+          if (is_dir($path)) {
+            $phpFiles = array_merge($phpFiles, getAllPhpFiles($path));
+          } elseif (pathinfo($path, PATHINFO_EXTENSION) == 'php') {
+            // 如果是.php文件，添加到结果数组中
+            $phpFiles[] = $path;
+          }
+        }
+      }
+
+      // 关闭目录句柄
+      closedir($handle);
+    }
+
+    return $phpFiles;
   }
 }
