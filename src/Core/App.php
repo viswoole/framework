@@ -160,4 +160,26 @@ class App extends Container
   {
     return $this->getRootPath() . DIRECTORY_SEPARATOR . '.env';
   }
+
+  /**
+   * 是否debug调试模式
+   *
+   * @return bool
+   */
+  public function isDebug(): bool
+  {
+    return $this->config->get('app.debug', false);
+  }
+
+  /**
+   * 设置是否启用debug模式，在请求中设置仅对当前请求的worker进程生效
+   *
+   * @access public
+   * @param bool $debug
+   * @return void
+   */
+  public function setDebug(bool $debug): void
+  {
+    $this->config->set('app.debug', $debug);
+  }
 }
