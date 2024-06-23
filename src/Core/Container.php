@@ -148,6 +148,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
+   * 创建一个已绑定的服务，或反射创建类实例，将存储为单例
+   *
    * @param string $abstract
    * @param array $params
    * @return object
