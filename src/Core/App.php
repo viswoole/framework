@@ -22,6 +22,7 @@ use Viswoole\Core\Service\Provider;
  *
  * @property Env $env 环境变量管理实例
  * @property Config $config 配置管理实例
+ * @property Console $console 控制台管理实例
  */
 class App extends Container
 {
@@ -33,6 +34,7 @@ class App extends Container
     'app' => App::class,
     'env' => Env::class,
     'config' => Config::class,
+    'console' => Console::class
   ];
   /**
    * @var Provider[] 服务列表
