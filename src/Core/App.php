@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core;
 
 use Viswoole\Core\Service\Provider;
+use Viswoole\Log\Manager as LogManager;
 
 /**
  * App应用管理中心
@@ -23,6 +24,7 @@ use Viswoole\Core\Service\Provider;
  * @property Env $env 环境变量管理实例
  * @property Config $config 配置管理实例
  * @property Console $console 控制台管理实例
+ * @property LogManager $log 日志控制器
  */
 class App extends Container
 {
@@ -34,7 +36,8 @@ class App extends Container
     'app' => App::class,
     'env' => Env::class,
     'config' => Config::class,
-    'console' => Console::class
+    'console' => Console::class,
+    'log' => LogManager::class
   ];
   /**
    * @var Provider[] 服务列表
@@ -105,7 +108,7 @@ class App extends Container
    */
   public function getRootPath(): string
   {
-    !defined('BASE_PATH') && define('BASE_PATH', dirname(realpath(__DIR__), 4));
+    !defined('BASE_PATH') && define('BASE_PATH', dirname(realpath(__DIR__), 3));
     return rtrim(BASE_PATH, DIRECTORY_SEPARATOR);
   }
 
