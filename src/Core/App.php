@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core;
 
 use Viswoole\Core\Service\Provider;
-use Viswoole\Log\Manager as LogManager;
+use Viswoole\Log\LogManager;
 
 /**
  * App应用管理中心

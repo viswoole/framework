@@ -106,6 +106,6 @@ abstract class Drive extends Collector implements DriveInterface
     array             $context = [],
   ): void
   {
-    $this->save([Manager::createLogData($level, $message, $context)]);
+    $this->save([LogManager::createLogData($level, $message, $context)]);
   }
 }

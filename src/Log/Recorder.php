@@ -37,7 +37,7 @@ class Recorder
    */
   public function push(string $level, string|Stringable $message, array $context = []): void
   {
-    $this->records[] = Manager::createLogData($level, $message, $context);
+    $this->records[] = LogManager::createLogData($level, $message, $context);
   }
 
   /**

@@ -40,7 +40,7 @@ use Viswoole\Log\Drives\File;
  * @method bool clearRecord() 清除缓存日志
  * @method array getRecord() 获取缓存日志
  */
-class Manager
+class LogManager
 {
   /**
    * @var bool 是否输出至控制台

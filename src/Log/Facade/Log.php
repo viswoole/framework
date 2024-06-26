@@ -18,7 +18,6 @@ namespace Viswoole\Log\Facade;
 use Stringable;
 use Viswoole\Core\Facade;
 use Viswoole\Log\Contract\DriveInterface;
-use Viswoole\Log\Manager;
 
 /**
  * 日志门面类
@@ -47,6 +46,6 @@ class Log extends Facade
    */
   #[\Override] protected static function getMappingClass(): string
   {
-    return Manager::class;
+    return Log::class;
   }
 }

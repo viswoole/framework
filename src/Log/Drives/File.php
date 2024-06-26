@@ -18,7 +18,7 @@ namespace Viswoole\Log\Drives;
 use Swoole\Timer;
 use Viswoole\Core\Coroutine;
 use Viswoole\Log\Drive;
-use Viswoole\Log\Manager;
+use Viswoole\Log\LogManager;
 
 class File extends Drive
 {
@@ -141,7 +141,7 @@ class File extends Drive
       // 如果以json格式存储则直接转为json字符串
       $logString = $this->json
         ? json_encode($logRecord, $this->json_flags)
-        : Manager::formatLogDataToString($this->logFormat, $logRecord);
+        : LogManager::formatLogDataToString($this->logFormat, $logRecord);
       $logDir = $this->getLogDir($level);
       // 获取日志文件夹下所有日志文件
       $logFiles = glob("$logDir/*.log");
@@ -155,7 +155,7 @@ class File extends Drive
         $currentLogFile = "$logDir/" . $level . '_' . $logFileCount . '.log';
       }
       // 输出日志到控制台
-      Manager::echoConsole($level, $logString);
+      LogManager::echoConsole($level, $logString);
       // 写入日志数据
       file_put_contents($currentLogFile, $logString . PHP_EOL, FILE_APPEND);
       // 如果当前日志文件数量超过设定的最大文件数量，则删除最早创建的一个
