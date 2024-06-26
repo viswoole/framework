@@ -287,6 +287,34 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
+   * 反射调用
+   *
+   * @param callable|string|array $callable
+   * @param array $params
+   * @return mixed
+   * @throws NotFoundException|TypeError
+   */
+  public function invoke(callable|string|array $callable, array $params = []): mixed
+  {
+    if ($callable instanceof Closure) {
+      return $this->invokeFunction($callable, $params);
+    } elseif (is_array($callable)) {
+      return $this->invokeMethod($callable, $params);
+    } elseif (is_string($callable)) {
+      if (str_contains($callable, '::')) {
+        return $this->invokeMethod($callable, $params);
+      } elseif (class_exists($callable)) {
+        return $this->invokeClass($callable, $params);
+      } elseif (function_exists($callable)) {
+        return $this->invokeFunction($callable, $params);
+      }
+    }
+    throw new TypeError(
+      self::class . 'invoke()方法，参数#1($callable)错误，必须给定可调用的(callable)结构。'
+    );
+  }
+
+  /**
    * 调用反射执行方法，支持依赖注入。
    *
    * @access public
