@@ -25,6 +25,7 @@ use Viswoole\Log\LogManager;
  * @property Config $config 配置管理实例
  * @property Console $console 控制台管理实例
  * @property LogManager $log 日志控制器
+ * @property Event $event 事件管理器
  */
 class App extends Container
 {
@@ -37,7 +38,8 @@ class App extends Container
     'env' => Env::class,
     'config' => Config::class,
     'console' => Console::class,
-    'log' => LogManager::class
+    'log' => LogManager::class,
+    'event' => Event::class
   ];
   /**
    * @var Provider[] 服务列表
