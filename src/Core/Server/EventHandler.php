@@ -21,7 +21,7 @@ use Swoole\Server as SwooleServer;
 /**
  * SwooleServer事件hook
  */
-class HookEventHandler
+class EventHandler
 {
   /**
    * @var array

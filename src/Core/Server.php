@@ -26,7 +26,7 @@ use Swoole\Server\Port;
 use Viswoole\Core\Exception\Handle;
 use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Exception\ServerNotFoundException;
-use Viswoole\Core\Server\HookEventHandler;
+use Viswoole\Core\Server\EventHandler;
 
 /**
  * Swoole服务代理类
@@ -184,7 +184,7 @@ class Server
     // 合并配置
     $config['options'] = array_merge(self::DEFAULT_GLOBAL_OPTION, $config['options'] ?? []);
     // HOOK事件监听
-    $config['events'] = HookEventHandler::hook($config['events']);
+    $config['events'] = EventHandler::hook($config['events']);
     // 任务回调协程化
     $config['options'][Constant::OPTION_TASK_ENABLE_COROUTINE] = true;
     // 判断PID存储路径是否设置
