@@ -1,9 +1,9 @@
 <?php
 /*
  *  +----------------------------------------------------------------------
- *  | ViSwoole [基于swoole开发的高性能快速开发框架]
+ *  | Viswoole [基于swoole开发的高性能快速开发框架]
  *  +----------------------------------------------------------------------
- *  | Copyright (c) 2024
+ *  | Copyright (c) 2024 https://viswoole.com All rights reserved.
  *  +----------------------------------------------------------------------
  *  | Licensed ( http://www.apache.org/licenses/LICENSE-2.0 )
  *  +----------------------------------------------------------------------
@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Core\Console\Server;
+namespace Viswoole\Core\Console\Commands\Server;
 
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;

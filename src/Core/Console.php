@@ -18,9 +18,9 @@ namespace Viswoole\Core;
 use RuntimeException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
-use Viswoole\Core\Console\Server\ServerClose;
-use Viswoole\Core\Console\Server\ServerReload;
-use Viswoole\Core\Console\Server\ServerStart;
+use Viswoole\Core\Console\Commands\Server\ServerClose;
+use Viswoole\Core\Console\Commands\Server\ServerReload;
+use Viswoole\Core\Console\Commands\Server\ServerStart;
 
 /**
  * 控制台命令行处理程序
