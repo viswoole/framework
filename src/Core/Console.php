@@ -18,6 +18,9 @@ namespace Viswoole\Core;
 use RuntimeException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Viswoole\Core\Console\Server\ServerClose;
+use Viswoole\Core\Console\Server\ServerReload;
+use Viswoole\Core\Console\Server\ServerStart;
 
 /**
  * 控制台命令行处理程序
@@ -25,7 +28,10 @@ use Symfony\Component\Console\Command\Command;
 class Console extends Application
 {
   protected array $defaultCommands = [
-    \Viswoole\Core\Console\Commands\Optimize\Facade::class
+    \Viswoole\Core\Console\Commands\Optimize\Facade::class,
+    ServerStart::class,
+    ServerClose::class,
+    ServerReload::class
   ];
 
   public function __construct(
