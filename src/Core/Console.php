@@ -18,9 +18,12 @@ namespace Viswoole\Core;
 use RuntimeException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Viswoole\Core\Console\Commands\CommandDiscover;
 use Viswoole\Core\Console\Commands\Server\ServerClose;
 use Viswoole\Core\Console\Commands\Server\ServerReload;
 use Viswoole\Core\Console\Commands\Server\ServerStart;
+use Viswoole\Core\Console\Commands\ServiceDiscover;
+use Viswoole\Core\Console\Commands\VendorPublish;
 
 /**
  * 控制台命令行处理程序
@@ -31,7 +34,10 @@ class Console extends Application
     \Viswoole\Core\Console\Commands\Optimize\Facade::class,
     ServerStart::class,
     ServerClose::class,
-    ServerReload::class
+    ServerReload::class,
+    CommandDiscover::class,
+    ServiceDiscover::class,
+    VendorPublish::class
   ];
 
   public function __construct(
