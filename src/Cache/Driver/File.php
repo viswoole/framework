@@ -20,9 +20,9 @@ use FilesystemIterator;
 use Override;
 use Swoole\Coroutine\System;
 use Throwable;
-use ViSwoole\Cache\Driver;
-use ViSwoole\Cache\Exception\CacheErrorException;
-use ViSwoole\Core\Coroutine;
+use Viswoole\Cache\Driver;
+use Viswoole\Cache\Exception\CacheErrorException;
+use Viswoole\Core\Coroutine;
 
 /**
  * 文件缓存驱动

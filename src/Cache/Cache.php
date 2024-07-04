@@ -17,11 +17,11 @@ namespace Viswoole\Cache;
 
 use Closure;
 use DateTime;
-use ViSwoole\Cache\Contract\CacheDriverInterface;
-use ViSwoole\Cache\Contract\CacheTagInterface;
-use ViSwoole\Cache\Driver\File;
-use ViSwoole\Cache\Exception\CacheErrorException;
-use ViSwoole\Core\Config;
+use Viswoole\Cache\Contract\CacheDriverInterface;
+use Viswoole\Cache\Contract\CacheTagInterface;
+use Viswoole\Cache\Driver\File;
+use Viswoole\Cache\Exception\CacheErrorException;
+use Viswoole\Core\Config;
 
 /**
  * 缓存驱动管理器

@@ -19,8 +19,8 @@ use DateTime;
 use Override;
 use RedisException;
 use Swoole\Coroutine\System;
-use ViSwoole\Cache\Driver;
-use ViSwoole\Cache\Exception\CacheErrorException;
+use Viswoole\Cache\Driver;
+use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Cache\RedisPool;
 use ViSwoole\Core\Coroutine;
 
