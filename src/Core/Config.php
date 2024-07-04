@@ -44,7 +44,7 @@ class Config
 
   public function __construct(App $app)
   {
-    $this->path = $app->getConfigPath();
+    $this->path = $app->getConfigPath() . DIRECTORY_SEPARATOR;
     $this->ext = '*';
     $this->matchCase = true;
     $this->load();
@@ -56,7 +56,7 @@ class Config
    */
   private function load(): void
   {
-    /**配置文件*/
+    // 配置文件
     $defaultConfigFiles = glob($this->path . '*.' . $this->ext);
     //如果出错了 则赋值为空数组
     if ($defaultConfigFiles === false) $defaultConfigFiles = [];
