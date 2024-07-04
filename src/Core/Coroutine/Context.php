@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Coroutine;
 
 use RuntimeException;
-use Viswoole\Coroutine;
+use Viswoole\Core\Coroutine;
 
 /**
  * 协程上下文辅助操作类，可通过Viswoole\Coroutine::getContext()获取Swoole协程上下文
