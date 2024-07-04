@@ -22,7 +22,7 @@ use Swoole\Coroutine\System;
 use Viswoole\Cache\Driver;
 use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Cache\RedisPool;
-use ViSwoole\Core\Coroutine;
+use Viswoole\Core\Coroutine;
 
 /**
  * Redis缓存驱动

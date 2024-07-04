@@ -17,7 +17,7 @@ namespace Viswoole\Core\Server;
 
 use Swoole\Process;
 use Viswoole\Core\App;
-use ViSwoole\Core\Console\Output;
+use Viswoole\Core\Console\Output;
 use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Server;
 

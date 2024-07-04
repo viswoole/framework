@@ -17,10 +17,10 @@ namespace Viswoole\Core\Channel;
 
 use BadMethodCallException;
 use Override;
-use ViSwoole\Core\Channel\Contract\ChannelManagerInterface;
-use ViSwoole\Core\Channel\Contract\ConnectionPoolInterface;
-use ViSwoole\Core\Common\Str;
-use ViSwoole\Core\Exception\ChannelNotFoundException;
+use Viswoole\Core\Channel\Contract\ChannelManagerInterface;
+use Viswoole\Core\Channel\Contract\ConnectionPoolInterface;
+use Viswoole\Core\Common\Str;
+use Viswoole\Core\Exception\ChannelNotFoundException;
 use function Swoole\Coroutine\run;
 
 /**

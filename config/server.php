@@ -7,7 +7,7 @@ declare (strict_types=1);
 
 use Swoole\Constant;
 use Swoole\Http\Server as httpServer;
-use ViSwoole\Core\Exception\Handle;
+use Viswoole\Core\Exception\Handle;
 
 return [
   // 默认启动的服务

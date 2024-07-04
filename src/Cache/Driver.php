@@ -18,8 +18,8 @@ namespace Viswoole\Cache;
 use Closure;
 use DateTime;
 use Override;
-use ViSwoole\Cache\Contract\CacheDriverInterface;
-use ViSwoole\Cache\Contract\CacheTagInterface;
+use Viswoole\Cache\Contract\CacheDriverInterface;
+use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Cache\Driver\Tag;
 
 abstract class Driver implements CacheDriverInterface

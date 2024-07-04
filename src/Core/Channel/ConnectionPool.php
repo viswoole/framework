@@ -17,8 +17,8 @@ namespace Viswoole\Core\Channel;
 
 use Override;
 use Swoole\Coroutine\Channel;
-use ViSwoole\Core\Channel\Contract\ConnectionPoolInterface;
-use ViSwoole\Core\Exception\ConnectionPoolException;
+use Viswoole\Core\Channel\Contract\ConnectionPoolInterface;
+use Viswoole\Core\Exception\ConnectionPoolException;
 
 /**
  * Abstract ConnectionPool.

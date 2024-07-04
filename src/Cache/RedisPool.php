@@ -19,7 +19,7 @@ use Override;
 use Redis;
 use RedisException;
 use Throwable;
-use ViSwoole\Core\Channel\ConnectionPool;
+use Viswoole\Core\Channel\ConnectionPool;
 
 /**
  * Redis连接池
