@@ -20,6 +20,7 @@ use DateTime;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Cache\Driver\File;
+use Viswoole\Cache\Driver\Redis;
 use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Core\Config;
 
@@ -51,6 +52,8 @@ use Viswoole\Core\Config;
  */
 class Cache
 {
+  public const string FILE_DRIVER = File::class;
+  public const string REDIS_DRIVER = Redis::class;
   /**
    * @var string 默认缓存商店
    */
@@ -67,6 +70,7 @@ class Cache
     if (!empty($this->stores)) {
       $this->defaultStore = $config->get('cache.default', array_keys($stores)[0]);
       foreach ($this->stores as $key => $driver) {
+        if (is_string($driver) && class_exists($driver)) $driver = new $driver();
         if (!$driver instanceof CacheDriverInterface) {
           throw new CacheErrorException(
             $key . '缓存驱动配置错误，驱动类需实现' . CacheDriverInterface::class . '接口'
