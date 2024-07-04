@@ -15,7 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Service;
 
-use ViSwoole\Core\App;
+use Viswoole\Core\App;
 
 abstract class Provider
 {
