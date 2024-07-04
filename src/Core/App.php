@@ -47,7 +47,7 @@ class App extends Container
     'server' => Server::class
   ];
   /**
-   * @var Provider[] 服务列表
+   * @var string[] 服务列表
    */
   protected array $services = [
     CacheService::class
@@ -70,33 +70,41 @@ class App extends Container
       )
     );
     // 注册服务
-    $this->registerService();
-    // 启动服务
-    $this->bootService();
+    $this->loadService();
   }
 
   /**
-   * 注册服务
+   * 加载服务
    *
-   * @access protected
    * @return void
    */
-  protected function registerService(): void
+  protected function loadService(): void
   {
     $services = $this->config->get('app.services', []);
     $depPath = $this->getVendorPath() . '/services.php';
     // 依赖包注册的服务
     $dependentServices = is_file($depPath) ? require $depPath : [];
-    $services = array_merge($services, $dependentServices);
-    // 遍历服务绑定进容器
-    foreach ($services as $service) {
-      if (is_string($service)) $service = new $service($this);
-      if (property_exists($service, 'bindings')) {
-        $this->bindings = array_merge($this->bindings, $service->bindings);
+    // 合并服务
+    $this->services = array_merge($this->services, $services, $dependentServices);
+    /**
+     * @var Provider $service
+     */
+    $instances = [];
+    // 遍历注册服务
+    foreach ($this->services as $service) {
+      /**
+       * @var Provider $instance 反射得到的服务提供者实例
+       */
+      $instance = $this->invokeClass($service);
+      if (property_exists($instance, 'bindings')) {
+        $this->bindings = array_merge($this->bindings, $instance->bindings);
       }
-      $service->register();
-      $this->services[] = $service;
+      $instance->register();
+      $instances[] = $instance;
     }
+    // 启动服务
+    foreach ($instances as $instance) $instance->boot();
+    unset($instances);
   }
 
   /**
@@ -119,16 +127,6 @@ class App extends Container
   {
     !defined('BASE_PATH') && define('BASE_PATH', dirname(realpath(__DIR__), 3));
     return rtrim(BASE_PATH, DIRECTORY_SEPARATOR);
-  }
-
-  /**
-   * 初始化服务
-   *
-   * @return void
-   */
-  protected function bootService(): void
-  {
-    foreach ($this->services as $service) $service->boot();
   }
 
   /**
