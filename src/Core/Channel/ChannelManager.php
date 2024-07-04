@@ -50,7 +50,7 @@ abstract class ChannelManager implements ChannelManagerInterface
    * @param array $channels 通道名称
    * @param string $defaultChannel
    */
-  protected function __construct(
+  public function __construct(
     array  $channels,
     string $defaultChannel
   )
