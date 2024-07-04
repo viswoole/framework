@@ -15,6 +15,8 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use Viswoole\Cache\Cache;
+use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Log\LogManager;
 
@@ -27,6 +29,7 @@ use Viswoole\Log\LogManager;
  * @property LogManager $log 日志控制器
  * @property Event $event 事件管理器
  * @property Server $server 应用控制器
+ * @property Cache $cache 缓存管理器
  */
 class App extends Container
 {
@@ -41,12 +44,14 @@ class App extends Container
     'console' => Console::class,
     'log' => LogManager::class,
     'event' => Event::class,
-    'server' => Server::class,
+    'server' => Server::class
   ];
   /**
    * @var Provider[] 服务列表
    */
-  protected array $services = [];
+  protected array $services = [
+    CacheService::class
+  ];
 
   protected function __construct()
   {
