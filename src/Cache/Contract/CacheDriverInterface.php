@@ -244,22 +244,4 @@ interface CacheDriverInterface
     string|Closure $set = 'serialize',
     string|Closure $get = 'unserialize'
   ): static;
-
-  /**
-   * 设置序列化方法
-   *
-   * @access public
-   * @param string|Closure $set
-   * @param string|Closure $get
-   * @return static
-   */
-  public function serialize(mixed $data): string;
-
-  /**
-   * 反序列化数据
-   * @access protected
-   * @param mixed $data 缓存数据
-   * @return mixed
-   */
-  public function unserialize(string $data): mixed;
 }
