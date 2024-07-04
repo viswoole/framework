@@ -50,6 +50,7 @@ use Viswoole\Core\Facade;
  * @method static string getCacheKey(string $key) 获取实际的缓存标识
  * @method static bool hasStore(string $name) 判断是否存在该缓存商店
  * @method static CacheDriverInterface store(string $name = null) 指定缓存驱动
+ * @method static void addStore(string $name, CacheDriverInterface $driver) 判断是否存在该缓存商店
  */
 class Cache extends Facade
 {
