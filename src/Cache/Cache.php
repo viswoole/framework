@@ -69,7 +69,7 @@ class Cache
     $this->stores = $stores;
     if (!empty($this->stores)) {
       $this->defaultStore = $config->get('cache.default', array_keys($stores)[0]);
-      foreach ($this->stores as $key => $driver) {
+      foreach ($this->stores as $key => &$driver) {
         if (is_string($driver) && class_exists($driver)) $driver = new $driver();
         if (!$driver instanceof CacheDriverInterface) {
           throw new CacheErrorException(

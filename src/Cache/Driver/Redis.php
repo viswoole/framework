@@ -21,6 +21,7 @@ use RedisException;
 use Swoole\Coroutine\System;
 use Viswoole\Cache\Driver;
 use Viswoole\Cache\Exception\CacheErrorException;
+use Viswoole\Cache\RedisConfig;
 use Viswoole\Cache\RedisPool;
 use Viswoole\Core\Coroutine;
 
@@ -72,7 +73,7 @@ class Redis extends Driver
     int              $pool_fill_size = 0
   )
   {
-    $this->pool = new RedisPool(...func_get_args());
+    $this->pool = new RedisPool(new RedisConfig(...func_get_args()));
     parent::__construct(
       $prefix,
       $tag_prefix,
