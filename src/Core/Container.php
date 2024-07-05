@@ -93,7 +93,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     foreach ($shapes as $index => $shape) {
       // 如果是可变参数则返回参数数组
       if ($shape->isVariadic()) return array_merge($args, $params);
-      /** 参数类型 */
+      // 参数类型
       $paramType = $shape->getType();
       // 参数名称
       $name = $shape->getName();
@@ -101,16 +101,14 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       $key = array_key_exists($name, $params) ? $name : $index;
       // 参数默认值
       $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
-      if (is_null($paramType)) {
+      if (
+        is_null($paramType)
+        || $paramType instanceof ReflectionUnionType
+        || $paramType instanceof ReflectionIntersectionType
+      ) {
         $value = Arr::arrayPopValue($params, $key, $default);
       } elseif ($paramType instanceof ReflectionNamedType) {
         $value = $this->injectValue($params, $paramType, $key, $default);
-      } elseif (
-        $paramType instanceof ReflectionUnionType
-        || $paramType instanceof ReflectionIntersectionType
-      ) {
-        // 联合类型直接获取
-        $value = Arr::arrayPopValue($params, $key, $default);
       } else {
         $value = $default;
       }
