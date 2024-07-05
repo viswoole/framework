@@ -23,9 +23,11 @@ class Handle
   /**
    * @var array 忽略的异常
    */
-  protected array $ignoreReport = [];
+  protected array $ignoreReport = [
+    ValidateException::class
+  ];
 
-  public function __construct(private readonly LogManager $log)
+  public function __construct(protected readonly LogManager $log)
   {
   }
 
@@ -68,9 +70,7 @@ class Handle
   protected function isIgnoreReport(Throwable $exception): bool
   {
     foreach ($this->ignoreReport as $class) {
-      if ($exception instanceof $class) {
-        return true;
-      }
+      if ($exception instanceof $class) return true;
     }
     return false;
   }
