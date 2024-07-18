@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Exception;
 
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * 验证异常
@@ -28,11 +29,11 @@ class ValidateException extends InvalidArgumentException
    */
   protected string|array $error;
 
-  public function __construct(string|array $error)
+  public function __construct(string|array $error, int $code = 0, Throwable|null $previous = null)
   {
     $this->error = $error;
     $message = is_array($error) ? implode(PHP_EOL, $error) : $error;
-    parent::__construct(message: $message);
+    parent::__construct($message, $code, $previous);
   }
 
   /**
