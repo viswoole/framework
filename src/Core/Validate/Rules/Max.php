@@ -18,7 +18,7 @@ namespace Viswoole\Core\Validate\Rules;
 use Attribute;
 
 /**
- * 验证数值是否不在某个区间
+ * 验证数值是否大于或等于$max
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Max extends RuleAbstract
