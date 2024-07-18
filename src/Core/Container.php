@@ -25,10 +25,8 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
-use ReflectionIntersectionType;
 use ReflectionMethod;
-use ReflectionNamedType;
-use ReflectionUnionType;
+use ReflectionType;
 use TypeError;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Coroutine\Context;
@@ -36,6 +34,9 @@ use Viswoole\Core\Exception\ClassNotFoundException;
 use Viswoole\Core\Exception\FuncNotFoundException;
 use Viswoole\Core\Exception\MethodNotFoundException;
 use Viswoole\Core\Exception\NotFoundException;
+use Viswoole\Core\Exception\ValidateException;
+use Viswoole\Core\Validate\Atomic;
+use Viswoole\Core\Validate\Rules;
 
 /**
  * 容器基本功能类
@@ -57,92 +58,84 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   protected array $invokeCallback = [];
 
   /**
-   * 反射调用函数
+   * 添加一个钩子，在解析类时触发
    *
-   * @param string|Closure $concrete
-   * @param array<string|int,mixed> $params
-   * @return mixed
-   * @throws NotFoundException
+   * Example:
+   * ```
+   * $container->addHook(UserService::class,function($object,$container){
+   *   // 这里可以对UserService对象进行操作
+   * })
+   * ```
+   * @access public
+   * @param string $abstract 类名,可传入*代表所有
+   * @param Closure $callback 事件回调
+   * @return void
    */
-  public function invokeFunction(string|Closure $concrete, array $params = []): mixed
+  public function addHook(string $abstract, Closure $callback): void
   {
-    try {
-      $reflect = new ReflectionFunction($concrete);
-    } catch (ReflectionException $e) {
-      throw new FuncNotFoundException($e->getMessage(), previous: $e);
-    }
-    $args = $this->injectParams($reflect, $params);
-    return $reflect->invoke(...$args);
+    $key = $abstract;
+    $this->invokeCallback[$key][] = $callback;
   }
 
   /**
-   * 注入参数
+   * 删除解析钩子
    *
-   * @param ReflectionFunctionAbstract $reflect 反射方法
-   * @param array $params 传递的参数
-   * @return array<int,mixed>
-   * @throws NotFoundException
+   * @access public
+   * @param string $abstract 类标识或类名
+   * @param Closure|null $callback 回调函数
+   * @return void
    */
-  private function injectParams(ReflectionFunctionAbstract $reflect, array $params = []): array
+  public function removeHook(string $abstract, Closure $callback = null): void
   {
-    $shapes = $reflect->getParameters();
-    // 如果没有参数 则返回空待注入参数数组
-    if (empty($shapes)) return [];
-    /** @var $args array<int,mixed> 最终要注入的参数 */
-    $args = [];
-    foreach ($shapes as $index => $shape) {
-      // 如果是可变参数则返回参数数组
-      if ($shape->isVariadic()) return array_merge($args, $params);
-      // 参数类型
-      $paramType = $shape->getType();
-      // 参数名称
-      $name = $shape->getName();
-      // 先判断是否存在命名，不存在则使用位置
-      $key = array_key_exists($name, $params) ? $name : $index;
-      // 参数默认值
-      $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
-      if (
-        is_null($paramType)
-        || $paramType instanceof ReflectionUnionType
-        || $paramType instanceof ReflectionIntersectionType
-      ) {
-        $value = Arr::arrayPopValue($params, $key, $default);
-      } elseif ($paramType instanceof ReflectionNamedType) {
-        $value = $this->injectValue($params, $paramType, $key, $default);
+    if (isset($this->invokeCallback[$abstract])) {
+      if (is_null($callback)) {
+        unset($this->invokeCallback[$abstract]);
       } else {
-        $value = $default;
+        $index = array_search($callback, $this->invokeCallback[$abstract]);
+        if ($index !== false) unset($this->invokeCallback[$abstract][$index]);
       }
-      $args[$index] = $value;
     }
-    return $args;
   }
 
   /**
-   * 注入参数值
+   * @inheritDoc
+   */
+  #[Override] public function offsetExists(mixed $offset): bool
+  {
+    return $this->has($offset);
+  }
+
+  /**
+   * 判断容器中是否绑定某个接口
    *
-   * @param array $vars 传递的参数数组
-   * @param ReflectionNamedType $paramType 参数类型
-   * @param string|int $key 参数名称
-   * @param mixed|null $default 默认值
-   * @return mixed
+   * @param string $id
+   * @return bool
+   */
+  public function has(string $id): bool
+  {
+    return isset($this->bindings[$id]) || isset($this->instances[$id]);
+  }
+
+  /**
+   * @inheritDoc
    * @throws NotFoundException
    */
-  private function injectValue(
-    array               &$vars,
-    ReflectionNamedType $paramType,
-    string|int          $key,
-    mixed               $default
-  ): mixed
+  #[Override] public function offsetGet(mixed $offset): mixed
   {
-    $value = Arr::arrayPopValue($vars, $key, $default);
-    if (!$paramType->isBuiltin()) {
-      $class = $paramType->getName();
-      // 判断是否直接传入了需要注入的类实例
-      if ($value instanceof $class) return $value;
-      // 依赖注入
-      $value = $this->make($class);
-    }
-    return $value;
+    return $this->get($offset);
+  }
+
+  /**
+   * 从容器绑定中获取实例
+   *
+   * @param string $id
+   * @return object
+   * @throws NotFoundException
+   */
+  public function get(string $id): object
+  {
+    if ($this->has($id)) return $this->make($id);
+    throw new NotFoundException("Container $id not found");
   }
 
   /**
@@ -197,30 +190,6 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 从容器绑定中获取实例
-   *
-   * @param string $id
-   * @return object
-   * @throws NotFoundException
-   */
-  public function get(string $id): object
-  {
-    if ($this->has($id)) return $this->make($id);
-    throw new NotFoundException("Container $id not found");
-  }
-
-  /**
-   * 判断容器中是否绑定某个接口
-   *
-   * @param string $id
-   * @return bool
-   */
-  public function has(string $id): bool
-  {
-    return isset($this->bindings[$id]) || isset($this->instances[$id]);
-  }
-
-  /**
    * 调用反射创建类实例，支持依赖注入。
    *
    * @param string $class
@@ -233,12 +202,150 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     try {
       $reflector = new ReflectionClass($class);
       $constructor = $reflector->getConstructor();
-      $args = $constructor ? $this->injectParams($constructor, $params) : [];
+      try {
+        $args = $constructor ? $this->injectParams($constructor, $params) : [];
+      } catch (ValidateException $e) {
+        $this->handleValidateError(
+          $reflector->getName() . '::__construct(): ' . $e->getMessage(), $e
+        );
+      }
       $instance = $reflector->newInstanceArgs($args);
       $this->invokeAfter($class, $instance);
       return $instance;
     } catch (ReflectionException $e) {
       throw new ClassNotFoundException($e->getMessage(), previous: $e);
+    }
+  }
+
+  /**
+   * 注入参数
+   *
+   * @param ReflectionFunctionAbstract $reflect 反射方法
+   * @param array $params 传递的参数
+   * @return array<int,mixed>
+   * @throws NotFoundException
+   */
+  private function injectParams(ReflectionFunctionAbstract $reflect, array $params = []): array
+  {
+    $shapes = $reflect->getParameters();
+    // 如果没有参数 则返回空待注入参数数组
+    if (empty($shapes)) return [];
+    /** @var $args array<int,mixed> 最终要注入的参数 */
+    $args = [];
+    foreach ($shapes as $index => $shape) {
+      // 参数类型
+      $paramType = $shape->getType();
+      // 扩展属性
+      $attributes = $shape->getAttributes();
+      // 是否允许为null
+      $allowsNull = $shape->allowsNull();
+      // 参数名称
+      $name = $shape->getName();
+      // 如果是可变参数则返回参数数组
+      if ($shape->isVariadic()) {
+        foreach ($params as &$item) {
+          $item = $this->validateParam(
+            $paramType, $item, $index, $name, $allowsNull, $attributes
+          );
+        }
+        return array_merge($args, $params);
+      }
+      // 先判断是否存在命名，不存在则使用位置
+      $key = array_key_exists($name, $params) ? $name : $index;
+      // 参数默认值
+      $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
+      // 获得值
+      $value = Arr::arrayPopValue($params, $key, $default);
+      // 验证类型
+      $value = $this->validateParam(
+        $paramType, $value, $index, $name, $allowsNull, $attributes
+      );
+      $args[$index] = $value;
+    }
+    return $args;
+  }
+
+  /**
+   * 验证参数
+   *
+   * @param ReflectionType|null $paramType 参数类型
+   * @param mixed $value 值
+   * @param int|string $index 索引
+   * @param string $name 参数名称
+   * @param bool $allowsNull 是否允许为空
+   * @param array $attributes 扩展属性
+   * @return mixed
+   */
+  private function validateParam(
+    ReflectionType|null $paramType,
+    mixed               $value,
+    int|string          $index,
+    string              $name,
+    bool                $allowsNull,
+    array               $attributes
+  ): mixed
+  {
+    $typeString = (string)$paramType;
+    if (!is_null($paramType)) {
+      try {
+        $value = Atomic::validate($value, $paramType);
+      } catch (ValidateException $e) {
+        $this->handleParamsError($index, $name, $e);
+      }
+    }
+    if (!$allowsNull && is_null($value)) {
+      $this->handleParamsError($index, $name, "must be of type $typeString, null given");
+    }
+    try {
+      // 验证扩展规则
+      if (!empty($attributes)) $value = Rules::validate($attributes, $value);
+    } catch (ValidateException $e) {
+      $this->handleParamsError($index, $name, $e);
+    }
+    return $value;
+  }
+
+  /**
+   * 处理注入参数时类型错误
+   *
+   * @param int $index
+   * @param string $name
+   * @param ValidateException|string $e
+   * @return void
+   */
+  protected function handleParamsError(int $index, string $name, ValidateException|string $e): void
+  {
+    $index++;
+    if (is_string($e)) {
+      throw new ValidateException(
+        $this->isDebug() ? "Argument #$index ($$name) " . $e : $e
+      );
+    } else {
+      if (!$this->isDebug()) {
+        throw $e;
+      } else {
+        throw new ValidateException(
+          "Argument #$index ($$name) " . $e->getMessage(), previous: $e
+        );
+      }
+    }
+
+  }
+
+  /**
+   * 处理反射验证类型错误
+   *
+   * @param string $message
+   * @param ValidateException $e
+   * @return void
+   * @throws ValidateException
+   */
+  protected function handleValidateError(string $message, ValidateException $e): void
+  {
+    if ($this->isDebug()) {
+      throw new ValidateException($message, previous: $e);
+    } else {
+      throw $e;
     }
   }
 
@@ -265,23 +372,26 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 设置单实例（存储在父协程中），协程结束自动销毁
+   * 反射调用函数
    *
-   * @param string $class
-   * @param object $instance
-   * @return void
+   * @param string|Closure $concrete
+   * @param array<string|int,mixed> $params
+   * @return mixed
+   * @throws NotFoundException
    */
-  private function setSingleInstance(string $class, object $instance): void
+  public function invokeFunction(string|Closure $concrete, array $params = []): mixed
   {
-    if (Coroutine::isCoroutine()) {
-      Context::set(
-        $this->CONTEXT_PREFIX . $class,
-        $instance,
-        Coroutine::getTopId()
-      );
-    } else {
-      $this->instances[$class] = $instance;
+    try {
+      $reflect = new ReflectionFunction($concrete);
+    } catch (ReflectionException $e) {
+      throw new FuncNotFoundException($e->getMessage(), previous: $e);
     }
+    try {
+      $args = $this->injectParams($reflect, $params);
+    } catch (ValidateException $e) {
+      $this->handleValidateError($reflect->getName() . '(): ' . $e->getMessage(), $e);
+    }
+    return $reflect->invoke(...$args);
   }
 
   /**
@@ -328,12 +438,18 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         // 创建实例
         $instance = is_object($method[0]) ? $method[0] : $this->invokeClass($method[0]);
         $reflect = new ReflectionMethod($instance, $method[1]);
+        $namespaceName = get_class($instance) . '::' . $method[1];
       } else {
         $instance = null;
         $reflect = new ReflectionMethod($method);
+        $namespaceName = $method;
       }
-      // 绑定参数
-      $args = $this->injectParams($reflect, $params);
+      try {
+        // 绑定参数
+        $args = $this->injectParams($reflect, $params);
+      } catch (ValidateException $e) {
+        $this->handleValidateError($namespaceName . '(): ' . $e->getMessage(), $e);
+      }
       // 调用方法并传入参数
       return $reflect->invokeArgs($instance, $args);
     } catch (ReflectionException $e) {
@@ -342,60 +458,23 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 添加一个钩子，在解析类时触发
+   * 设置单实例（存储在父协程中），协程结束自动销毁
    *
-   * Example:
-   * ```
-   * $container->addHook(UserService::class,function($object,$container){
-   *   // 这里可以对UserService对象进行操作
-   * })
-   * ```
-   * @access public
-   * @param string $abstract 类名,可传入*代表所有
-   * @param Closure $callback 事件回调
+   * @param string $class
+   * @param object $instance
    * @return void
    */
-  public function addHook(string $abstract, Closure $callback): void
+  private function setSingleInstance(string $class, object $instance): void
   {
-    $key = $abstract;
-    $this->invokeCallback[$key][] = $callback;
-  }
-
-  /**
-   * 删除解析钩子
-   *
-   * @access public
-   * @param string $abstract 类标识或类名
-   * @param Closure|null $callback 回调函数
-   * @return void
-   */
-  public function removeHook(string $abstract, Closure $callback = null): void
-  {
-    if (isset($this->invokeCallback[$abstract])) {
-      if (is_null($callback)) {
-        unset($this->invokeCallback[$abstract]);
-      } else {
-        $index = array_search($callback, $this->invokeCallback[$abstract]);
-        if ($index !== false) unset($this->invokeCallback[$abstract][$index]);
-      }
+    if (Coroutine::isCoroutine()) {
+      Context::set(
+        $this->CONTEXT_PREFIX . $class,
+        $instance,
+        Coroutine::getTopId()
+      );
+    } else {
+      $this->instances[$class] = $instance;
     }
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function offsetExists(mixed $offset): bool
-  {
-    return $this->has($offset);
-  }
-
-  /**
-   * @inheritDoc
-   * @throws NotFoundException
-   */
-  #[Override] public function offsetGet(mixed $offset): mixed
-  {
-    return $this->get($offset);
   }
 
   /**
