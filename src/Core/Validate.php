@@ -199,11 +199,11 @@ class Validate
   }
 
   /**
-   * 判断是否为一个类的实例，如果$value传入的是类的构造参数则会验证合法性
+   * 判断是否为一个类的实例，如果$value传入的是类的构造参数或是类实例，则验证通过
    *
    * @param string $class 类或接口
-   * @param mixed $value 值
-   * @return object
+   * @param mixed $value 实例对象，或构造参数数组
+   * @return object 返回类的实例对象
    */
   public static function class(string $class, mixed $value): object
   {
