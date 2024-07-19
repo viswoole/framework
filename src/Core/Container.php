@@ -35,8 +35,6 @@ use Viswoole\Core\Exception\FuncNotFoundException;
 use Viswoole\Core\Exception\MethodNotFoundException;
 use Viswoole\Core\Exception\NotFoundException;
 use Viswoole\Core\Exception\ValidateException;
-use Viswoole\Core\Validate\Atomic;
-use Viswoole\Core\Validate\Rules;
 
 /**
  * 容器基本功能类
@@ -288,7 +286,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $typeString = (string)$paramType;
     if (!is_null($paramType)) {
       try {
-        $value = Atomic::validate($value, $paramType);
+        $value = Validate::check($value, $paramType);
       } catch (ValidateException $e) {
         $this->handleParamsError($index, $name, $e);
       }
@@ -298,7 +296,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     }
     try {
       // 验证扩展规则
-      if (!empty($attributes)) $value = Rules::validate($attributes, $value);
+      if (!empty($attributes)) $value = Validate::checkRules($attributes, $value);
     } catch (ValidateException $e) {
       $this->handleParamsError($index, $name, $e);
     }

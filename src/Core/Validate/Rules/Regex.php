@@ -41,7 +41,7 @@ class Regex extends RuleAbstract
   #[\Override] public function validate(mixed $value): mixed
   {
     if (!is_string($value) || !preg_match($this->pattern, $value)) {
-      $this->error("必须符合 $this->pattern 匹配规则");
+      $this->error("必须匹配 $this->pattern 规则");
     }
     return $value;
   }

@@ -17,7 +17,7 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Viswoole\Core\Exception\ValidateException;
-use Viswoole\Core\Validate\Atomic;
+use Viswoole\Core\Validate;
 use Viswoole\Core\Validate\Type;
 
 /**
@@ -47,7 +47,7 @@ class ArrayItem extends RuleAbstract
     $array = [];
     foreach ($value as $item) {
       try {
-        Atomic::validate($item, $this->types);
+        Validate::check($item, $this->types);
       } catch (ValidateException $e) {
         $this->error($e->getMessage());
       }
