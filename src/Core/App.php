@@ -30,6 +30,7 @@ use Viswoole\Log\LogManager;
  * @property Event $event 事件管理器
  * @property Server $server 应用控制器
  * @property Cache $cache 缓存管理器
+ * @property Middleware $middleware 中间件管理器
  */
 class App extends Container
 {
@@ -44,7 +45,8 @@ class App extends Container
     'console' => Console::class,
     'log' => LogManager::class,
     'event' => Event::class,
-    'server' => Server::class
+    'server' => Server::class,
+    'middleware' => Middleware::class
   ];
   /**
    * @var string[] 服务列表
