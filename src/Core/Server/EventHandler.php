@@ -91,9 +91,9 @@ class EventHandler
   public static function hook(array $events): array
   {
     $events = array_change_key_case($events);
-    foreach ($events as $event => $value) {
+    foreach ($events as $event => $callback) {
       if (method_exists(self::class, $event)) {
-        self::$hook[$event] = $value;
+        self::$hook[$event] = $callback;
         $events[$event] = [self::class, $event];
       }
     }
