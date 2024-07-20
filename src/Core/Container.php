@@ -169,7 +169,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param string $abstract 标识
    * @return string|Closure 获取类
    */
-  private function getBind(string $abstract): string|Closure
+  protected function getBind(string $abstract): string|Closure
   {
     return $this->bindings[$abstract] ?? $abstract;
   }
@@ -180,7 +180,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param string $class
    * @return object|null
    */
-  private function getSingleton(string $class): ?object
+  protected function getSingleton(string $class): ?object
   {
     if (isset($this->instances[$class])) return $this->instances[$class];
     if (Coroutine::isCoroutine()) return Context::get($this->CONTEXT_PREFIX . $class);
@@ -223,7 +223,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @return array<int,mixed>
    * @throws NotFoundException
    */
-  private function injectParams(ReflectionFunctionAbstract $reflect, array $params = []): array
+  protected function injectParams(ReflectionFunctionAbstract $reflect, array $params = []): array
   {
     $shapes = $reflect->getParameters();
     // 如果没有参数 则返回空待注入参数数组
@@ -274,7 +274,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param array $attributes 扩展属性
    * @return mixed
    */
-  private function validateParam(
+  protected function validateParam(
     ReflectionType|null $paramType,
     mixed               $value,
     int|string          $index,
@@ -464,7 +464,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param object $instance
    * @return void
    */
-  private function setSingleInstance(string $class, object $instance): void
+  protected function setSingleInstance(string $class, object $instance): void
   {
     if (Coroutine::isCoroutine()) {
       Context::set(
