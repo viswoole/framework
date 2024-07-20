@@ -1,9 +1,9 @@
 <?php
 /*
  *  +----------------------------------------------------------------------
- *  | ViSwoole [基于swoole开发的高性能快速开发框架]
+ *  | Viswoole [基于swoole开发的高性能快速开发框架]
  *  +----------------------------------------------------------------------
- *  | Copyright (c) 2024
+ *  | Copyright (c) 2024 https://viswoole.com All rights reserved.
  *  +----------------------------------------------------------------------
  *  | Licensed ( http://www.apache.org/licenses/LICENSE-2.0 )
  *  +----------------------------------------------------------------------
@@ -24,7 +24,7 @@ use Viswoole\Core\Config;
 /**
  * 缓存驱动管理器
  */
-class Cache
+class CacheManager
 {
   public const string FILE_DRIVER = File::class;
   public const string REDIS_DRIVER = Redis::class;

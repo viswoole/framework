@@ -1,9 +1,9 @@
 <?php
 /*
  *  +----------------------------------------------------------------------
- *  | ViSwoole [基于swoole开发的高性能快速开发框架]
+ *  | Viswoole [基于swoole开发的高性能快速开发框架]
  *  +----------------------------------------------------------------------
- *  | Copyright (c) 2024
+ *  | Copyright (c) 2024 https://viswoole.com All rights reserved.
  *  +----------------------------------------------------------------------
  *  | Licensed ( http://www.apache.org/licenses/LICENSE-2.0 )
  *  +----------------------------------------------------------------------
@@ -36,6 +36,6 @@ class CacheService extends Provider
    */
   #[Override] public function register(): void
   {
-    $this->app->bind('cache', Cache::class);
+    $this->app->bind('cache', CacheManager::class);
   }
 }

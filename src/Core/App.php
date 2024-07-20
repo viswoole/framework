@@ -15,7 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
-use Viswoole\Cache\Cache;
+use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Log\LogManager;
@@ -31,7 +31,7 @@ use Viswoole\Router\RouterService;
  * @property LogManager $log 日志控制器
  * @property Event $event 事件管理器
  * @property Server $server 应用控制器
- * @property Cache $cache 缓存管理器
+ * @property CacheManager $cache 缓存管理器
  * @property Middleware $middleware 中间件管理器
  * @property RouterManager $router 路由管理器
  */

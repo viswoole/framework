@@ -59,6 +59,6 @@ class Cache extends Facade
    */
   #[Override] protected static function getMappingClass(): string
   {
-    return \Viswoole\Cache\Cache::class;
+    return \Viswoole\Cache\CacheManager::class;
   }
 }
