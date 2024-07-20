@@ -283,16 +283,18 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     array               $attributes
   ): mixed
   {
-    $typeString = (string)$paramType;
     if (!is_null($paramType)) {
+      // 如果$value等于null 且设置的是内置类型 则判断是否允许为null，如果允许则返回null，否则抛出异常
+      if (is_null($value) && $paramType->isBuiltin()) {
+        if ($allowsNull) return null;
+        $this->handleParamsError($index, $name, "must be of type $paramType, null given");
+      }
+      // 进行类型验证
       try {
         $value = Validate::check($value, $paramType);
       } catch (ValidateException $e) {
         $this->handleParamsError($index, $name, $e);
       }
-    }
-    if (!$allowsNull && is_null($value)) {
-      $this->handleParamsError($index, $name, "must be of type $typeString, null given");
     }
     try {
       // 验证扩展规则
