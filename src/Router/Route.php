@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use Closure;
-use Viswoole\Core\Facades\Server;
+use Viswoole\Core\Facade\Server;
 use Viswoole\Router\Facade\Router;
 
 /**

@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Core\Facades;
+namespace Viswoole\Core\Facade;
 
 use Closure;
 use Viswoole\Core\Facade;

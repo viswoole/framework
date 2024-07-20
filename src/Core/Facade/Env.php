@@ -13,19 +13,21 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Core\Facades;
+namespace Viswoole\Core\Facade;
 
 use Viswoole\Core\Facade;
 
 /**
- * Event事件管理器
+ * Env管理类
  *
- * @method static void on(string $event, callable|string $handle, int $limit = 0) 监听事件
- * @method static void emit(string $event, array $data = []) 触发事件
- * @method static void off(string $event, callable|string $handle = null) 清除事件，不传handle则清除所有
- * @method static void offAll() 清除所有事件
+ * @method static void set(array|string $env, mixed $value = null) 设置环境变量值
+ * @method static bool has(string $name) 检测是否存在环境变量
+ * @method static mixed get(?string $name = null, mixed $default = null) 获取环境变量值(可获取用户环境变量和系统环境变量)
+ * @method static mixed getEnv(string $name, mixed $default = null) 获取环境变量(仅能获取系统缓存变量)
+ *
+ * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facades\\Env
  */
-class Event extends Facade
+class Env extends Facade
 {
 
   /**
@@ -33,6 +35,6 @@ class Event extends Facade
    */
   #[\Override] protected static function getMappingClass(): string
   {
-    return \Viswoole\Core\Event::class;
+    return \Viswoole\Core\Env::class;
   }
 }
