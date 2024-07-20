@@ -19,6 +19,7 @@ use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Log\LogManager;
+use Viswoole\Log\LogService;
 use Viswoole\Router\RouterManager;
 use Viswoole\Router\RouterService;
 
@@ -46,7 +47,6 @@ class App extends Container
     'env' => Env::class,
     'config' => Config::class,
     'console' => Console::class,
-    'log' => LogManager::class,
     'event' => Event::class,
     'server' => Server::class,
     'middleware' => Middleware::class
@@ -55,6 +55,7 @@ class App extends Container
    * @var string[] 服务列表
    */
   protected array $services = [
+    LogService::class,
     CacheService::class,
     RouterService::class
   ];
