@@ -19,6 +19,8 @@ use Viswoole\Cache\Cache;
 use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Log\LogManager;
+use Viswoole\Router\RouterManager;
+use Viswoole\Router\RouterService;
 
 /**
  * App应用管理中心
@@ -31,6 +33,7 @@ use Viswoole\Log\LogManager;
  * @property Server $server 应用控制器
  * @property Cache $cache 缓存管理器
  * @property Middleware $middleware 中间件管理器
+ * @property RouterManager $router 路由管理器
  */
 class App extends Container
 {
@@ -52,7 +55,8 @@ class App extends Container
    * @var string[] 服务列表
    */
   protected array $services = [
-    CacheService::class
+    CacheService::class,
+    RouterService::class
   ];
 
   protected function __construct()
