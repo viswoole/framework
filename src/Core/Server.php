@@ -146,6 +146,9 @@ class Server
   public function __construct(string $server_name, protected Event $event)
   {
     $server_name = strtolower($server_name);
+    /**
+     * 当前正在运行的服务名称
+     */
     define('SERVER_NAME', $server_name);
     $this->serverName = $server_name;
     /** @noinspection PhpUnhandledExceptionInspection */
