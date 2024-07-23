@@ -222,6 +222,7 @@ class Server
       $server->on($event_name, $handler);
     }
     $this->server = $server;
+    $this->event->emit('ServerCreate', [$this]);
   }
 
   /**
@@ -258,8 +259,8 @@ class Server
     $serverName = $this->serverName;
     if ($this->isStart) throw new ServerException("{$serverName}服务已在运行中，请勿重复启动服务。");
     $this->isStart = true;
-    // 触发ServerStartBefore事件
-    $this->event->emit('ServerStartBefore', [$this]);
+    // 触发ServerStart事件
+    $this->event->emit('ServerStart', [$this]);
     // 进程守护
     if ($daemonize) $this->server->set([Constant::OPTION_DAEMONIZE => $daemonize]);
     $result = $this->server->start();
