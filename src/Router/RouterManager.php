@@ -32,8 +32,10 @@ class RouterManager
    */
   protected array $serverRouteCollector = [];
 
-  function __construct(protected readonly App $app)
+  public function __construct(protected readonly App $app)
   {
+    // 因为在实例化期间存在从外部获取本来实例，所以需要在此绑定实例到容器中
+    $this->app->bind(self::class, $this);
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
     $this->parseRoute();

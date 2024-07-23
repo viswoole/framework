@@ -82,6 +82,8 @@ class App extends Container
         'Asia/Shanghai'
       )
     );
+    // 实例化中间件
+    $this->bind(Middleware::class, new Middleware($this));
     // 注册服务
     $this->loadService();
   }

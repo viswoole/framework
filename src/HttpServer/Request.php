@@ -60,7 +60,7 @@ class Request implements RequestInterface
    */
   protected array $filter = ['htmlspecialchars' => ['flags' => ENT_QUOTES | ENT_SUBSTITUTE]];
 
-  protected function __construct(public readonly swooleRequest $swooleRequest)
+  public function __construct(public readonly swooleRequest $swooleRequest)
   {
     if (!empty($swooleRequest->files)) $swooleRequest->files = $this->parseFiles(
       $swooleRequest->files
@@ -100,7 +100,7 @@ class Request implements RequestInterface
       userInfo: $this->getBasicAuthCredentials(),
       host    : $host[0],
       port    : $host[1] ?? null,
-      path    : $this->getRequestTarget(),
+      path    : $this->target(),
       query   : $this->getServer('query_string', '')
     );
   }
@@ -210,9 +210,9 @@ class Request implements RequestInterface
    * @access public
    * @return string
    */
-  public function getPath(): string
+  public function target(): string
   {
-    return $this->target();
+    return $this->getServer('path_info', $this->getServer('request_uri', '/'));
   }
 
   /**
@@ -221,9 +221,9 @@ class Request implements RequestInterface
    * @access public
    * @return string
    */
-  public function target(): string
+  public function getPath(): string
   {
-    return $this->getServer('path_info', $this->getServer('request_uri', '/'));
+    return $this->target();
   }
 
   /**
@@ -498,7 +498,7 @@ class Request implements RequestInterface
   }
 
   /**
-   * 用于 获取 swooleRequest 对象的属性
+   * 用于 获取 Swoole\Http\Request 对象的属性
    *
    * @param string $name
    * @return mixed
@@ -508,12 +508,12 @@ class Request implements RequestInterface
     if (property_exists($this->swooleRequest, $name)) {
       return $this->swooleRequest->$name;
     } else {
-      throw new InvalidArgumentException("属性 $name 在 swooleRequest 对象中不存在");
+      throw new InvalidArgumentException("属性 $name 在 Swoole\Http\Request 对象中不存在");
     }
   }
 
   /**
-   * 用于 设置 swooleRequest 对象的属性
+   * 用于 设置 Swoole\Http\Request 对象的属性
    *
    * @param string $name
    * @param $value
@@ -524,7 +524,7 @@ class Request implements RequestInterface
     if (property_exists($this->swooleRequest, $name)) {
       $this->swooleRequest->$name = $value;
     } else {
-      throw new InvalidArgumentException("属性 $name 在 swooleRequest 对象中不存在");
+      throw new InvalidArgumentException("属性 $name 在 Swoole\Http\Request 对象中不存在");
     }
   }
 
@@ -533,7 +533,7 @@ class Request implements RequestInterface
     if (method_exists($this->swooleRequest, $name)) {
       return call_user_func_array([$this->swooleRequest, $name], $arguments);
     } else {
-      throw new BadMethodCallException("方法 $name 在 swooleRequest 对象中不存在");
+      throw new BadMethodCallException("方法 $name 在 Swoole\Http\Request 对象中不存在");
     }
   }
 

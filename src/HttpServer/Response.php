@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer;
 
+use BadMethodCallException;
 use InvalidArgumentException;
 use JsonSerializable;
 use Override;
@@ -63,7 +64,7 @@ class Response implements ResponseInterface
   public function __construct(public readonly swooleResponse $swooleResponse)
   {
     $this->swooleResponse->status($this->statusCode, $this->reasonPhrase);
-    foreach ($this->swooleResponse->header as $key => $value) {
+    foreach ($this->headers as $key => $value) {
       $this->swooleResponse->header($key, $value);
     }
   }
@@ -114,6 +115,46 @@ class Response implements ResponseInterface
     $result = swooleResponse::create($server, $fd);
     if (!$result) throw new RuntimeException('创建响应对象失败，请检查参数是否正确。');
     return new static($result);
+  }
+
+  public function __call(string $name, array $arguments)
+  {
+    if (method_exists($this->swooleResponse, $name)) {
+      return call_user_func_array([$this->swooleResponse, $name], $arguments);
+    } else {
+      throw new BadMethodCallException("方法 $name 在 Swoole\Http\Response 对象中不存在");
+    }
+  }
+
+  /**
+   * 用于 获取 Swoole\Http\Response 对象的属性
+   *
+   * @param string $name
+   * @return mixed
+   */
+  public function __get(string $name)
+  {
+    if (property_exists($this->swooleResponse, $name)) {
+      return $this->swooleResponse->$name;
+    } else {
+      throw new InvalidArgumentException("属性 $name 在 Swoole\Http\Response 对象中不存在");
+    }
+  }
+
+  /**
+   * 用于 设置 Swoole\Http\Response 对象的属性
+   *
+   * @param string $name
+   * @param $value
+   * @return void
+   */
+  public function __set(string $name, $value): void
+  {
+    if (property_exists($this->swooleResponse, $name)) {
+      $this->swooleResponse->$name = $value;
+    } else {
+      throw new InvalidArgumentException("属性 $name 在 Swoole\Http\Response 对象中不存在");
+    }
   }
 
   /**
