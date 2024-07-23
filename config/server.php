@@ -7,20 +7,20 @@ declare (strict_types=1);
 
 use Swoole\Constant;
 use Swoole\Http\Server as httpServer;
-use Viswoole\Core\Exception\Handle;
+use Swoole\Server\Task;
+use Viswoole\HttpServer\EventHandle as HttpEventHandle;
+use Viswoole\HttpServer\Exception\Handle as HttpExceptionHandle;
 
 return [
   // 默认启动的服务
   'default_start_server' => env('default_start_server', 'http'),
-  // 默认的服务异常处理类
-  'default_exception_handle' => Handle::class,
   // 服务定义
   'servers' => [
     'http' => [
       // 服务类型
       'type' => httpServer::class,
       // 服务异常处理类
-      'exception_handle' => Handle::class,
+      'exception_handle' => HttpExceptionHandle::class,
       // 构造参数 参考https://wiki.swoole.com/#/server/methods?id=__construct
       'construct' => [
         // 指定监听的 ip 地址。
@@ -47,9 +47,9 @@ return [
       ],
       'events' => [
         // HTTP请求处理
-//        Constant::EVENT_REQUEST => [HttpEventHandle::class, 'onRequest'],
+        Constant::EVENT_REQUEST => [HttpEventHandle::class, 'onRequest'],
         // 任务分发
-//        Constant::EVENT_TASK => [Task::class, 'dispatch']
+        Constant::EVENT_TASK => [Task::class, 'dispatch']
       ]
     ]
   ],
@@ -77,5 +77,5 @@ return [
     Constant::OPTION_PACKAGE_MAX_LENGTH => 2 * 1024 * 1024,
     // 日志输出等级
     Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
-  ],
+  ]
 ];
