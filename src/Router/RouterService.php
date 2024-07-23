@@ -31,7 +31,7 @@ class RouterService extends Provider
   {
     // 监听服务启动之前
     $this->app->event->on('ServerCreate', function (Server $server) {
-      $this->app->make('router', [$server->serverName]);
+      $this->app->make('router');
     });
   }
 

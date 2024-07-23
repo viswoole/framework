@@ -80,7 +80,7 @@ class RouterManager
       /** @var $controller RouteController|AutoRouteController 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
       // 如果指定了服务，且服务名称非当前正在运行的服务，则跳过解析
-      if ($controller->server !== null && $controller->server !== $this->app->server->getName()) {
+      if ($controller->server !== null && $controller->server !== SERVER_NAME) {
         continue;
       }
       // 判断是否设置了描述
@@ -189,7 +189,7 @@ class RouterManager
    */
   public function collector(string $serverName = null): RouteCollector
   {
-    if (is_null($serverName)) $serverName = $this->app->server->getName();
+    if (is_null($serverName)) $serverName = SERVER_NAME;
     if (isset($this->serverRouteCollector[$serverName])) return $this->serverRouteCollector[$serverName];
     return $this->serverRouteCollector[$serverName] = new RouteCollector($this->app);
   }
