@@ -72,6 +72,17 @@ if (!function_exists('app')) {
     return App::factory()->get($name);
   }
 }
+if (!function_exists('isDebug')) {
+  /**
+   * 判断是否Debug环境
+   *
+   * @return bool
+   */
+  function isDebug(): bool
+  {
+    return App::factory()->isDebug();
+  }
+}
 if (!function_exists('env')) {
   /**
    * 获取环境变量的值
