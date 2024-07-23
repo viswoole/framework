@@ -18,6 +18,9 @@ namespace Viswoole\Core;
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Provider;
+use Viswoole\HttpServer\Contract\RequestInterface;
+use Viswoole\HttpServer\Contract\ResponseInterface;
+use Viswoole\HttpServer\HttpService;
 use Viswoole\Log\LogManager;
 use Viswoole\Log\LogService;
 use Viswoole\Router\RouterManager;
@@ -35,6 +38,8 @@ use Viswoole\Router\RouterService;
  * @property CacheManager $cache 缓存管理器
  * @property Middleware $middleware 中间件管理器
  * @property RouterManager $router 路由管理器
+ * @property ResponseInterface $response HTTP响应对象
+ * @property RequestInterface $request HTTP请求对象
  */
 class App extends Container
 {
@@ -57,7 +62,8 @@ class App extends Container
   protected array $services = [
     LogService::class,
     CacheService::class,
-    RouterService::class
+    RouterService::class,
+    HttpService::class
   ];
 
   protected function __construct()
