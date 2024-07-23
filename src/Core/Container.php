@@ -115,12 +115,28 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * @inheritDoc
-   * @throws NotFoundException
+   * 判断是否存在某个类的实例
+   *
+   * @param string $class
+   * @return bool
    */
-  #[Override] public function offsetGet(mixed $offset): mixed
+  public function hasInstance(string $class): bool
   {
-    return $this->get($offset);
+    $result = $this->getSingleton($class);
+    return is_object($result);
+  }
+
+  /**
+   * 获取单实例
+   *
+   * @param string $class
+   * @return object|null
+   */
+  protected function getSingleton(string $class): ?object
+  {
+    if (isset($this->instances[$class])) return $this->instances[$class];
+    if (Coroutine::isCoroutine()) return Context::get($this->CONTEXT_PREFIX . $class);
+    return null;
   }
 
   /**
@@ -172,19 +188,6 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   protected function getBind(string $abstract): string|Closure
   {
     return $this->bindings[$abstract] ?? $abstract;
-  }
-
-  /**
-   * 获取单实例
-   *
-   * @param string $class
-   * @return object|null
-   */
-  protected function getSingleton(string $class): ?object
-  {
-    if (isset($this->instances[$class])) return $this->instances[$class];
-    if (Coroutine::isCoroutine()) return Context::get($this->CONTEXT_PREFIX . $class);
-    return null;
   }
 
   /**
@@ -475,6 +478,15 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     } else {
       $this->instances[$class] = $instance;
     }
+  }
+
+  /**
+   * @inheritDoc
+   * @throws NotFoundException
+   */
+  #[Override] public function offsetGet(mixed $offset): mixed
+  {
+    return $this->get($offset);
   }
 
   /**
