@@ -11,8 +11,8 @@ return [
   'AppInit' => [],
   // 应用销毁
   'AppDestroyed' => [],
-  // 服务器启动
-  'ServerStart' => [],
-  // 服务器停止
-  'ServerShutdown' => []
+  // SWOOLE服务创建，通常应该在此时做一些依赖于服务配置的事情，例如在此时系统会初始化对应服务的路由器。
+  'ServerCreate' => [],
+  // SWOOLE服务启动。
+  'ServerStart' => []
 ];
