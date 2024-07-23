@@ -15,19 +15,17 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer\Message;
 
-use Psr\Http\Message\StreamInterface;
-use Psr\Http\Message\UploadedFileInterface;
 
 /**
  * 客户端上传的文件
  */
-class UploadedFile implements UploadedFileInterface
+class UploadedFile
 {
 
   /**
-   * @var StreamInterface 资源流
+   * @var FileStream 资源流
    */
-  protected StreamInterface $stream;
+  protected FileStream $stream;
   /**
    * @var string 媒体类型
    */
@@ -69,9 +67,9 @@ class UploadedFile implements UploadedFileInterface
    * 获取文件流
    *
    * @access public
-   * @return StreamInterface
+   * @return FileStream
    */
-  public function getStream(): StreamInterface
+  public function getStream(): FileStream
   {
     if (!isset($this->stream)) {
       $this->stream = new FileStream($this->tmp_name); // 以二进制只读模式打开文件流

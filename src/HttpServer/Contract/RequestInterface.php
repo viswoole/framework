@@ -15,9 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer\Contract;
 
-use Psr\Http\Message\UriInterface;
 use RuntimeException;
 use Viswoole\HttpServer\Message\UploadedFile;
+use Viswoole\HttpServer\Message\Uri;
 
 /**
  * 请求对象
@@ -241,9 +241,9 @@ interface RequestInterface
    * 检索 URI 实例。
    *
    * @access public
-   * @return UriInterface 返回表示请求 URI 的 UriInterface 实例。
+   * @return Uri 返回表示请求 URI 的 UriInterface 实例。
    */
-  public function getUri(): UriInterface;
+  public function getUri(): Uri;
 
   /**
    * 判断是否https访问

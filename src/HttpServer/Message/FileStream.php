@@ -15,10 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer\Message;
 
-use Psr\Http\Message\StreamInterface;
 use RuntimeException;
 
-class FileStream implements StreamInterface
+class FileStream
 {
   /**
    * @var resource 资源流
@@ -34,6 +33,8 @@ class FileStream implements StreamInterface
 
   /**
    * 创建流实例
+   *
+   * @access public
    * @param string $filePath 文件路径
    * @param string $mode 参考https://www.php.net/manual/zh/function.fopen.php
    * @return static
@@ -97,6 +98,7 @@ class FileStream implements StreamInterface
   /**
    * 获取流的大小（字节数），如果不可知则返回 null
    *
+   * @access public
    * @return int|null Returns the size in bytes if known, or null of unknown.
    */
   public function getSize(): ?int
@@ -109,6 +111,7 @@ class FileStream implements StreamInterface
   /**
    * 返回当前流的读/写指针位置。
    *
+   * @access public
    * @return int Position of the file pointer
    * @throws RuntimeException on error.
    */
@@ -124,6 +127,7 @@ class FileStream implements StreamInterface
   /**
    * 检查是否已到达流的末尾。
    *
+   * @access public
    * @return bool
    */
   public function eof(): bool
@@ -244,6 +248,7 @@ class FileStream implements StreamInterface
   /**
    * 读取整个流的内容并返回。
    *
+   * @access public
    * @return string
    * @throws RuntimeException if unable to read or an error occurs while reading.
    */
@@ -259,6 +264,7 @@ class FileStream implements StreamInterface
   /**
    * 获取流的元数据信息，可以传递一个键来获取特定的元数据。
    *
+   * @access public
    * @param string|null $key Specific metadata to retrieve.
    * @return array|mixed|null 如果未提供键，则返回关联数组。
    * 如果提供了键并且找到了值，则返回特定的键值；

@@ -18,7 +18,6 @@ namespace Viswoole\HttpServer;
 use BadMethodCallException;
 use InvalidArgumentException;
 use Override;
-use Psr\Http\Message\UriInterface;
 use RuntimeException;
 use Swoole\Http\Request as swooleRequest;
 use Viswoole\Core\Facade\Server;
@@ -90,9 +89,9 @@ class Request implements RequestInterface
    * 检索 URI 实例。
    *
    * @access public
-   * @return UriInterface 返回表示请求 URI 的 UriInterface 实例。
+   * @return Uri 返回表示请求 URI 的 UriInterface 实例。
    */
-  public function getUri(): UriInterface
+  #[Override] public function getUri(): Uri
   {
     $host = explode(':', $this->getHeader('host'));
     return Uri::create(

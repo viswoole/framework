@@ -15,9 +15,8 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer\Message;
 
-use Psr\Http\Message\UriInterface;
 
-class Uri implements UriInterface
+class Uri
 {
 
   /**
@@ -103,6 +102,8 @@ class Uri implements UriInterface
   /**
    * 获取 URI 的协议方案部分（Scheme）。
    * 例如，对于 URI "http://example.com"，此方法返回 "http"。
+   *
+   * @access public
    * @return string
    */
   public function getScheme(): string
@@ -114,6 +115,8 @@ class Uri implements UriInterface
    * 获取 URI 的授权部分（Authority）。
    * 授权部分通常包括主机名和可选的端口号。
    * 例如，对于 URI "http://example.com:8080"，此方法返回 "example.com:8080"。
+   *
+   * @access public
    * @return string
    */
   public function getAuthority(): string
@@ -128,6 +131,8 @@ class Uri implements UriInterface
    * 获取 URI 的用户信息部分。通常用于包含用户名和密码。
    * 例如，对于 URI "http://user:password@example.com"，此方法返回 "user:password"。
    * 从Authorization 请求头获取。
+   *
+   * @access public
    * @return string
    */
   public function getUserInfo(): string
@@ -138,6 +143,8 @@ class Uri implements UriInterface
   /**
    * 获取 URI 的主机部分（Host）。
    * 主机部分通常包括主机名或 IP 地址。例如，对于 URI "http://example.com"，此方法返回 "example.com"。
+   *
+   * @access public
    * @return string
    */
   public function getHost(): string
@@ -149,6 +156,8 @@ class Uri implements UriInterface
    * 获取 URI 的端口部分（Port）。
    * 端口部分表示 URI 使用的端口号。
    * 例如，对于 URI "http://example.com:8080"，此方法返回 8080。
+   *
+   * @access public
    * @return int|null
    */
   public function getPort(): ?int
@@ -159,6 +168,8 @@ class Uri implements UriInterface
   /**
    * 获取 URI 的路径部分（Path）。路径部分表示资源在服务器上的路径。
    * 例如，对于 URI "http://example.com/path/to/resource"，此方法返回 "/path/to/resource"
+   *
+   * @access public
    * @return string
    */
   public function getPath(): string
@@ -171,6 +182,8 @@ class Uri implements UriInterface
    * 查询部分通常用于传递参数给资源。
    * 例如，对于 URI "http://example.com/resource?param1=value1&param2=value2"，
    * 此方法返回 "param1=value1&param2=value2"。
+   *
+   * @access public
    * @return string
    */
   public function getQuery(): string
@@ -182,6 +195,8 @@ class Uri implements UriInterface
    * 获取 URI 的片段部分（Fragment）。
    * 片段部分通常用于标识资源中的特定部分。
    * 例如，对于 URI "http://example.com/resource#section1"，此方法返回 "section1"。
+   *
+   * @access public
    * @return string
    */
   public function getFragment(): string
@@ -191,10 +206,12 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的协议部分。
+   *
+   * @access public
    * @param string $scheme
-   * @return UriInterface
+   * @return Uri
    */
-  public function withScheme(string $scheme): UriInterface
+  public function withScheme(string $scheme): Uri
   {
     $newInstance = clone $this;
     $newInstance->scheme = $scheme;
@@ -203,11 +220,13 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的用户信息部分。
+   *
+   * @access public
    * @param string $user 用户
    * @param string|null $password 密码
-   * @return UriInterface
+   * @return Uri
    */
-  public function withUserInfo(string $user, ?string $password = null): UriInterface
+  public function withUserInfo(string $user, ?string $password = null): Uri
   {
     $newInstance = clone $this;
     if (empty($password)) {
@@ -220,10 +239,12 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的主机部分。
+   *
+   * @access public
    * @param string $host
-   * @return UriInterface
+   * @return Uri
    */
-  public function withHost(string $host): UriInterface
+  public function withHost(string $host): Uri
   {
     $newInstance = clone $this;
     $newInstance->host = $host;
@@ -232,10 +253,12 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的端口部分。
+   *
+   * @access public
    * @param int|null $port
-   * @return UriInterface
+   * @return Uri
    */
-  public function withPort(?int $port): UriInterface
+  public function withPort(?int $port): Uri
   {
     $newInstance = clone $this;
     $newInstance->port = $port;
@@ -244,10 +267,12 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的路径部分。
+   *
+   * @access public
    * @param string $path
-   * @return UriInterface
+   * @return Uri
    */
-  public function withPath(string $path): UriInterface
+  public function withPath(string $path): Uri
   {
     $newInstance = clone $this;
     $newInstance->path = $path;
@@ -256,10 +281,12 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的查询部分。
+   *
+   * @access public
    * @param string $query
-   * @return UriInterface
+   * @return Uri
    */
-  public function withQuery(string $query): UriInterface
+  public function withQuery(string $query): Uri
   {
     $newInstance = clone $this;
     $newInstance->query = $query;
@@ -268,10 +295,12 @@ class Uri implements UriInterface
 
   /**
    * 创建一个新的 URI 对象，其中包含指定的片段部分。
+   *
+   * @access public
    * @param string $fragment
-   * @return UriInterface
+   * @return Uri
    */
-  public function withFragment(string $fragment): UriInterface
+  public function withFragment(string $fragment): Uri
   {
     $newInstance = clone $this;
     $newInstance->fragment = $fragment;
@@ -281,6 +310,8 @@ class Uri implements UriInterface
   /**
    * 返回 URI 的字符串表示形式。这是一个魔术方法，用于将 URI 对象转换为字符串。
    * http://example.com:8080/path#fragment?query=1
+   *
+   * @access public
    * @return string
    */
   public function __toString(): string
