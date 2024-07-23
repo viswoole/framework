@@ -7,7 +7,8 @@ declare (strict_types=1);
 
 use Swoole\Constant;
 use Swoole\Http\Server as httpServer;
-use Swoole\Server\Task;
+use Swoole\Server as SwooleServer;
+use Viswoole\Core\Console\Output;
 use Viswoole\HttpServer\EventHandle as HttpEventHandle;
 use Viswoole\HttpServer\Exception\Handle as HttpExceptionHandle;
 
@@ -38,7 +39,7 @@ return [
         // 启用HTTP2协议解析
         Constant::OPTION_OPEN_HTTP2_PROTOCOL => true,
         // 任务进程数量 最大值不得超过 swoole_cpu_num() * 1000  0代表不开启
-        Constant::OPTION_TASK_WORKER_NUM => swoole_cpu_num(),
+        Constant::OPTION_TASK_WORKER_NUM => 0,
         // 如果需要ssl访问则需要配置 Constant::OPTION_SSL_CERT_FILE 和 Constant::OPTION_SSL_KEY_FILE
         // 进程守护运行
         Constant::OPTION_DAEMONIZE => false,
@@ -47,9 +48,7 @@ return [
       ],
       'events' => [
         // HTTP请求处理
-        Constant::EVENT_REQUEST => [HttpEventHandle::class, 'onRequest'],
-        // 任务分发
-        Constant::EVENT_TASK => [Task::class, 'dispatch']
+        Constant::EVENT_REQUEST => [HttpEventHandle::class, 'onRequest']
       ]
     ]
   ],
@@ -67,6 +66,8 @@ return [
     Constant::OPTION_LOG_FILE => BASE_PATH . '/runtime/sysLog.log',
     // 工作进程数量
     Constant::OPTION_WORKER_NUM => swoole_cpu_num(),
+    // 任务进程数量 最大值不得超过 swoole_cpu_num() * 1000  0代表不开启
+    Constant::OPTION_TASK_WORKER_NUM => 0,
     // 最大请求数 0为不限制
     Constant::OPTION_MAX_REQUEST => 100000,
     // 客户端连接的缓存区长度
@@ -77,5 +78,16 @@ return [
     Constant::OPTION_PACKAGE_MAX_LENGTH => 2 * 1024 * 1024,
     // 日志输出等级
     Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
+  ],
+  // 全局EVENTS
+  'events' => [
+    Constant::EVENT_START => function (SwooleServer $server): void {
+      $serverName = SERVER_NAME;
+      Output::echo("$serverName 服务启动 进程PID:" . $server->master_pid, 'NOTICE', 0);
+    },
+    Constant::EVENT_SHUTDOWN => function (SwooleServer $server): void {
+      $serverName = SERVER_NAME;
+      Output::echo("$serverName 服务已经安全关闭", 'NOTICE', 0);
+    }
   ]
 ];

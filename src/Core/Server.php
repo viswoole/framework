@@ -151,6 +151,7 @@ class Server
     /** @noinspection PhpUnhandledExceptionInspection */
     $this->getConfig();
     $this->createSwooleServer();
+    $this->event->emit('ServerCreate', [$this]);
   }
 
   /**
@@ -163,6 +164,8 @@ class Server
   public function getConfig(): array
   {
     if (isset($this->config)) return $this->config;
+    // 默认的全局event
+    $defaultEvents = config('server.events', []);
     $config = config("server.servers.$this->serverName");
     if (empty($config)) {
       throw new ServerNotFoundException(
@@ -184,7 +187,7 @@ class Server
     // 合并配置
     $config['options'] = array_merge(self::DEFAULT_GLOBAL_OPTION, $config['options'] ?? []);
     // HOOK事件监听
-    $config['events'] = EventHandler::hook($config['events']);
+    $config['events'] = EventHandler::hook(array_merge($defaultEvents, $config['events'] ?? []));
     // 任务回调协程化
     $config['options'][Constant::OPTION_TASK_ENABLE_COROUTINE] = true;
     // 判断PID存储路径是否设置
@@ -222,7 +225,6 @@ class Server
       $server->on($event_name, $handler);
     }
     $this->server = $server;
-    $this->event->emit('ServerCreate', [$this]);
   }
 
   /**
