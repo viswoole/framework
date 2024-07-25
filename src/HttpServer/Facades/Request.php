@@ -16,15 +16,15 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Facades;
 
 use Override;
-use Psr\Http\Message\UriInterface;
 use Viswoole\Core\Facade;
 use Viswoole\HttpServer\Contract\RequestInterface;
 use ViSwoole\HttpServer\Message\UploadedFile;
+use Viswoole\HttpServer\Message\Uri;
 
 /**
  * HTTP请求对象
  *
- * @method static UriInterface getUri() 检索 URI 实例。
+ * @method static Uri getUri() 检索 URI 实例。
  * @method static array|string|null getHeader(?string $key = null, mixed $default = null) 获取请求标头, 所有标头均为小写
  * @method static RequestInterface create(array $options = []) 创建一个新的RequestInterface对象
  * @method static bool https() 判断是否https访问
