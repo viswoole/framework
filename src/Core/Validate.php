@@ -15,7 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
-use App\Interface\Example;
 use ReflectionAttribute;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -208,7 +207,6 @@ class Validate
    */
   public static function class(string $class, mixed $value): object
   {
-    if ($class === Example::class) dump($value);
     if ($value instanceof $class) return $value;
     $app = App::factory();
     if (interface_exists($class)) {
