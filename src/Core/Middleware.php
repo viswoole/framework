@@ -40,12 +40,12 @@ class Middleware
    *
    * ```
    * // 注册一个闭包中间件，必须调用$handler才能往下执行，支持依赖注入
-   * \Viswoole\Core\Facades\Middleware::register(function (RequestInterface $request, ResponseInterface $response, Closure $handler) {
+   * \Viswoole\Core\Facade\Middleware::register(function (RequestInterface $request, ResponseInterface $response, Closure $handler) {
    *   // 中间件逻辑
    *   return $handler();
    * }, 'http');
    * // 注册一个实现了MiddlewareInterface接口的类
-   * \Viswoole\Core\Facades\Middleware::register(UserAuthMiddleware::class, 'http');
+   * \Viswoole\Core\Facade\Middleware::register(UserAuthMiddleware::class, 'http');
    * ```
    * @param Closure|string $handler 中间件
    * @param string|null $server 服务器名称，默认为null，表示应用于所有服务器
