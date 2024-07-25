@@ -39,11 +39,13 @@ class HttpService extends Provider
   {
     if (class_exists('\App\Request')) {
       $requestClass = \App\Request::class;
+      $this->app->bind(\App\Request::class, \App\Request::class);
     } else {
       $requestClass = Request::class;
     }
     if (class_exists('\App\Response')) {
       $responseClass = \App\Response::class;
+      $this->app->bind(\App\Response::class, \App\Response::class);
     } else {
       $responseClass = Response::class;
     }
