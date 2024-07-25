@@ -57,6 +57,15 @@ interface ResponseInterface
   ): ResponseInterface;
 
   /**
+   * html响应
+   *
+   * @access public
+   * @param string $html
+   * @return ResponseInterface
+   */
+  public function html(string $html): ResponseInterface;
+
+  /**
    * 设置响应头(别名setHeader)
    *
    * @access public

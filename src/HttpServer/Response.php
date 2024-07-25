@@ -292,6 +292,16 @@ class Response implements ResponseInterface
   /**
    * @inheritDoc
    */
+  #[Override] public function html(string $html): ResponseInterface
+  {
+    $this->setContentType('text/html');
+    $this->setContent($html);
+    return $this;
+  }
+
+  /**
+   * @inheritDoc
+   */
   #[Override] public function file(
     string $filePath, int $offset = 0, int $length = 0, ?string $fileMimeType = null
   ): bool
