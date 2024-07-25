@@ -17,6 +17,7 @@ namespace Viswoole\Core;
 
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
+use Viswoole\Core\Service\Middleware as MiddlewareService;
 use Viswoole\Core\Service\Provider;
 use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
@@ -53,8 +54,7 @@ class App extends Container
     'config' => Config::class,
     'console' => Console::class,
     'event' => Event::class,
-    'server' => Server::class,
-    'middleware' => Middleware::class
+    'server' => Server::class
   ];
   /**
    * @var string[] 服务列表
@@ -62,8 +62,9 @@ class App extends Container
   protected array $services = [
     LogService::class,
     CacheService::class,
+    MiddlewareService::class,
     RouterService::class,
-    HttpService::class
+    HttpService::class,
   ];
 
   protected function __construct()
@@ -82,8 +83,6 @@ class App extends Container
         'Asia/Shanghai'
       )
     );
-    // 实例化中间件
-    $this->bind(Middleware::class, new Middleware($this));
     // 注册服务
     $this->loadService();
   }
