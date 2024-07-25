@@ -61,6 +61,15 @@ class Request implements RequestInterface
 
   public function __construct(public readonly swooleRequest $swooleRequest)
   {
+    $contentType = $swooleRequest->header['content-type'] ?? null;
+    if ($contentType === 'application/json') {
+      // 获取原始请求内容
+      $rawContent = $swooleRequest->rawContent();
+      // 解析JSON数据
+      $postData = json_decode($rawContent, true);
+      // 将解析后的数据设置到 $request->post
+      $swooleRequest->post = $postData;
+    }
     if (!empty($swooleRequest->files)) $swooleRequest->files = $this->parseFiles(
       $swooleRequest->files
     );
