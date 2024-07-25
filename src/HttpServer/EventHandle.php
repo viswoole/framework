@@ -67,7 +67,7 @@ class EventHandle
       }
     } catch (Throwable $e) {
       $exceptionHandle = $app->server->getConfig()['exception_handle'] ?? Handle::class;
-      $app->invoke([$exceptionHandle, 'render'], [$e]);
+      $app->invokeMethod([$exceptionHandle, 'render'], [$e]);
     }
   }
 }
