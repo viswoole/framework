@@ -202,20 +202,21 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   {
     try {
       $reflector = new ReflectionClass($class);
-      $constructor = $reflector->getConstructor();
-      try {
-        $args = $constructor ? $this->injectParams($constructor, $params) : [];
-      } catch (ValidateException $e) {
-        $this->handleValidateError(
-          $reflector->getName() . '::__construct(): ' . $e->getMessage(), $e
-        );
-      }
-      $instance = $reflector->newInstanceArgs($args);
-      $this->invokeAfter($class, $instance);
-      return $instance;
     } catch (ReflectionException $e) {
       throw new ClassNotFoundException($e->getMessage(), previous: $e);
     }
+    $constructor = $reflector->getConstructor();
+    try {
+      $args = $constructor ? $this->injectParams($constructor, $params) : [];
+    } catch (ValidateException $e) {
+      $this->handleValidateError(
+        $reflector->getName() . '::__construct(): ' . $e->getMessage(), $e
+      );
+    }
+    /** @noinspection PhpUnhandledExceptionInspection */
+    $instance = $reflector->newInstanceArgs($args);
+    $this->invokeAfter($class, $instance);
+    return $instance;
   }
 
   /**
