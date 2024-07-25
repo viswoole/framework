@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use App\Interface\Example;
 use ReflectionAttribute;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -119,7 +120,7 @@ class Validate
       $value = self::intersection($type, $value);
     } elseif (enum_exists($type)) {
       $value = self::enum($type, $value);
-    } elseif (class_exists($type)) {
+    } elseif (class_exists($type) || interface_exists($type)) {
       $value = self::class($type, $value);
     }
     return $value;
@@ -207,16 +208,14 @@ class Validate
    */
   public static function class(string $class, mixed $value): object
   {
-    try {
-      if ($value instanceof $class) return $value;
-      if (!interface_exists($class)) {
-        // 如果验证通过，则将值注入,得到新实例
-        return App::factory()->make($class, is_array($value) ? $value : [$value]);
-      }
-    } catch (ValidateException $e) {
-      throw new ValidateException(
-        "must be an instance of $class" . ' , ' . gettype($value) . ' given', previous: $e
-      );
+    if ($class === Example::class) dump($value);
+    if ($value instanceof $class) return $value;
+    $app = App::factory();
+    if (interface_exists($class)) {
+      if ($app->has($class)) return $app->make($class, is_array($value) ? $value : [$value]);
+    } else {
+      // 如果验证通过，则将值注入,得到新实例
+      return App::factory()->make($class, is_array($value) ? $value : [$value]);
     }
     throw new ValidateException(
       "must be an instance of $class" . ' , ' . gettype($value) . ' given'
