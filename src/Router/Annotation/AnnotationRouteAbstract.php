@@ -32,6 +32,6 @@ abstract class AnnotationRouteAbstract
   )
   {
     $this->options['method'] = $this->methods;
-    $this->options['describe'] = $this->describe ?? '';
+    if (!empty($this->describe)) $this->options['describe'] = $this->describe;
   }
 }
