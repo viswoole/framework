@@ -57,7 +57,7 @@ class Handle extends \Viswoole\Core\Exception\Handle
     parent::render($e);
     $statusCode = 500;
     $message = $e->getMessage();
-    $data = null;
+    $trace = null;
     /**
      * @var ResponseInterface $response
      */
@@ -70,16 +70,14 @@ class Handle extends \Viswoole\Core\Exception\Handle
       $statusCode = Status::BAD_REQUEST;
     } elseif (isDebug()) {
       $message = $e->getMessage();
-      $data = $e->getTrace();
+      $trace = $e->getTrace();
     } else {
       $message = 'Internal Server Error';
     }
-    if ($this->request->isJson()) {
-      $this->response->status($statusCode)->json([
-        'code' => $e->getCode(),
-        'message' => $message,
-        'data' => $data
-      ]);
-    }
+    $this->response->status($statusCode)->json([
+      'code' => $e->getCode(),
+      'message' => $message,
+      'data' => $trace
+    ])->send();
   }
 }
