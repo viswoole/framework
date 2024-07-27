@@ -117,6 +117,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 判断是否存在某个类的实例
    *
+   * @access public
    * @param string $class
    * @return bool
    */
@@ -213,10 +214,13 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         $reflector->getName() . '::__construct(): ' . $e->getMessage(), $e
       );
     }
-    /** @noinspection PhpUnhandledExceptionInspection */
-    $instance = $reflector->newInstanceArgs($args);
-    $this->invokeAfter($class, $instance);
-    return $instance;
+    try {
+      $instance = $reflector->newInstanceArgs($args);
+      $this->invokeAfter($class, $instance);
+      return $instance;
+    } catch (ReflectionException $e) {
+      throw new ClassNotFoundException($e->getMessage(), previous: $e);
+    }
   }
 
   /**
@@ -260,7 +264,12 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       $value = Arr::arrayPopValue($params, $key, $default);
       // 验证类型
       $value = $this->validateParam(
-        $paramType, $value, $index, $name, $allowsNull, $attributes
+        $paramType,
+        $value,
+        $index,
+        $name,
+        $allowsNull,
+        $attributes
       );
       $args[$index] = $value;
     }
