@@ -19,7 +19,9 @@ use Viswoole\HttpServer\Facade\Request;
 use ViSwoole\HttpServer\Message\UploadedFile;
 
 /**
- * 用于自动注入
+ * 用于自动注入上传的文件，
+ * 如果需注入指定name的文件，
+ * 则需配合\Viswoole\HttpServer\Validate\FileRule使用。
  */
 class File
 {
