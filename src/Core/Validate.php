@@ -136,18 +136,21 @@ class Validate
   private static function checkTypes(mixed $value, array $types): mixed
   {
     $valid = false;
-    foreach ($types as $type) {
+    foreach ($types as $index => $type) {
       try {
         $value = self::checkType($value, $type);
         $valid = true;
         break;
-      } catch (ValidateException) {
-        // 不做处理
+      } catch (ValidateException $e) {
+        if ($index === count($types) - 1) {
+          throw $e;
+        }
       }
     }
     if (!$valid) {
-      $types = implode('|', $types);
-      throw new ValidateException("must match the $types" . ' , ' . gettype($value) . ' given');
+      throw new ValidateException(
+        'must match the type ' . implode('|', $types)
+      );
     }
     return $value;
   }

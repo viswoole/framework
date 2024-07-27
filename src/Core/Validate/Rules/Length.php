@@ -38,7 +38,7 @@ class Length extends RuleAbstract
   #[\Override] public function validate(mixed $value): mixed
   {
     if (is_string($value)) {
-      $len = strlen(trim($value));
+      $len = mb_strlen(trim($value));
     } elseif (is_array($value)) {
       $len = count($value);
     } else {
