@@ -78,7 +78,7 @@ class Request implements RequestInterface
   /**
    * 解析上传文件为UploadedFile实例
    * @param array $files
-   * @return array<string, UploadedFile|UploadedFile[]>
+   * @return array<string, UploadedFile[]>
    */
   protected function parseFiles(array $files): array
   {
@@ -88,7 +88,7 @@ class Request implements RequestInterface
         $file = $this->parseFiles($file);
         $uploadedFiles[$name] = $file;
       } else {
-        $uploadedFiles[$name] = new UploadedFile(...$file);
+        $uploadedFiles[$name] = [new UploadedFile(...$file)];
       }
     }
     return $uploadedFiles;
@@ -252,9 +252,9 @@ class Request implements RequestInterface
    * 获取上传的文件
    *
    * @param string|null $key 可选文件名称
-   * @return UploadedFile|UploadedFile[]|null|array<string, UploadedFile|UploadedFile[]>
+   * @return UploadedFile[]|null|array<string, UploadedFile[]>
    */
-  #[Override] public function files(?string $key = null): UploadedFile|array|null
+  #[Override] public function files(?string $key = null): array|null
   {
     return is_null($key) ? $this->swooleRequest->files : $this->swooleRequest->files[$key] ?? null;
   }

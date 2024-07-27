@@ -33,7 +33,7 @@ use Viswoole\HttpServer\Message\Uri;
  * @method static string target() 获取消息的请求目标（路径）。
  * @method static string getPath() 获取消息的请求路径。
  * @method static mixed cookie(?string $key = null, mixed $default = null) 获取cookie
- * @method static UploadedFile|\array|\null files(?string $key = null) 获取上传的文件
+ * @method static UploadedFile[]|\null files(?string $key = null) 获取上传的文件
  * @method static string|false getContent() 获取POST包体，此函数等同于 PHP 的 fopen('php://input')。
  * @method static string|false getData() 获取完整的原始 Http 请求报文，注意 Http2 下无法使用。
  * @method static int parse(string $data) 解析 HTTP 请求数据包，会返回成功解析的数据包长度。
