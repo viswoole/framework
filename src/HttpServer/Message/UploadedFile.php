@@ -25,7 +25,7 @@ class UploadedFile
   /**
    * @var string 缓存路径
    */
-  public readonly string $tmp_name;
+  public readonly string $tmp_path;
   /**
    * @var FileStream 资源流
    */
@@ -59,7 +59,7 @@ class UploadedFile
     $this->type = $type;
     $this->name = $name;
     $this->size = $size;
-    $this->tmp_name = $tmp_name;
+    $this->tmp_path = $tmp_name;
     $this->error = $error;
   }
 
@@ -72,7 +72,7 @@ class UploadedFile
   public function getStream(): FileStream
   {
     if (!isset($this->stream)) {
-      $this->stream = new FileStream($this->tmp_name); // 以二进制只读模式打开文件流
+      $this->stream = new FileStream($this->tmp_path); // 以二进制只读模式打开文件流
     }
     return $this->stream;
   }
@@ -88,7 +88,7 @@ class UploadedFile
   {
     if ($this->getError() === UPLOAD_ERR_OK) {
       // 移动上传的文件到目标路径
-      move_uploaded_file($this->tmp_name, $targetPath);
+      move_uploaded_file($this->tmp_path, $targetPath);
     }
   }
 
