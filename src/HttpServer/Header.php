@@ -128,6 +128,16 @@ class Header
 
   public function __toString(): string
   {
-    return $this->value;
+    return $this->value ?? var_export($this->all(), true);
+  }
+
+  /**
+   * 获取当前请求所有标头
+   *
+   * @return array
+   */
+  public function all(): array
+  {
+    return \Viswoole\HttpServer\Facade\Request::getHeader(default: []);
   }
 }
