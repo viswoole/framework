@@ -53,7 +53,7 @@ class Header extends RuleAbstract
     $headerValue = Request::getHeader($this->name);
     if (empty($headerValue) && $this->require) {
       $this->error("Http header $this->name is required");
-    } elseif ($value instanceof \Viswoole\HttpServer\Header) {
+    } elseif ($value instanceof \Viswoole\HttpServer\AutoInject\Header) {
       $value->name = $this->name;
       $value->value = $headerValue;
     } else {
