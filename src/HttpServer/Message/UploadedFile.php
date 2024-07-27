@@ -16,6 +16,9 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Message;
 
 
+use InvalidArgumentException;
+use RuntimeException;
+
 /**
  * 客户端上传的文件
  */
@@ -46,6 +49,10 @@ class UploadedFile
    * @var int 状态码
    */
   protected int $error;
+  /**
+   * @var bool 是否移动
+   */
+  protected bool $moved = false;
 
   /**
    * @param string $type 媒体类型
@@ -86,10 +93,71 @@ class UploadedFile
    */
   public function moveTo(string $targetPath): void
   {
-    if ($this->getError() === UPLOAD_ERR_OK) {
-      // 移动上传的文件到目标路径
-      move_uploaded_file($this->tmp_path, $targetPath);
+    $this->validateActive();
+
+    if (false === $this->isStringNotEmpty($targetPath)) {
+      throw new InvalidArgumentException(
+        'Invalid path provided for move operation; must be a non-empty string'
+      );
     }
+    $dir = dirname($targetPath);
+
+    if (false === is_dir($dir) && false === mkdir($dir, 0777, true)) {
+      throw new RuntimeException(
+        sprintf(
+          'Uploaded file could not be moved to %s because it is not possible to create that directory',
+          $dir
+        )
+      );
+    }
+    $name = basename($targetPath);
+    $targetPath = "$dir/$name";
+    $this->moved = PHP_SAPI === 'cli'
+      ? rename($this->tmp_path, $targetPath)
+      : move_uploaded_file($this->tmp_path, $targetPath);
+    if (false === $this->moved) {
+      throw new RuntimeException(
+        sprintf('Uploaded file could not be moved to %s', $targetPath)
+      );
+    }
+  }
+
+  /**
+   * @throws RuntimeException 如果被移动或不正常
+   */
+  private function validateActive(): void
+  {
+    if (false === $this->isOk()) {
+      throw new RuntimeException('Cannot retrieve stream due to upload error');
+    }
+
+    if ($this->isMoved()) {
+      throw new RuntimeException('Cannot retrieve stream after it has already been moved');
+    }
+  }
+
+  /**
+   * 如果没有上传错误，则返回 true
+   * @return bool
+   */
+  private function isOk(): bool
+  {
+    return $this->error === UPLOAD_ERR_OK;
+  }
+
+  /**
+   * 判断文件是否已移动
+   *
+   * @return bool
+   */
+  public function isMoved(): bool
+  {
+    return $this->moved;
+  }
+
+  private function isStringNotEmpty($param): bool
+  {
+    return is_string($param) && false === empty($param);
   }
 
   /**
@@ -135,4 +203,5 @@ class UploadedFile
   {
     return $this->type;
   }
+
 }
