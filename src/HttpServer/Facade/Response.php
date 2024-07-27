@@ -44,6 +44,7 @@ use Viswoole\HttpServer\Contract\ResponseInterface;
  * @method static ResponseInterface cookie(string $key, string $value = '', int $expire = 0, string $path = '/', string $domain = '', bool $secure = false, bool $httponly = false, string $samesite = '', string $priority = '') 设置cookie
  * @method static ResponseInterface detach() 分离响应对象。
  * @method static ResponseInterface setHeaders(array $headers) 批量设置响应标头
+ * @method static \Swoole\Http\Response getSwooleResponse() 获取swoole响应对象
  *
  * 优化命令：php viswoole optimize:facade \\Viswoole\\HttpServer\\Facades\\Response
  */

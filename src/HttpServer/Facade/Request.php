@@ -50,6 +50,7 @@ use Viswoole\HttpServer\Message\Uri;
  * @method static bool isJson() 当前是否JSON请求
  * @method static string getAcceptType() 当前请求的资源类型
  * @method static void addParams(array $params, string $type = 'auto') 添加/修改请求参数
+ * @method static \Swoole\Http\Request getSwooleRequest() 获取swoole请求对象
  *
  * 优化命令：php viswoole optimize:facade \\Viswoole\\HttpServer\\Facades\\Request
  */

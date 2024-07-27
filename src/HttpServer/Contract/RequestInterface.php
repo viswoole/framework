@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Contract;
 
 use RuntimeException;
+use Swoole\Http\Request as swooleRequest;
 use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\HttpServer\Message\Uri;
 
@@ -42,6 +43,13 @@ interface RequestInterface
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=create
    */
   public static function create(array $options = []): RequestInterface;
+
+  /**
+   * 获取Swoole\Http\Request对象
+   *
+   * @return swooleRequest
+   */
+  public function getSwooleRequest(): swooleRequest;
 
   /**
    * 获取请求标头

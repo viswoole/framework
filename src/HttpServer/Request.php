@@ -569,4 +569,12 @@ class Request implements RequestInterface
         }
     }
   }
+
+  /**
+   * @return swooleRequest
+   */
+  #[Override] public function getSwooleRequest(): swooleRequest
+  {
+    return $this->swooleRequest;
+  }
 }

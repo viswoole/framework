@@ -290,6 +290,16 @@ class Response implements ResponseInterface
   }
 
   /**
+   * 获取Swoole\Http\Response响应对象
+   *
+   * @return swooleResponse
+   */
+  #[Override] public function getSwooleResponse(): swooleResponse
+  {
+    return $this->swooleResponse;
+  }
+
+  /**
    * @inheritDoc
    */
   #[Override] public function html(string $html): ResponseInterface

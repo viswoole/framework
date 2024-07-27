@@ -17,6 +17,7 @@ namespace Viswoole\HttpServer\Contract;
 
 use JsonSerializable;
 use RuntimeException;
+use Swoole\Http\Response as swooleResponse;
 
 interface ResponseInterface
 {
@@ -33,6 +34,13 @@ interface ResponseInterface
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=create
    */
   public static function create(object|array|int $server = -1, int $fd = -1): ResponseInterface;
+
+  /**
+   * 获取Swoole\Http\Response响应对象
+   *
+   * @return swooleResponse
+   */
+  public function getSwooleResponse(): swooleResponse;
 
   /**
    * 批量设置响应标头
