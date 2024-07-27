@@ -96,7 +96,9 @@ class Validate
       return $tArr;
     }
     if ($type instanceof ReflectionIntersectionType) return (string)$type;
-    if ($type instanceof ReflectionNamedType) return $type->getName();
+    if ($type instanceof ReflectionNamedType) {
+      return $type->allowsNull() ? ['null', $type->getName()] : $type->getName();
+    }
     if (str_contains($type, '|')) return explode('|', $type);
     return $type;
   }
@@ -211,6 +213,7 @@ class Validate
     if (interface_exists($class)) {
       if ($app->has($class)) return $app->make($class, is_array($value) ? $value : [$value]);
     } else {
+      App::factory()->make($class, is_array($value) ? $value : [$value]);
       // 如果验证通过，则将值注入,得到新实例
       return App::factory()->make($class, is_array($value) ? $value : [$value]);
     }
