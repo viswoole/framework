@@ -23,6 +23,10 @@ class UploadedFile
 {
 
   /**
+   * @var string 缓存路径
+   */
+  public readonly string $tmp_name;
+  /**
    * @var FileStream 资源流
    */
   protected FileStream $stream;
@@ -30,10 +34,6 @@ class UploadedFile
    * @var string 媒体类型
    */
   protected string $type;
-  /**
-   * @var string 缓存路径
-   */
-  protected string $tmp_name;
   /**
    * @var int 文件大小
    */
