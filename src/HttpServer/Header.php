@@ -23,6 +23,15 @@ use InvalidArgumentException;
 class Header
 {
   /**
+   * @var string 标头
+   */
+  public string $name;
+  /**
+   * @var string 标头值
+   */
+  public string $value;
+
+  /**
    * 验证标头是否合法
    *
    * @param string $name 不区分大小写的头字段名称
@@ -57,7 +66,7 @@ class Header
    * @param false|string $nameModel false则表示保留原标头名称，其他可选值为lower|upper|title
    * @return array 格式化完毕的标头
    */
-  public static function getHeaders(
+  public static function formatHeaders(
     array        $headers,
     string       $valueMode = 'array',
     false|string $nameModel = false
@@ -98,29 +107,6 @@ class Header
   }
 
   /**
-   * 获取标头
-   *
-   * @access public
-   * @param string $name 不区分大小写标头名称
-   * @param array $headers 标头数组
-   * @param string $valueMode 要得到的标头值类型
-   * @return array|string
-   */
-  public static function getHeader(string $name, array $headers, string $valueMode = 'array'
-  ): array|string
-  {
-    $name = static::hasHeader($name, $headers);
-    if ($name === false) return $valueMode === 'array' ? [] : '';
-    $value = $headers[$name];
-    if ($valueMode === 'array') {
-      if (is_string($value)) $value = explode(',', $value) ?: [];
-    } elseif (is_array($value)) {
-      $value = implode(',', $value);
-    }
-    return $value;
-  }
-
-  /**
    * 通过不区分大小标头判断是否存在
    *
    * @param string $name 不区分大小写标头名称
@@ -138,5 +124,10 @@ class Header
     } else {
       return false;
     }
+  }
+
+  public function __toString(): string
+  {
+    return $this->value;
   }
 }
