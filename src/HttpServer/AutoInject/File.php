@@ -15,29 +15,114 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer\AutoInject;
 
-use Viswoole\HttpServer\Facade\Request;
+use ArrayAccess;
+use ArrayIterator;
+use BadMethodCallException;
+use Countable;
+use IteratorAggregate;
+use Override;
+use Viswoole\HttpServer\Contract\RequestInterface;
+use Viswoole\HttpServer\Message\FileStream;
 use Viswoole\HttpServer\Message\UploadedFile;
 
 /**
- * 用于自动注入上传的文件，
- * 如果需注入指定name的文件，
+ * 用于自动注入上传的文件，如果需注入指定name的文件，
  * 则需配合\Viswoole\HttpServer\Validate\FileRule使用。
+ *
+ * 可以通过__call魔术方法直接调用UploadFile对象的方法，只适用于上传的文件只有一个时。
+ * @method FileStream getStream() 获取流
+ * @method void moveTo(string $targetPath) 移动文件到指定目录
+ * @method bool isMoved() 判断文件是否已移动
+ * @method int getError() 获取状态码，0为正常
+ * @method int getSize() 获取文件大小
+ * @method string getClientFilename() 获取文件名称
+ * @method string getClientMediaType() 获取媒体类型
  */
-class File
+class File implements ArrayAccess, IteratorAggregate, Countable
 {
-  public string $name;
   /**
-   * @var UploadedFile[] 文件对象列表
+   * @var string post上传时的参数名
+   */
+  public string $name = '';
+  /**
+   * @var UploadedFile[]|array<string,UploadedFile[]> 文件对象列表
    */
   public array $list;
 
-  /**
-   * 获取上传的所有文件
-   *
-   * @return array<string,UploadedFile|UploadedFile[]>|null
-   */
-  public function all(): array|null
+  public function __construct(RequestInterface $request)
   {
-    return Request::files();
+    $this->list = $request->files() ?? [];
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function offsetExists(mixed $offset): bool
+  {
+    return isset($this->list[$offset]);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function offsetGet(mixed $offset): ?UploadedFile
+  {
+    return $this->list[$offset] ?? null;
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function offsetSet(mixed $offset, mixed $value): void
+  {
+    throw new BadMethodCallException('File is read-only');
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function offsetUnset(mixed $offset): void
+  {
+    throw new BadMethodCallException('File is read-only');
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function getIterator(): ArrayIterator
+  {
+    return new ArrayIterator($this->list);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function count(): int
+  {
+    return count($this->list);
+  }
+
+  public function __call(string $name, array $arguments)
+  {
+    if ($this->isEmpty()) throw new BadMethodCallException('File is empty');
+
+    if (empty($name)) {
+      // list存储的是全部上传的文件，则默认操作第一个
+      return $this->list[array_key_first($this->list)]->{$name}(...$arguments);
+    } elseif (method_exists($this->list[0], $name)) {
+      return $this->list[0]->{$name}(...$arguments);
+    } else {
+      throw new BadMethodCallException('Method not exists: ' . static::class . '::' . $name);
+    }
+  }
+
+  /**
+   * 判断是否为空
+   *
+   * @return bool
+   */
+  public function isEmpty(): bool
+  {
+    return empty($this->list);
   }
 }
