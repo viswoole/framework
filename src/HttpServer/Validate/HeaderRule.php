@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\HttpServer\Rules;
+namespace Viswoole\HttpServer\Validate;
 
 use Attribute;
 use Override;
@@ -25,7 +25,7 @@ use Viswoole\HttpServer\Facade\Request;
  * Http 请求头验证
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Header extends RuleAbstract
+class HeaderRule extends RuleAbstract
 {
   /**
    * @param string $name 标头

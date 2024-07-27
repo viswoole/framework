@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\HttpServer\Rules;
+namespace Viswoole\HttpServer\Validate;
 
 use Attribute;
 use Viswoole\Core\Validate\Rules\RuleAbstract;
@@ -24,7 +24,7 @@ use Viswoole\HttpServer\Message\UploadedFile;
  * HTTP上传文件校验
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class File extends RuleAbstract
+class FileRule extends RuleAbstract
 {
   /**
    * @param string $name 表单name属性
