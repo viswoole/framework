@@ -24,7 +24,7 @@ class FileStream
    */
   protected $stream;
 
-  public function __construct(string $filePath, string $mode = 'r')
+  public function __construct(public readonly string $filePath, string $mode = 'r')
   {
     $stream = fopen($filePath, $mode);
     if (!$stream) throw new RuntimeException('无法打开文件流：' . $filePath);
