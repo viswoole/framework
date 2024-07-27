@@ -18,19 +18,10 @@ namespace Viswoole\HttpServer;
 use InvalidArgumentException;
 
 /**
- * 请求头处理
+ * 请求头处理工具
  */
 class Header
 {
-  /**
-   * @var string 标头
-   */
-  public string $name;
-  /**
-   * @var string 标头值
-   */
-  public string $value;
-
   /**
    * 验证标头是否合法
    *
@@ -124,20 +115,5 @@ class Header
     } else {
       return false;
     }
-  }
-
-  public function __toString(): string
-  {
-    return $this->value ?? var_export($this->all(), true);
-  }
-
-  /**
-   * 获取当前请求所有标头
-   *
-   * @return array
-   */
-  public function all(): array
-  {
-    return \Viswoole\HttpServer\Facade\Request::getHeader(default: []);
   }
 }
