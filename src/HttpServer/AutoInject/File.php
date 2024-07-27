@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\AutoInject;
 
 use Viswoole\HttpServer\Facade\Request;
-use ViSwoole\HttpServer\Message\UploadedFile;
+use Viswoole\HttpServer\Message\UploadedFile;
 
 /**
  * 用于自动注入上传的文件，

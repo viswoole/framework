@@ -22,7 +22,7 @@ use RuntimeException;
 use Swoole\Http\Request as swooleRequest;
 use Viswoole\Core\Facade\Server;
 use Viswoole\HttpServer\Contract\RequestInterface;
-use ViSwoole\HttpServer\Message\UploadedFile;
+use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\HttpServer\Message\Uri;
 
 /**

@@ -18,7 +18,7 @@ namespace Viswoole\HttpServer\Facade;
 use Override;
 use Viswoole\Core\Facade;
 use Viswoole\HttpServer\Contract\RequestInterface;
-use ViSwoole\HttpServer\Message\UploadedFile;
+use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\HttpServer\Message\Uri;
 
 /**

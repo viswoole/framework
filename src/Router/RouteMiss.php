@@ -15,7 +15,7 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use Closure;
-use ViSwoole\Core\App;
+use Viswoole\Core\App;
 
 /**
  * 路由未匹配处理
