@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\HttpServer\Facades;
+namespace Viswoole\HttpServer\Facade;
 
 use JsonSerializable;
 use Viswoole\Core\Facade;
