@@ -41,6 +41,10 @@ use Viswoole\Core\Exception\ValidateException;
  */
 abstract class Container implements ArrayAccess, IteratorAggregate, Countable
 {
+  /**
+   * 允许新建实例
+   */
+  const string allowNewInstance = 'allowNewInstance';
   protected string $CONTEXT_PREFIX = '__container_singleton_';
   /**
    * @var array<string,string> 接口标识映射
@@ -175,8 +179,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $instance = is_string($concrete)
       ? $this->invokeClass($concrete, $params)
       : $this->invokeFunction($concrete, $params);
-    // 缓存单实例
-    $this->setSingleInstance($abstract, $instance);
+    // 如果类没有设置allowNewInstance属性，则缓存单实例
+    if (!isset($instance->allowNewInstance)) {
+      $this->setSingleInstance($abstract, $instance);
+    }
     return $instance;
   }
 
