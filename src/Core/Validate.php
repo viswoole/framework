@@ -46,14 +46,13 @@ class Validate
   {
     if (!is_array($rules)) $rules = [$rules];
     foreach ($rules as $attribute) {
+      $instance = $attribute;
       if ($attribute instanceof ReflectionAttribute) {
         $instance = $attribute->newInstance();
-        // 判断是否为扩展规则
-        if ($instance instanceof RuleAbstract) {
-          $value = $instance->validate($value);
-        }
-      } elseif ($attribute instanceof RuleAbstract) {
-        $value = $attribute->validate($value);
+      }
+      // 判断是否为扩展规则
+      if ($instance instanceof RuleAbstract) {
+        $instance->validate($value);
       }
     }
     return $value;
