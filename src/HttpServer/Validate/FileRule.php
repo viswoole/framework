@@ -17,6 +17,7 @@ namespace Viswoole\HttpServer\Validate;
 
 use Attribute;
 use Viswoole\Core\Validate\Rules\RuleAbstract;
+use Viswoole\HttpServer\AutoInject\File;
 use Viswoole\HttpServer\Facade\Request;
 use Viswoole\HttpServer\Message\UploadedFile;
 
@@ -51,7 +52,7 @@ class FileRule extends RuleAbstract
     if (!isset($upload[$this->name])) {
       $this->error("必须上传 $this->name 文件");
     }
-    $file = $upload[$this->name];
+    $file = $upload[$this->name] ?? [];
     $file = $file instanceof UploadedFile ? [$file] : $file;
     /**
      * @var $item UploadedFile
@@ -64,8 +65,7 @@ class FileRule extends RuleAbstract
         $this->error("$this->name 文件大小不能超过 $this->maxSize 字节");
       }
     }
-    if (!$value instanceof \Viswoole\HttpServer\AutoInject\File) $value = new \Viswoole\HttpServer\AutoInject\File(
-    );
+    if (!$value instanceof File) $value = new File();
     $value->list = $file;
     $value->name = $this->name;
     return $value;
