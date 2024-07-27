@@ -51,7 +51,7 @@ class Header extends RuleAbstract
   #[Override] public function validate(mixed $value): mixed
   {
     $headerValue = Request::getHeader($this->name);
-    if ($headerValue === null && $this->require) {
+    if (empty($headerValue) && $this->require) {
       $this->error("Http header $this->name is required");
     } elseif ($value instanceof \Viswoole\HttpServer\Header) {
       $value->name = $this->name;
