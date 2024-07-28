@@ -82,9 +82,9 @@ class RouterManager
       /** @var $controller RouteController|AutoRouteController 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
       // 如果指定了服务，且服务名称非当前正在运行的服务，则跳过解析
-      if ($controller->server !== null && $controller->server !== SERVER_NAME) {
-        continue;
-      }
+//      if ($controller->server !== null && $controller->server !== SERVER_NAME) {
+//        continue;
+//      }
       // 判断是否设置了描述
       if (!isset($controller->options['describe'])) {
         $controller->options['describe'] = $this->getDocComment($refClass);
