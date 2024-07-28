@@ -120,7 +120,8 @@ class RouteCollector
 
   /**
    * 自定义路由
-   * @param string|array $paths 匹配规则user/{id:string}
+   *
+   * @param string|array $paths 匹配规则，动态规则示例：user/{id}|user/{id?}
    * @param string|array|Closure $handler 路由地址
    * @param string|string[] $method 请求类型可传数组定义多个
    * @return RouteConfig
@@ -171,6 +172,9 @@ class RouteCollector
   {
     if (self::isVariable($path)) {
       $urlSegments = explode('/', $path);
+      $urlSegments = array_filter($urlSegments, function ($value) {
+        return $value !== '';
+      });
       $regex = $this->convertRegex(
         $urlSegments,
         $this->routeItems[$routeIndex]['pattern']
@@ -224,7 +228,7 @@ class RouteCollector
     // 删除最后一个斜杠
     $regexPattern = rtrim($regexPattern, '/');
     // 添加正则表达式的开始和结束标记
-    return '#^' . $regexPattern . '$#';
+    return '#^/' . $regexPattern . '$#';
   }
 
   /**
@@ -256,30 +260,29 @@ class RouteCollector
    */
   private function addDynamicRoute(array $urlSegments, string $regex, int $routeIndex): void
   {
-    $len = 0;
+    $len = count($urlSegments);
     foreach ($urlSegments as $rule) {
-      if (self::isOptionalVariable($rule)) {
-        $len--;
-      } else {
-        $len++;
-      }
+      if (empty($rule)) continue;
+      if (self::isOptionalVariable($rule)) $len--;
     }
     $path = implode('/', $urlSegments);
     if (isset($this->dynamicRoute["segment_$len"][$regex])) {
       trigger_error("{$path}路由规则已存在，重复定义即覆盖路由", E_USER_WARNING);
     }
     $this->dynamicRoute["segment_$len"][$regex] = $routeIndex;
-    //适配去掉可选参数的长度
-    if (count($urlSegments) !== $len) {
-      if (isset($this->dynamicRoute['segment_' . count($urlSegments)][$regex])) {
+    $fullLen = count($urlSegments);
+    // 适配去掉可选参数的长度
+    if ($fullLen !== $len) {
+      if (isset($this->dynamicRoute['segment_' . $fullLen][$regex])) {
         trigger_error("{$path}路由规则已存在，重复定义即覆盖路由", E_USER_WARNING);
       }
-      $this->dynamicRoute['segment_' . count($urlSegments)][$regex] = $routeIndex;
+      $this->dynamicRoute['segment_' . $fullLen][$regex] = $routeIndex;
     }
   }
 
   /**
    * 添加静态路由
+   *
    * @param string $urlPath 匹配path
    * @param int $routeIndex 路由item实例索引
    * @return void
@@ -342,7 +345,7 @@ class RouteCollector
    */
   public function dispatch(
     string $path,
-    array  $params,
+    array  &$params,
     string $method,
     string $domain,
   ): mixed
@@ -350,7 +353,7 @@ class RouteCollector
     $PathAndExt = explode('.', $path);
     $path = $PathAndExt[0] ?? '/';
     $path = $path === '/' ? '/' : rtrim($path, '/');
-    if (!config('router.case_sensitive', false)) $path = strtolower($path);
+    if (!$this->app->config->get('router.case_sensitive', false)) $path = strtolower($path);
     $ext = $PathAndExt[1] ?? '';
     $pattern = [];
     /** @var $route RouteConfig 路由 */
@@ -364,12 +367,17 @@ class RouteCollector
       //判断是否存在动态路由
       $routes = $this->dynamicRoute['segment_' . $segments] ?? [];
       $regexArray = array_keys($routes);
+      // 遍历正则匹配路由
       foreach ($regexArray as $regex) {
         if (preg_match($regex, $path, $matches)) {
           if ($matches === null) $matches = [];
+          // 如果匹配成功 则弹出默认的uri
           array_shift($matches);
+          // 拿到路由
           $route = $this->routeItems[$routes[$regex]];
+          // 去除匹配到的key
           $keys = array_slice(array_keys($route['pattern']), 0, count($matches));
+          // 组合为关联数组
           $pattern = array_combine($keys, $matches);
           break;
         }
