@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\ApiDoc;
+namespace Viswoole\Router;
 
 use Closure;
 use InvalidArgumentException;
