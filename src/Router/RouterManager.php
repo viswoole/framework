@@ -171,7 +171,7 @@ class RouterManager
   {
     $classDocComment = $reflector->getDocComment();
     if ($classDocComment) {
-      if (preg_match('/^\s+\*\s+(.+)$/m', $classDocComment, $matches)) {
+      if (preg_match('/^\s+\*\s+([^@\n][^\n]*)$/m', $classDocComment, $matches)) {
         $classDocComment = trim($matches[1]);
       } else {
         $classDocComment = '';
