@@ -272,7 +272,7 @@ interface ResponseInterface
    * 判断是否已经分离或已经结束
    *
    * @access public
-   * @return bool
+   * @return bool 如果返回true则是未分离，返回false则代表已分离，或上下文已结束
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=detach
    */
   public function isWritable(): bool;

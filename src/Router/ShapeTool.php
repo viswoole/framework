@@ -43,7 +43,7 @@ final class ShapeTool
    * @param object|string $objectOrClass 类实例或类名称
    * @param string $property_name 要反射的属性名称
    * @param bool $cache 缓存结果，默认TRUE
-   * @return array{name:string,type:string,required:bool,default:mixed,desc:string,depend:bool}
+   * @return array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool}
    */
   public static function getPropertyShape(
     object|string $objectOrClass,
@@ -85,10 +85,10 @@ final class ShapeTool
   /**
    * 解析类型结构
    *
-   * @return array{name:string,type:string,rules:array<string,array>,required:bool,default:mixed,desc:string,depend:bool}
+   * @return array{name:string,type:string,rules:array<string,array>,required:bool,default:mixed,describe:string,depend:bool}
    */
   private static function parseTypeShape(
-    string|false                           $doc,
+    string|false $doc,
     ReflectionProperty|ReflectionParameter $reflector
   ): array
   {
@@ -98,21 +98,23 @@ final class ShapeTool
     /**是否为app依赖*/
     $depend = App::factory()->has($type);
     /**描述*/
-    $desc = '';
+    $describe = '';
     // 提取属性注释描述部分
     if ($reflector instanceof ReflectionProperty) {
-      if (is_string($doc)) $desc = self::extractPropertyTypeAnnotation($doc);
+      if (is_string($doc)) $describe = self::extractPropertyTypeAnnotation($doc);
       $default = $reflector->hasDefaultValue() ? $reflector->getDefaultValue() : null;
       // 如果没有设置默认值且没有标记null类型
       $required = !$reflector->hasDefaultValue() && !$reflector->getType()->allowsNull();
     } else {
-      if (is_string($doc)) $desc = self::extractParamTypeAnnotation($doc, $reflector->getName());
+      if (is_string($doc)) $describe = self::extractParamTypeAnnotation(
+        $doc, $reflector->getName()
+      );
       $default = $reflector->isDefaultValueAvailable() ? $reflector->getDefaultValue() : null;
       $required = !$reflector->allowsNull();
     }
     /**名称*/
     $name = $reflector->getName();
-    return compact('name', 'type', 'required', 'default', 'desc', 'depend');
+    return compact('name', 'type', 'required', 'default', 'describe', 'depend');
   }
 
   /**
@@ -183,7 +185,7 @@ final class ShapeTool
    * @access public
    * @param Closure|array|string $callable
    * @param bool $cache 缓存结果，默认TRUE
-   * @return array<int,array{name:string,type:string,required:bool,default:mixed,desc:string,depend:bool,variadic:bool}>
+   * @return array<int,array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool,variadic:bool}>
    */
   public static function getParamTypeShape(
     Closure|array|string $callable,
@@ -249,13 +251,13 @@ final class ShapeTool
    * }
    * $shapes = ShapeTool::getPropertyShape(MyClass::class);
    * // $shape如下
-   * $shapes = ['name'=>['name'=>'name','type'=>'string','rules'=>[],'required'=>false,'default'=>'viswoole','desc'=>'没有属性var描述将会为空']];
+   * $shapes = ['name'=>['name'=>'name','type'=>'string','rules'=>[],'required'=>false,'default'=>'viswoole','describe'=>'没有属性var描述将会为空']];
    * ```
    * @access public
    * @param object|string $objectOrClass
    * @param int $filter 默认ReflectionProperty::IS_PUBLIC，公开属性
    * @param bool $cache 缓存结果，默认TRUE
-   * @return array<string,array{name:string,type:string,rules:array<string,array>,required:bool,default:mixed,desc:string,depend:bool}>类的Public属性列表
+   * @return array<string,array{name:string,type:string,rules:array<string,array>,required:bool,default:mixed,describe:string,depend:bool}>类的Public属性列表
    */
   public static function getClassPropertyShape(
     object|string $objectOrClass,
