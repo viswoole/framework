@@ -20,6 +20,7 @@ use Closure;
 use InvalidArgumentException;
 use Override;
 use RuntimeException;
+use Viswoole\Router\ApiDoc\ShapeTool;
 
 /**
  * 路线配置类

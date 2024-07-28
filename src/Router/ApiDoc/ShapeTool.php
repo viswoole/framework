@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router;
+namespace Viswoole\Router\ApiDoc;
 
 use Closure;
 use InvalidArgumentException;
@@ -88,7 +88,7 @@ final class ShapeTool
    * @return array{name:string,type:string,rules:array<string,array>,required:bool,default:mixed,describe:string,depend:bool}
    */
   private static function parseTypeShape(
-    string|false $doc,
+    string|false                           $doc,
     ReflectionProperty|ReflectionParameter $reflector
   ): array
   {
