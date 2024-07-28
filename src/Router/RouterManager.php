@@ -115,6 +115,7 @@ class RouterManager
         $handler = $method->isStatic() ?
           $refClass->getName() . '::' . $method->getName()
           : [$refClass->getName(), $method->getName()];
+        // 如果没有设置路由注解，且该类为自动路由则创建路由
         if (empty($methodAttributes) && $isAutoRoute) {
           // 自动路由
           // 创建新的路由项
@@ -124,6 +125,7 @@ class RouterManager
           // 添加到组的子路由中
           $group->addItem($routeItem);
         } elseif (isset($methodAttributes[0])) {
+          // 处理设置了路由注解的方法
           /** @var $methodAnnotationRoute RouteMapping 注解路由 */
           $methodAnnotationRoute = $methodAttributes[0]->newInstance();
           // 设置描述
