@@ -73,7 +73,7 @@ class EventHandle
    */
   public static function handleResponse(mixed $result, ResponseInterface $psr7Response): void
   {
-    if (!$psr7Response->isWritable()) {
+    if ($psr7Response->isWritable()) {
       if ($result instanceof ResponseInterface) {
         $result->send();
       } elseif (is_array($result) || is_object($result)) {
