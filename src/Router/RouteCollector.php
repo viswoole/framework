@@ -313,7 +313,16 @@ class RouteCollector
    * 获取api文档
    *
    * @access public
-   * @return array
+   * @return array{
+   *   paths: string[],
+   *   describe: string,
+   *   method:string[],
+   *   params:array<int,array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool,variadic:bool}>,
+   *   suffix:string[],
+   *   domain:string[],
+   *   pattern:array<string,string>,
+   *   children:array,
+   * }
    */
   public function getApiDoc(): array
   {
