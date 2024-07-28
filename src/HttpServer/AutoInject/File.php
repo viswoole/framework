@@ -40,6 +40,7 @@ use Viswoole\HttpServer\Message\UploadedFile;
  */
 class File implements ArrayAccess, IteratorAggregate, Countable
 {
+  public bool $allowNewInstance = true;
   /**
    * @var string post上传时的参数名
    */

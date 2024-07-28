@@ -19,6 +19,7 @@ use Viswoole\HttpServer\Facade\Request;
 
 class Header
 {
+  public bool $allowNewInstance = true;
   /**
    * @var string 标头
    */
