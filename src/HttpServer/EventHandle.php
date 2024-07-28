@@ -50,13 +50,16 @@ class EventHandle
        * @var $psr7Response ResponseInterface
        */
       $psr7Response = $app->make(ResponseInterface::class, [$response]);
+      $params = $psr7Request->params();
       // 交由路由分发
       $result = $app->router->collector()->dispatch(
         $psr7Request->getPath(),
-        $psr7Request->params(),
+        $params,
         $psr7Request->getMethod(),
         $psr7Request->getUri()->getHost()
       );
+      // 将动态匹配到的参数添加到请求参数中
+      $psr7Request->addParams($params);
       self::handleResponse($result, $psr7Response);
     } catch (Throwable $e) {
       $exceptionHandle = $app->server->getConfig()['exception_handle'] ?? Handle::class;
