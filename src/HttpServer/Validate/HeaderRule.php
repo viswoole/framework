@@ -19,6 +19,7 @@ use Attribute;
 use Override;
 use Viswoole\Core\Exception\ValidateException;
 use Viswoole\Core\Validate\Rules\RuleAbstract;
+use Viswoole\HttpServer\AutoInject\Header;
 use Viswoole\HttpServer\Facade\Request;
 
 /**
@@ -53,7 +54,7 @@ class HeaderRule extends RuleAbstract
     $headerValue = Request::getHeader($this->name);
     if (empty($headerValue) && $this->require) {
       $this->error("Http header $this->name is required");
-    } elseif ($value instanceof \Viswoole\HttpServer\AutoInject\Header) {
+    } elseif ($value instanceof Header) {
       $value->name = $this->name;
       $value->value = $headerValue;
     } else {
