@@ -121,9 +121,7 @@ abstract class RouteConfig implements ArrayAccess
           }
         }
       }
-      if (!str_starts_with($path, '/')) {
-        $path = "/$path";
-      }
+      if (!str_starts_with($path, '/')) $path = "/$path";
       $path = $path === '/' ? '/' : rtrim(!$case ? strtolower($path) : $path, '/');
     }
     $this->pattern($pattern);
