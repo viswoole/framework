@@ -57,6 +57,23 @@ class EventHandle
         $psr7Request->getMethod(),
         $psr7Request->getUri()->getHost()
       );
+      self::handleResponse($result, $psr7Response);
+    } catch (Throwable $e) {
+      $exceptionHandle = $app->server->getConfig()['exception_handle'] ?? Handle::class;
+      $app->invokeMethod([$exceptionHandle, 'render'], [$e]);
+    }
+  }
+
+  /**
+   * 处理响应
+   *
+   * @param mixed $result
+   * @param ResponseInterface $psr7Response
+   * @return void
+   */
+  public static function handleResponse(mixed $result, ResponseInterface $psr7Response): void
+  {
+    if (!$psr7Response->isWritable()) {
       if ($result instanceof ResponseInterface) {
         $result->send();
       } elseif (is_array($result) || is_object($result)) {
@@ -65,9 +82,6 @@ class EventHandle
       } else {
         $psr7Response->send((string)$result);
       }
-    } catch (Throwable $e) {
-      $exceptionHandle = $app->server->getConfig()['exception_handle'] ?? Handle::class;
-      $app->invokeMethod([$exceptionHandle, 'render'], [$e]);
     }
   }
 }
