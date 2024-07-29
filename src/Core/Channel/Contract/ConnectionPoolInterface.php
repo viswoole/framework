@@ -109,7 +109,9 @@ interface ConnectionPoolInterface
   public function stats(): array;
 
   /**
-   * @return mixed 获取连接池配置
+   * 获取连接池配置
+   *
+   * @return mixed
    */
   public function getConfig(): mixed;
 }
