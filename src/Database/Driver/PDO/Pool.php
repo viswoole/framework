@@ -19,12 +19,12 @@ use Exception;
 use Override;
 use PDO;
 use Throwable;
-use Viswoole\Core\Channel\ConnectionPool;
+use Viswoole\Database\Driver\ConnectionDriver;
 
 /**
  * PDO连接池
  */
-class Pool extends ConnectionPool
+class Pool extends ConnectionDriver
 {
 
   public function __construct(protected PDOConfig $PDOConfig)
