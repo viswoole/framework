@@ -19,12 +19,12 @@ use Exception;
 use Override;
 use PDO;
 use Throwable;
-use Viswoole\Database\Driver\ConnectionDriver;
+use Viswoole\Core\Channel\ConnectionPool;
 
 /**
  * PDO连接池
  */
-class Pool extends ConnectionDriver
+class Pool extends ConnectionPool
 {
 
   public function __construct(protected PDOConfig $PDOConfig)
@@ -51,7 +51,7 @@ class Pool extends ConnectionDriver
   #[Override] protected function createConnection(): PDOProxy
   {
     $options = ['dns' => $this->createDSN($this->PDOConfig->type)];
-    if ($this->PDOConfig->type !== PDODriver::SQLite) {
+    if ($this->PDOConfig->type !== PDODriverType::SQLite) {
       $options['username'] = $this->PDOConfig->username;
       $options['password'] = $this->PDOConfig->password;
       $options['options'] = $this->PDOConfig->options;
@@ -63,7 +63,7 @@ class Pool extends ConnectionDriver
    * create DSN
    * @throws Exception
    */
-  private function createDSN(PDODriver $driver): string
+  private function createDSN(PDODriverType $driver): string
   {
     switch ($driver->value) {
       case 'mysql':

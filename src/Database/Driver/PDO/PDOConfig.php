@@ -20,7 +20,7 @@ use PDO;
 class PDOConfig
 {
   /**
-   * @param PDODriver $type 数据库类型
+   * @param PDODriverType $type 数据库类型
    * @param string $host 链接地址
    * @param int $port 端口
    * @param string|null $unixSocket unixSocket
@@ -33,19 +33,19 @@ class PDOConfig
    * @param int $pool_fill_size 连接池默认填充长度，默认0为不填充
    */
   public function __construct(
-    public PDODriver $type = PDODriver::MYSQL,
-    public string    $host = '127.0.0.1',
-    public int       $port = 3306,
-    public ?string   $unixSocket = null,
-    public string    $database = 'test',
-    public string    $username = 'root',
-    public string    $password = 'root',
-    public string    $charset = 'utf8mb4',
-    public array     $options = [
+    public PDODriverType $type = PDODriverType::MYSQL,
+    public string        $host = '127.0.0.1',
+    public int           $port = 3306,
+    public ?string       $unixSocket = null,
+    public string        $database = 'test',
+    public string        $username = 'root',
+    public string        $password = 'root',
+    public string        $charset = 'utf8mb4',
+    public array         $options = [
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ],
-    public int       $pool_max_size = 64,
-    public int       $pool_fill_size = 0
+    public int           $pool_max_size = 64,
+    public int           $pool_fill_size = 0
   )
   {
   }

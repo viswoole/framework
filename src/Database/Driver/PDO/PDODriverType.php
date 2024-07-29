@@ -17,7 +17,7 @@ namespace Viswoole\Database\Driver\PDO;
 /**
  * PDO支持的驱动
  */
-enum PDODriver: string
+enum PDODriverType: string
 {
   case MYSQL = 'mysql';
   case POSTGRESQL = 'pgsql';
