@@ -42,7 +42,7 @@ class CacheManager
     $stores = $config->get('cache.stores', []);
     $this->stores = $stores;
     if (!empty($this->stores)) {
-      $this->defaultStore = $config->get('cache.default', array_keys($stores)[0]);
+      $this->defaultStore = $config->get('cache.default', array_key_first($stores));
       foreach ($this->stores as $key => $driver) $this->addStore($key, $driver);
     }
   }
