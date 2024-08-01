@@ -51,7 +51,7 @@ class CacheManager
    * 添加缓存商店
    *
    * @param string $name
-   * @param CacheDriverInterface|string|array{driver:string,option:array{string:mixed}|object} $driver
+   * @param CacheDriverInterface|string|array{driver:string,options:array{string:mixed}|object} $driver
    * @return void
    */
   public function addStore(string $name, CacheDriverInterface|string|array $driver): void
@@ -63,10 +63,10 @@ class CacheManager
           $name . '缓存驱动配置错误，驱动类不存在'
         );
       }
-      $option = $driver['option'] ?? [];
-      $driver = is_object($option)
-        ? new $driver['driver']($option)
-        : new $driver['driver'](...$option);
+      $options = $driver['options'] ?? [];
+      $driver = is_object($options)
+        ? new $driver['driver']($options)
+        : new $driver['driver'](...$options);
     }
     if (!$driver instanceof CacheDriverInterface) {
       throw new CacheErrorException(
