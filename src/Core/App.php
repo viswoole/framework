@@ -19,6 +19,7 @@ use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Middleware as MiddlewareService;
 use Viswoole\Core\Service\Provider;
+use Viswoole\Database\DbService;
 use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 use Viswoole\HttpServer\HttpService;
@@ -65,6 +66,7 @@ class App extends Container
     MiddlewareService::class,
     RouterService::class,
     HttpService::class,
+    DbService::class
   ];
 
   protected function __construct()
