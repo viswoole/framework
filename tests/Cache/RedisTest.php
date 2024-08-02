@@ -17,6 +17,7 @@ namespace Viswoole\Tests\Cache;
 
 use PHPUnit\Framework\TestCase;
 use Viswoole\Cache\Driver\Redis;
+use Viswoole\Cache\RedisConfig;
 use function Co\run;
 
 class RedisTest extends TestCase
@@ -24,7 +25,7 @@ class RedisTest extends TestCase
   public function testSet()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->set('test', '123');
       static::assertEquals('123', $cache->get('test'));
     });
@@ -33,7 +34,7 @@ class RedisTest extends TestCase
   public function testInc()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->set('test', 1);
       static::assertEquals(2, $cache->inc('test'));
       static::assertEquals(1, $cache->dec('test'));
@@ -43,7 +44,7 @@ class RedisTest extends TestCase
   public function testPull()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->set('test', 1);
       static::assertEquals(1, $cache->pull('test'));
       static::assertFalse($cache->has('test'));
@@ -53,7 +54,7 @@ class RedisTest extends TestCase
   public function testClear()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->set('test', 1);
       $cache->clear();
       static::assertFalse($cache->has('test'));
@@ -63,7 +64,7 @@ class RedisTest extends TestCase
   public function testDelete()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->delete('test');
       static::assertNull($cache->get('test'));
     });
@@ -72,7 +73,7 @@ class RedisTest extends TestCase
   public function testArray()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->clear();
       $cache->sAddArray('test', [1, 2, 3]);
       static::assertEquals([1, 2, 3], $cache->getArray('test'));
@@ -86,7 +87,7 @@ class RedisTest extends TestCase
   public function testTag()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->clear();
       $tagInstance = $cache->tag('testTag');
       $tagInstance->set('test', 123);
@@ -100,7 +101,7 @@ class RedisTest extends TestCase
   public function testLock()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $id = $cache->lock('test');
       static::assertTrue($cache->unlock($id));
       static::assertTrue(is_string($cache->lock('test')));
@@ -110,7 +111,7 @@ class RedisTest extends TestCase
   public function testTll()
   {
     run(function () {
-      $cache = new Redis('viswoole-redis-1');
+      $cache = new Redis(new RedisConfig('viswoole-redis-1'));
       $cache->set('test', 1, 10);
       static::assertIsInt($cache->ttl('test'));
       $cache->set('test', 1, 0);
