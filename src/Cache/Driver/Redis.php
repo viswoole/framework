@@ -44,41 +44,18 @@ class Redis extends Driver
   private readonly RedisPool $pool;
 
   /**
-   * @param string $host 连接地址
-   * @param int $port 连接端口
-   * @param string $password 密码
-   * @param int $db_index redis数据库 0-15
-   * @param float $timeout 连接超时时间
-   * @param int $retry_interval 连接重试时间等待单位毫秒
-   * @param float $read_timeout 读取超时时间
-   * @param string $prefix 缓存前缀
-   * @param int $expire 过期时间，单位秒
-   * @param string $tag_store 标签仓库名称(用于存储标签映射列表),不能为空
-   * @param int $pool_max_size 连接池最大长度
-   * @param int $pool_fill_size 连接池最小长度，如果为0则默认不填充连接池
+   * @param RedisConfig $config
    */
   public function __construct(
-    string           $host = '127.0.0.1',
-    int              $port = 6379,
-    string           $password = '',
-    int              $db_index = 0,
-    float            $timeout = 0,
-    int              $retry_interval = 1000,
-    float            $read_timeout = 0,
-    protected string $prefix = '',
-    protected string $tag_prefix = 'tag:',
-    protected int    $expire = 0,
-    protected string $tag_store = 'TAG_STORE',
-    int              $pool_max_size = 64,
-    int              $pool_fill_size = 0
+    RedisConfig $config,
   )
   {
-    $this->pool = new RedisPool(new RedisConfig(...func_get_args()));
+    $this->pool = new RedisPool($config);
     parent::__construct(
-      $prefix,
-      $tag_prefix,
-      $tag_store,
-      $expire
+      $config->prefix,
+      $config->tag_prefix,
+      $config->tag_store,
+      $config->expire
     );
   }
 
