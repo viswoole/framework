@@ -117,11 +117,11 @@ abstract class ChannelManager implements ChannelManagerInterface
   #[Override] public function getChannel(?string $channel_name = null): ConnectionPoolInterface
   {
     if (empty($this->channels)) throw new ChannelNotFoundException('通道列表为空');
-    if (empty($channel_alias)) $channel_alias = $this->defaultChannel;
-    if ($this->hasChannel($channel_alias)) {
-      return $this->channels[Str::camelCaseToSnakeCase($channel_alias)];
+    if (empty($channel_name)) $channel_name = $this->defaultChannel;
+    if ($this->hasChannel($channel_name)) {
+      return $this->channels[Str::camelCaseToSnakeCase($channel_name)];
     } else {
-      throw new ChannelNotFoundException("通道{$channel_alias}不存在");
+      throw new ChannelNotFoundException("通道{$channel_name}不存在");
     }
   }
 }
