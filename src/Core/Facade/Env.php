@@ -25,7 +25,7 @@ use Viswoole\Core\Facade;
  * @method static mixed get(?string $name = null, mixed $default = null) 获取环境变量值(可获取用户环境变量和系统环境变量)
  * @method static mixed getEnv(string $name, mixed $default = null) 获取环境变量(仅能获取系统缓存变量)
  *
- * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facades\\Env
+ * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facade\\Env
  */
 class Env extends Facade
 {

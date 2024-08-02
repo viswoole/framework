@@ -24,7 +24,7 @@ use Viswoole\Router\RouterManager;
  *
  * @method static RouteCollector collector(?string $serverName = null) 获取路由控制器实例
  *
- * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facades\\Router
+ * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facade\\Router
  */
 class Router extends Facade
 {

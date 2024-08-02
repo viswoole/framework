@@ -25,7 +25,7 @@ use Viswoole\Core\Facade;
  * @method static mixed get(?string $name = null, mixed $default = null) 获取配置参数 name为null则获取所有配置
  * @method static void set(array|string $key, mixed $value = null) 设置或更新配置，仅在当前进程中下有效，重启进程则会丢失。
  *
- * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facades\\Config
+ * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facade\\Config
  */
 class Config extends Facade
 {
