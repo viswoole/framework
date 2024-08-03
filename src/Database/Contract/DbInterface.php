@@ -13,22 +13,8 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Exception;
+namespace Viswoole\Database\Contract;
 
-use Throwable;
-
-/**
- * 查询数据为空时抛出异常
- */
-class DataNotFoundException extends DbException
+interface DbInterface
 {
-  public function __construct(
-    string     $message,
-    int        $code = 10400,
-    ?string    $sql = null,
-    ?Throwable $previous = null
-  )
-  {
-    parent::__construct($message, $code, $sql, $previous);
-  }
 }

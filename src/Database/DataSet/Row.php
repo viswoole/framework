@@ -13,22 +13,17 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Exception;
-
-use Throwable;
-
+namespace Viswoole\Database\DataSet;
 /**
- * 查询数据为空时抛出异常
+ * 数据集行
  */
-class DataNotFoundException extends DbException
+class Row extends ArrayObject
 {
-  public function __construct(
-    string     $message,
-    int        $code = 10400,
-    ?string    $sql = null,
-    ?Throwable $previous = null
-  )
+  /**
+   * @param array<string,mixed>|Row $data 行数据
+   */
+  public function __construct(array|Row $data)
   {
-    parent::__construct($message, $code, $sql, $previous);
+    $this->data = $data;
   }
 }

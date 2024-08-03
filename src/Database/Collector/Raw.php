@@ -13,22 +13,21 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Exception;
-
-use Throwable;
-
+namespace Viswoole\Database\Collector;
 /**
- * 查询数据为空时抛出异常
+ * 原生sql语句
  */
-class DataNotFoundException extends DbException
+class Raw
 {
-  public function __construct(
-    string     $message,
-    int        $code = 10400,
-    ?string    $sql = null,
-    ?Throwable $previous = null
-  )
+  /**
+   * @param string $sql 不需要额外处理的原生sql语句
+   */
+  public function __construct(public string $sql)
   {
-    parent::__construct($message, $code, $sql, $previous);
+  }
+
+  public function __toString(): string
+  {
+    return $this->sql;
   }
 }

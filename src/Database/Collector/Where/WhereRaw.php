@@ -13,22 +13,11 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Exception;
+namespace Viswoole\Database\Collector\Where;
 
-use Throwable;
-
-/**
- * 查询数据为空时抛出异常
- */
-class DataNotFoundException extends DbException
+class WhereRaw
 {
-  public function __construct(
-    string     $message,
-    int        $code = 10400,
-    ?string    $sql = null,
-    ?Throwable $previous = null
-  )
+  public function __construct(public string $sql, public array $params = [])
   {
-    parent::__construct($message, $code, $sql, $previous);
   }
 }

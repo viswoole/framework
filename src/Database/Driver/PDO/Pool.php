@@ -43,6 +43,28 @@ class Pool extends ConnectionPool
   }
 
   /**
+   * 获取数据库连接
+   *
+   * @param float $timeout 超时时间
+   * @return PDOProxy
+   */
+  #[Override] public function get(float $timeout = -1): PDOProxy
+  {
+    return parent::get($timeout);
+  }
+
+  /**
+   * 获取数据库连接
+   *
+   * @param float $timeout 超时时间
+   * @return PDOProxy
+   */
+  public function pop(float $timeout = -1): PDOProxy
+  {
+    return parent::pop($timeout);
+  }
+
+  /**
    * 创建连接
    *
    * @return PDOProxy
@@ -80,6 +102,20 @@ class Pool extends ConnectionPool
         $dsn = 'oci:dbname=' . ($this->PDOConfig->unixSocket ?: $this->PDOConfig->host) . ':' . $this->PDOConfig->port . '/' . $this->PDOConfig->database . ';charset=' . $this->PDOConfig->charset;
         break;
       case 'sqlite':
+        // There are three types of SQLite databases: databases on disk, databases in memory, and temporary
+        // databases (which are deleted when the connections are closed). It doesn't make sense to use
+        // connection pool for the latter two types of databases, because each connection connects to a
+        //different in-memory or temporary SQLite database.
+        if ($this->PDOConfig->database === '') {
+          throw new Exception(
+            'Connection pool in Swoole does not support temporary SQLite databases.'
+          );
+        }
+        if ($this->PDOConfig->database === ':memory:') {
+          throw new Exception(
+            'Connection pool in Swoole does not support creating SQLite databases in memory.'
+          );
+        }
         $dsn = 'sqlite:' . $this->PDOConfig->database;
         break;
       default:
