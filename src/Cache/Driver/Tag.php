@@ -124,12 +124,12 @@ class Tag implements CacheTagInterface
         $keys = implode(',', $keys);
         throw new CacheErrorException("从标签集合中剔除{$keys}缓存失败");
       }
-      // 移除缓存数据
-      $this->driver->delete($keys);
       // 判断标签数据集是否已为空，如果为空则把标签从标签总仓库数据集中移除
       $arr = $this->driver->getArray($tag);
       if (empty($arr)) $this->driver->sRemoveArray($this->driver->getTagStoreName(), $tag);
     }
+    // 移除缓存数据
+    $this->driver->delete($keys);
   }
 
   /**
