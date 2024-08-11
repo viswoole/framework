@@ -13,12 +13,17 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Collector\Contract;
+namespace Viswoole\Database\Collector\Trait;
 
+use InvalidArgumentException;
 use Viswoole\Database\Collector\Raw;
 
-interface JoinInterface
+/**
+ * JoinTrait
+ */
+trait JoinTrait
 {
+
   /**
    * left关联查询
    *
@@ -27,27 +32,10 @@ interface JoinInterface
    * @param string $condition 连接条件，例如 a.id = b.id,注意运算符两侧需要使用空格隔开
    * @return static
    */
-  public function leftJoin(string|Raw $table, string $condition): static;
-
-  /**
-   * right关联查询
-   *
-   * @access public
-   * @param string|Raw $table 要关联的表,以及别名
-   * @param string $condition 连接条件，例如 a.id = b.id,注意运算符两侧需要使用空格隔开
-   * @return static
-   */
-  public function rightJoin(string|Raw $table, string $condition): static;
-
-  /**
-   * FULL关联查询
-   *
-   * @access public
-   * @param string|Raw $table 要关联的表,以及别名
-   * @param string $condition 连接条件，例如 a.id = b.id,注意运算符两侧需要使用空格隔开
-   * @return static
-   */
-  public function fullJoin(string|Raw $table, string $condition): static;
+  public function leftJoin(string|Raw $table, string $condition): static
+  {
+    return $this->join($table, $condition, 'LEFT');
+  }
 
   /**
    * 关联查询
@@ -62,5 +50,44 @@ interface JoinInterface
     string|Raw $table,
     string     $condition,
     string     $type = 'INNER'
-  ): static;
+  ): static
+  {
+    $type = strtoupper($type);
+    $typeArr = ['INNER', 'LEFT', 'RIGHT', 'FULL'];
+    if (!in_array($type, $typeArr)) {
+      throw new InvalidArgumentException('关联查询$type错误，请使用：INNER, LEFT, RIGHT, FULL 之一');
+    }
+    $this->options->join[] = [
+      'table' => $table,
+      'condition' => $condition,
+      'type' => $type
+    ];
+    return $this;
+  }
+
+  /**
+   * right关联查询
+   *
+   * @access public
+   * @param string|Raw $table 要关联的表,以及别名
+   * @param string $condition 连接条件，例如 a.id = b.id,注意运算符两侧需要使用空格隔开
+   * @return static
+   */
+  public function rightJoin(string|Raw $table, string $condition): static
+  {
+    return $this->join($table, $condition, 'RIGHT');
+  }
+
+  /**
+   * FULL关联查询
+   *
+   * @access public
+   * @param string|Raw $table 要关联的表,以及别名
+   * @param string $condition 连接条件，例如 a.id = b.id,注意运算符两侧需要使用空格隔开
+   * @return static
+   */
+  public function fullJoin(string|Raw $table, string $condition): static
+  {
+    return $this->join($table, $condition, 'FULL');
+  }
 }

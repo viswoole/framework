@@ -16,20 +16,20 @@ declare (strict_types=1);
 namespace Viswoole\Database\Facade;
 
 use Viswoole\Core\Facade;
-use Viswoole\Database\Driver\Contract\DriverInterface;
-use Viswoole\Database\Manager\ChannelManager;
+use Viswoole\Database\Driver\Contract\ChannelInterface;
+use Viswoole\Database\Manager\DbChannel;
 
 /**
  * 通道管理器
  */
 
 /**
- * @method static DriverInterface channel(?string $name = null) 获取数据库通道
+ * @method static ChannelInterface channel(?string $name = null) 获取数据库通道，返回数据库驱动
  * @method static bool hasChannel(string $channel_name) 判断通道是否存在
  *
- * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\DbChannelManager
+ * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\ChannelManager
  */
-class DbChannelManager extends Facade
+class Db extends Facade
 {
 
   /**
@@ -40,6 +40,6 @@ class DbChannelManager extends Facade
    */
   #[\Override] protected static function getMappingClass(): string
   {
-    return ChannelManager::class;
+    return DbChannel::class;
   }
 }

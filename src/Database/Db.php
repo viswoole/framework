@@ -16,10 +16,9 @@ declare (strict_types=1);
 namespace Viswoole\Database;
 
 use Closure;
-use Viswoole\Database\Collector\Query;
+use Viswoole\Database\Collector\QueryCollector;
 use Viswoole\Database\Collector\Raw;
-use Viswoole\Database\Driver\Contract\DriverInterface;
-use Viswoole\Database\Facade\DbChannelManager;
+use Viswoole\Database\Driver\Contract\ChannelInterface;
 
 class Db
 {
@@ -28,17 +27,16 @@ class Db
    *
    * @param string $name 表名称
    * @param string $pk 主键
-   * @param string|DriverInterface|null $channel 数据库通道/驱动
-   * @return Query
+   * @param string|ChannelInterface|null $channel 数据库通道/驱动
+   * @return QueryCollector
    */
   public static function table(
-    string                 $name,
-    string                 $pk = 'id',
-    string|DriverInterface $channel = null
-  ): Query
+    string                  $name,
+    string                  $pk = 'id',
+    string|ChannelInterface $channel = null
+  ): QueryCollector
   {
-    if (!$channel instanceof DriverInterface) $channel = DbChannelManager::channel($channel);
-    return new Query($channel, $name, $pk);
+//    if (!$channel instanceof DriverInterface) $channel = DbChannelManager::channel($channel);
   }
 
   /**
@@ -85,7 +83,15 @@ class Db
    * @access public
    * @return void
    */
-  public static function startTrans(): void
+  public static function start(): void
   {
+  }
+
+  /**
+   * @return bool
+   */
+  public static function inTransaction(): bool
+  {
+
   }
 }

@@ -13,9 +13,12 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Collector\Where;
+namespace Viswoole\Database\Collector\Trait;
 
-trait DateQuery
+/**
+ * 日期快捷查询
+ */
+trait DateTrait
 {
   /**
    * 日期区间查询

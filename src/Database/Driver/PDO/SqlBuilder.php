@@ -46,7 +46,7 @@ class SqlBuilder
   private static array $tableFields = [];
   protected array $params = [];
 
-  public function __construct(protected PDODriver $driver, protected QueryOptions $options)
+  public function __construct(protected PDOChannel $driver, protected QueryOptions $options)
   {
 
   }

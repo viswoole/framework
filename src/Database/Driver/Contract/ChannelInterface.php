@@ -16,48 +16,39 @@ declare (strict_types=1);
 namespace Viswoole\Database\Driver\Contract;
 
 
+use Viswoole\Database\Collector\CrudMethod;
 use Viswoole\Database\Collector\QueryOptions;
-use Viswoole\Database\DataSet\DataSetCollection;
-use Viswoole\Database\DataSet\Row;
+use Viswoole\Database\Exception\DbException;
 
-interface DriverInterface
+/**
+ * 数据库驱动接口
+ */
+interface ChannelInterface
 {
-  /**
-   * 数据库表统一前缀
-   *
-   * @param string|null $table 表名
-   * @return string 如果传入表名则返回表前缀+表名 否则返回表前缀
-   */
-  public function prefix(string $table = null): string;
-
-  /**
-   * 打包sql
-   *
-   * @param QueryOptions $options 查询构造器选项
-   * @return string|array{sql:string,params:array} 如果合并sql则返回字符串 否则返回['sql'=>string,'params'=>array]
-   */
-  public function builder(QueryOptions $options): string|array;
-
   /**
    * 原生查询
    *
    * @param string $sql
    * @param array $params
-   * @return DataSetCollection|Row
+   * @return mixed 查询成功返回数据集
+   * @throws DbException 查询失败抛出异常
    */
-  public function query(
-    string $sql,
-    array  $params = []
-  ): DataSetCollection|Row;
+  public function query(string $sql, array $params = []): mixed;
 
   /**
    * 原生写入
    *
-   * @param string $sql
-   * @param array $params
-   * @return int
+   * @param string $sql 要执行的查询语句
+   * @param array $params 要绑定的参数
+   * @param bool $getLastInsertId 是否返回最后插入的ID
+   * @return int|string 查询成功返回受影响的行数
+   * @throws DbException 查询失败抛出异常
    */
-  public function execute(string $sql, array $params = []): int;
+  public function execute(
+    string $sql,
+    array  $params = [],
+    bool   $getLastInsertId = false
+  ): int|string;
 
   /**
    * 原生执行sql
@@ -67,4 +58,17 @@ interface DriverInterface
    * @return mixed 返回原生的执行结果，例如PDO驱动则返回PDOStatement对象
    */
   public function exec(string $sql, array $params = []): mixed;
+
+  /**
+   * 构建sql
+   *
+   * @param QueryOptions $options 查询选项
+   * @param CrudMethod $crud crud方法
+   * @param bool $merge 是否将参数和sql语句合并，不使用占位符
+   * @return string|array{sql:string,params:array<string,mixed>}
+   */
+  public function build(
+    QueryOptions $options,
+    bool         $merge = true,
+  ): string|array;
 }

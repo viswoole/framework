@@ -13,40 +13,37 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database;
-
-
-use Override;
-use Viswoole\Core\Service\Provider;
-use Viswoole\Database\Manager\DbChannel;
+namespace Viswoole\Database\Collector\Trait;
 
 /**
- * 数据库服务
+ * 分组查询
  */
-class DbService extends Provider
+trait GroupTrait
 {
-
   /**
-   * 该方法是在所有系统服务都绑定完毕过后调用，可以在此方法内注册路由，监听事件等
+   * 分组
    *
-   * @return void
+   * @access public
+   * @param string|array $columns
+   * @return static
    */
-  #[Override] public function boot(): void
+  public function group(array|string $columns): static
   {
-    // 创建数据库通道管理器
-    $this->app->make('db');
+    if (is_string($columns)) $columns = explode(',', $columns);
+    $this->options->group = $columns;
+    return $this;
   }
 
   /**
-   * 该方法会在服务注册时调用，在该方法内通过$this->app->bind('服务名', '服务类名');
+   * 用于配合group方法完成从分组的结果中筛选
    *
-   * @return void
+   * @access public
+   * @param string $condition
+   * @return static
    */
-  #[Override] public function register(): void
+  public function having(string $condition): static
   {
-    /**
-     * 绑定数据库通道管理器
-     */
-    $this->app->bind('db', DbChannel::class);
+    $this->options->having = $condition;
+    return $this;
   }
 }

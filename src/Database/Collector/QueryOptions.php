@@ -19,6 +19,10 @@ use InvalidArgumentException;
 use Viswoole\Database\Collector\Where\WhereGroup;
 use Viswoole\Database\Collector\Where\WhereRaw;
 
+/**
+ * 查询选项
+ * @noinspection PhpClassHasTooManyDeclaredMembersInspection
+ */
 class QueryOptions
 {
   /**运算符*/
@@ -59,9 +63,9 @@ class QueryOptions
     'NOT IN TIME',
   ];
   /**
-   * @var string 查询类型 ['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'SELECT', 'FIND', 'INSERT', 'UPDATE','DELETE']
+   * @var CrudMethod 查询的方法
    */
-  public string $queryType;
+  public CrudMethod $crudMethod;
   /**
    * @var array<int,array{column:string,operator:string,value:mixed,connector:string}|WhereGroup|WhereRaw> 查询条件
    */
@@ -75,7 +79,7 @@ class QueryOptions
    */
   public ?string $alias = null;
   /**
-   * @var array<string,string|null>|string 查询字段,为空则代表所有字段['字段'=>'别名']
+   * @var array<string,string|null>|string 查询字段，关联数组[字段名=>别名|null]
    */
   public array|string|Raw $field = '*';
   /**
@@ -106,26 +110,16 @@ class QueryOptions
    * @var string 聚合查询的列
    */
   public string $columnName = '*';
-  /** @var int 是否直接返回sql,0不返回，1返回，2合并sql */
-  public int $getSql = 0;
   /**
-   * @var bool|string 是否读取缓存
+   * @var false|array{key:string,store:string|null,tag:string|null,expiry:int} 是否读取缓存
    */
-  public bool|string $cache = false;
+  public false|array $cache = false;
   /**
-   * @var int 缓存过期时间
-   */
-  public int $cache_expiry = 0;
-  /**
-   * @var string|null 缓存标签
-   */
-  public ?string $cache_tag = null;
-  /**
-   * @var array 自动递减
+   * @var array<string,int> 自动递减
    */
   public array $autoDec = [];
   /**
-   * @var array 自动递增
+   * @var array<string,int> 自动递增
    */
   public array $autoInc = [];
   /**
@@ -137,11 +131,7 @@ class QueryOptions
    */
   public array $group = [];
   /**
-   * @var string[] mysql分区查询
-   */
-  public array $partition = [];
-  /**
-   * @var ?string 强制索引
+   * @var string|null 强制索引
    */
   public ?string $force = null;
   /**
@@ -168,17 +158,15 @@ class QueryOptions
    * @var string[] unionAll
    */
   public array $unionAll = [];
+  /**
+   * @var string[] mysql分区查询
+   */
+  public array $partition = [];
 
   /**
-   * @param string $table 表名
-   * @param string $prefix 表前缀
-   * @param string $pk 主键
+   * @param string $table 完整表名
    */
-  public function __construct(
-    public string $table,
-    public string $prefix,
-    public string $pk,
-  )
+  public function __construct(public string $table, public string $pk)
   {
   }
 

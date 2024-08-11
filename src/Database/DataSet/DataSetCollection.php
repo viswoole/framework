@@ -17,22 +17,24 @@ namespace Viswoole\Database\DataSet;
 
 use InvalidArgumentException;
 use Override;
+use SebastianBergmann\CodeCoverage\Driver\Driver;
 
+/**
+ * 查询结果数据集
+ */
 class DataSetCollection extends ArrayObject
 {
   /**
-   * @var Row[] 数据集列表
+   * @var array<int,array<string,mixed>>|array<string,mixed> 数据集列表
    */
   protected array $data = [];
 
   /**
-   * @param array<int,array<string,mixed>|Row> $list
+   * @param array<int,array<string,mixed>> $list
    */
-  public function __construct(array $list)
+  public function __construct(array $list, array $sqlRunInfo, Driver $driver)
   {
-    foreach ($list as $row) {
-      $this->data[] = $row instanceof Row ? $row : new Row($row);
-    }
+    $this->data = $list;
   }
 
   /**

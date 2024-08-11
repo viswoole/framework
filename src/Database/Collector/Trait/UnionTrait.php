@@ -13,40 +13,36 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database;
+namespace Viswoole\Database\Collector\Trait;
 
-
-use Override;
-use Viswoole\Core\Service\Provider;
-use Viswoole\Database\Manager\DbChannel;
-
-/**
- * 数据库服务
- */
-class DbService extends Provider
+trait UnionTrait
 {
 
   /**
-   * 该方法是在所有系统服务都绑定完毕过后调用，可以在此方法内注册路由，监听事件等
+   * 合并多个语句
    *
-   * @return void
+   * @access public
+   * @param string|array $sql
+   * @return static
    */
-  #[Override] public function boot(): void
+  public function union(array|string $sql): static
   {
-    // 创建数据库通道管理器
-    $this->app->make('db');
+    if (is_string($sql)) $sql = [$sql];
+    $this->options->union = $sql;
+    return $this;
   }
 
   /**
-   * 该方法会在服务注册时调用，在该方法内通过$this->app->bind('服务名', '服务类名');
+   * 合并多个语句
    *
-   * @return void
+   * @access public
+   * @param string|array $sql
+   * @return static
    */
-  #[Override] public function register(): void
+  public function unionAll(array|string $sql): static
   {
-    /**
-     * 绑定数据库通道管理器
-     */
-    $this->app->bind('db', DbChannel::class);
+    if (is_string($sql)) $sql = [$sql];
+    $this->options->unionAll = $sql;
+    return $this;
   }
 }

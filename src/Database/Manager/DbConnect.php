@@ -13,8 +13,22 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Contract;
+namespace Viswoole\Database\Manager;
 
-interface DbInterface
+/**
+ * 数据库连接管理器
+ */
+class DbConnect
 {
+  /**
+   * @return static
+   */
+  public static function create(): static
+  {
+  }
+
+  public function commit()
+  {
+
+  }
 }

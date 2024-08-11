@@ -13,12 +13,17 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Collector;
+namespace Viswoole\Database\Collector\Trait;
 
+use Viswoole\Cache\Facade\Cache;
+use Viswoole\Database\Collector\CrudMethod;
 use Viswoole\Database\DataSet\DataSetCollection;
 use Viswoole\Database\DataSet\Row;
 
-trait CrudQuery
+/**
+ * CRUD操作
+ */
+trait CrudTrait
 {
   /**
    * 更新
@@ -30,15 +35,35 @@ trait CrudQuery
   public function update(array $data = null): int
   {
     if (!empty($data)) $this->options->data = $data;
-    return $this->runCrud('update');
+    return $this->runCrud(CrudMethod::UPDATE);
   }
 
-  protected function runCrud(string $method): mixed
+  /**
+   * 运行CRUD操作。
+   *
+   * @param CrudMethod $method CRUD操作方法。
+   * @return mixed 根据不同的CRUD操作返回不同的结果。
+   */
+  protected function runCrud(CrudMethod $method): mixed
   {
-    $this->options->queryType = strtoupper($method);
-    $currentOptions = clone $this->options;
-    $this->options = new QueryOptions($this->table, $this->driver->prefix(), $this->pk);
-    $sql = $this->driver->builder($currentOptions);
+    $options = $this->options;
+    $isQuery = in_array($method->name, ['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'SELECT', 'FIND']);
+    $cache = $options->cache;
+    if ($isQuery) {
+      if ($options->cache) {
+        $result = Cache::store($options->cache['store'])->get($options->cache['key']);
+      }
+      if (!isset($result)) {
+        $sql = $this->build($method, false);
+        $result = $this->driver->query($sql['sql'], $sql['params']);
+      }
+    } else {
+      if ($cache['tag']) {
+        Cache::store($options->cache['store'])->tag($cache['tag'])->remove($cache['key']);
+      } else {
+        Cache::store($options->cache['store'])->delete($options->cache['key']);
+      }
+    }
     return '';
   }
 
@@ -57,21 +82,21 @@ trait CrudQuery
         $this->whereEq($this->pk, $pks);
       }
     }
-    return $this->runCrud('delete');
+    return $this->runCrud(CrudMethod::DELETE);
   }
 
   /**
-   * 新增数据
+   * 创建新记录
    *
    * @param array<string,mixed>|array<int,array<string,mixed>> $data 关联数组[字段=>值]或[[字段=>值...],[字段=>值]...]
    * @param bool $getId 是否获取写入成功数据的主键。 默认为false
    * @return int|string|array 如果$getId为true，返回主键值，否则返回受影响的行数，如果插入多行数据且$getId=true则返回主键值数组
    */
-  public function insert(array $data = null, bool $getId = false): int|string|array
+  public function create(array $data = null, bool $getId = false): int|string|array
   {
     if (!empty($data)) $this->options->data = $data;
     $this->options->insertGetId = $getId;
-    return $this->runCrud('insert');
+    return $this->runCrud(CrudMethod::CREATE);
   }
 
   /**
@@ -84,7 +109,7 @@ trait CrudQuery
   public function find(int|string $pk = null): Row
   {
     if (!is_null($pk)) $this->whereEq($this->pk, $pk);
-    return $this->runCrud('find');
+    return $this->runCrud(CrudMethod::FIND);
   }
 
   /**
@@ -103,7 +128,7 @@ trait CrudQuery
         $this->whereIn($this->pk, $pks);
       }
     }
-    return $this->runCrud('select');
+    return $this->runCrud(CrudMethod::SELECT);
   }
 
   /**
@@ -115,7 +140,7 @@ trait CrudQuery
   public function count(string $column = '*'): int
   {
     $this->options->columnName = $column;
-    return $this->runCrud('count');
+    return $this->runCrud(CrudMethod::COUNT);
   }
 
   /**
@@ -127,7 +152,7 @@ trait CrudQuery
   public function sum(string $column): int
   {
     $this->options->columnName = $column;
-    return $this->runCrud('sum');
+    return $this->runCrud(CrudMethod::SUM);
   }
 
   /**
@@ -139,7 +164,7 @@ trait CrudQuery
   public function avg(string $column): int
   {
     $this->options->columnName = $column;
-    return $this->runCrud('avg');
+    return $this->runCrud(CrudMethod::AVG);
   }
 
   /**
@@ -151,7 +176,7 @@ trait CrudQuery
   public function min(string $column): int|string
   {
     $this->options->columnName = $column;
-    return $this->runCrud('min');
+    return $this->runCrud(CrudMethod::MIN);
   }
 
   /**
@@ -163,6 +188,6 @@ trait CrudQuery
   public function max(string $column): int|string
   {
     $this->options->columnName = $column;
-    return $this->runCrud('max');
+    return $this->runCrud(CrudMethod::MAX);
   }
 }

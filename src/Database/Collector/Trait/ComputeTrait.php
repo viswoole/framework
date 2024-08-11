@@ -13,40 +13,45 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database;
+namespace Viswoole\Database\Collector\Trait;
 
-
-use Override;
-use Viswoole\Core\Service\Provider;
-use Viswoole\Database\Manager\DbChannel;
+use Viswoole\Database\Collector\Raw;
 
 /**
- * 数据库服务
+ * 设置某个字段自增或自减
  */
-class DbService extends Provider
+trait ComputeTrait
 {
 
   /**
-   * 该方法是在所有系统服务都绑定完毕过后调用，可以在此方法内注册路由，监听事件等
+   * 自减
    *
-   * @return void
+   * @param string|Raw $column
+   * @param float|int $step
+   * @return static
    */
-  #[Override] public function boot(): void
+  public function dec(
+    string|Raw $column,
+    float|int  $step = 1,
+  ): static
   {
-    // 创建数据库通道管理器
-    $this->app->make('db');
+    $this->options->autoDec[] = ['column' => $column, 'step' => $step];
+    return $this;
   }
 
   /**
-   * 该方法会在服务注册时调用，在该方法内通过$this->app->bind('服务名', '服务类名');
+   * 自增
    *
-   * @return void
+   * @param string|Raw $column
+   * @param float|int $step
+   * @return static
    */
-  #[Override] public function register(): void
+  public function inc(
+    string|Raw $column,
+    float|int  $step = 1,
+  ): static
   {
-    /**
-     * 绑定数据库通道管理器
-     */
-    $this->app->bind('db', DbChannel::class);
+    $this->options->autoInc[] = ['column' => $column, 'step' => $step];
+    return $this;
   }
 }

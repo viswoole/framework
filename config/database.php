@@ -17,7 +17,7 @@
 
 declare (strict_types=1);
 
-use Viswoole\Database\Driver\PDO\PDODriver;
+use Viswoole\Database\Driver\PDO\PDOChannel;
 
 return [
   // 默认通道
@@ -25,7 +25,7 @@ return [
   // 通道列表
   'channel' => [
     // 驱动类需继承Viswoole\Database\Driver\ConnectionDriver
-    'default' => new PDODriver(
+    'default' => new PDOChannel(
       host    : env('DATABASE_HOST', '127.0.0.1'),
       port    : env('DATABASE_PORT', 3306),
       database: env('DATABASE_NAME', ''),

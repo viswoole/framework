@@ -18,27 +18,33 @@ namespace Viswoole\Database\Manager;
 use InvalidArgumentException;
 use Viswoole\Core\Common\Str;
 use Viswoole\Core\Config;
-use Viswoole\Database\Driver\Contract\DriverInterface;
+use Viswoole\Database\Driver\Contract\ChannelInterface;
 use Viswoole\Database\Exception\DbException;
 
-class ChannelManager
+/**
+ * 数据库通道管理器
+ */
+class DbChannel
 {
   /**
-   * @var array<string,DriverInterface> 数据库通道
+   * @var array<string,ChannelInterface> 数据库通道
    */
   protected array $channels = [];
 
   protected string $defaultChannel;
 
+  /**
+   * @param Config $config
+   */
   public function __construct(protected Config $config)
   {
     $channels = $config->get('database.channel', []);
     if (!empty($channels)) {
       $this->defaultChannel = $config->get('database.default', array_key_first($channels));
       foreach ($channels as $key => $driver) {
-        if (!$driver instanceof DriverInterface) {
+        if (!$driver instanceof ChannelInterface) {
           throw new DbException(
-            '数据库通道 ' . $key . ' 驱动类需实现' . DriverInterface::class . '接口'
+            '数据库通道 ' . $key . ' 驱动类需实现' . ChannelInterface::class . '接口'
           );
         }
         $this->channels[Str::camelCaseToSnakeCase($key)] = $driver;
@@ -51,9 +57,9 @@ class ChannelManager
    *
    * @access public
    * @param string|null $name 通道名称
-   * @return DriverInterface
+   * @return ChannelInterface
    */
-  public function channel(string $name = null): DriverInterface
+  public function channel(string $name = null): ChannelInterface
   {
     $name = $name ?? $this->defaultChannel;
     if (!$this->hasChannel($name)) {

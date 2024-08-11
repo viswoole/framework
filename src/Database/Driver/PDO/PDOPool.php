@@ -24,9 +24,12 @@ use Viswoole\Core\Channel\ConnectionPool;
 /**
  * PDO连接池
  */
-class Pool extends ConnectionPool
+class PDOPool extends ConnectionPool
 {
 
+  /**
+   * @param PDOConfig $PDOConfig
+   */
   public function __construct(protected PDOConfig $PDOConfig)
   {
     parent::__construct($PDOConfig->pool_max_size, $PDOConfig->pool_fill_size);

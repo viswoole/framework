@@ -13,15 +13,17 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Collector;
+namespace Viswoole\Database\Collector\Trait;
 
-use Viswoole\Database\Collector\Where\DateQuery;
 use Viswoole\Database\Collector\Where\WhereGroup;
 use Viswoole\Database\Collector\Where\WhereRaw;
 
-trait WhereQuery
+/**
+ * 查询条件
+ */
+trait WhereTrait
 {
-  use DateQuery;
+  use DateTrait;
 
   /**
    * 查询条件(AND连接符)
