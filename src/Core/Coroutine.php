@@ -15,6 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+/**
+ * 协程
+ */
 class Coroutine extends \Swoole\Coroutine
 {
   /**
