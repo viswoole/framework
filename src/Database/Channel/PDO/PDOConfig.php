@@ -13,10 +13,13 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Driver\PDO;
+namespace Viswoole\Database\Channel\PDO;
 
 use PDO;
 
+/**
+ * PDO配置
+ */
 class PDOConfig
 {
   /**
@@ -45,7 +48,8 @@ class PDOConfig
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ],
     public int           $pool_max_size = 64,
-    public int           $pool_fill_size = 0
+    public int           $pool_fill_size = 0,
+    public bool          $onlyRead = false
   )
   {
   }

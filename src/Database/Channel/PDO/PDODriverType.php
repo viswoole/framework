@@ -13,36 +13,14 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Exception;
-
-use RuntimeException;
-use Throwable;
-
+namespace Viswoole\Database\Channel\PDO;
 /**
- * 数据库异常
+ * PDO支持的驱动
  */
-class DbErrorException extends RuntimeException
+enum PDODriverType: string
 {
-  protected ?string $sql;
-
-  public function __construct(
-    string     $message,
-    int        $code = 10500,
-    ?string    $sql = null,
-    ?Throwable $previous = null
-  )
-  {
-    $this->sql = $sql;
-    parent::__construct($message, $code, $previous);
-  }
-
-  /**
-   * 获取出错的sql语句
-   *
-   * @return string|null
-   */
-  public function getSql(): ?string
-  {
-    return $this->sql;
-  }
+  case MYSQL = 'mysql';
+  case POSTGRESQL = 'pgsql';
+  case ORACLE = 'oci';
+  case SQLite = 'sqlite';
 }

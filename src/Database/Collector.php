@@ -13,8 +13,11 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Collector;
+namespace Viswoole\Database;
 
+use Viswoole\Database\Collector\CrudMethod;
+use Viswoole\Database\Collector\QueryOptions;
+use Viswoole\Database\Collector\Raw;
 use Viswoole\Database\Collector\Trait\ComputeTrait;
 use Viswoole\Database\Collector\Trait\CrudTrait;
 use Viswoole\Database\Collector\Trait\GroupTrait;
@@ -23,12 +26,11 @@ use Viswoole\Database\Collector\Trait\MysqlTrait;
 use Viswoole\Database\Collector\Trait\PageTrait;
 use Viswoole\Database\Collector\Trait\UnionTrait;
 use Viswoole\Database\Collector\Trait\WhereTrait;
-use Viswoole\Database\Driver\Contract\ChannelInterface;
 
 /**
  * 查询构造器
  */
-class QueryCollector
+class Collector
 {
   use WhereTrait, JoinTrait, CrudTrait, ComputeTrait, PageTrait, UnionTrait, MysqlTrait,
     GroupTrait;
@@ -39,14 +41,14 @@ class QueryCollector
   private QueryOptions $options;
 
   /**
-   * @param ChannelInterface $driver 数据库驱动
+   * @param Channel $driver 数据库驱动
    * @param string $table 要查询的表名
    * @param string $pk 主键
    */
   public function __construct(
-    protected ChannelInterface $driver,
-    protected string           $table,
-    protected string           $pk
+    protected Channel $driver,
+    protected string  $table,
+    protected string  $pk
   )
   {
   }

@@ -17,7 +17,7 @@
 
 declare (strict_types=1);
 
-use Viswoole\Database\Driver\PDO\PDOChannel;
+use Viswoole\Database\Channel\PDO\PDOChannel;
 
 return [
   // 默认通道

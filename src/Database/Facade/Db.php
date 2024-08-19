@@ -16,18 +16,21 @@ declare (strict_types=1);
 namespace Viswoole\Database\Facade;
 
 use Viswoole\Core\Facade;
-use Viswoole\Database\Driver\Contract\ChannelInterface;
+use Viswoole\Database\Channel;
 use Viswoole\Database\Manager\DbChannel;
 
 /**
- * 通道管理器
- */
-
-/**
- * @method static ChannelInterface channel(?string $name = null) 获取数据库通道，返回数据库驱动
- * @method static bool hasChannel(string $channel_name) 判断通道是否存在
+ * 数据库通道管理器
  *
- * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\ChannelManager
+ * @method static Channel channel(?string $name = null) 获取数据库通道
+ * @method static bool hasChannel(string $channel_name) 判断通道是否存在
+ * @method static void start(bool $cross = false) 开启事务(startTrans别名方法)
+ * @method static void startTrans(bool $cross = false) 开启事务
+ * @method static bool inTransaction() 判断当前是否在事务中
+ * @method static void commit() 提交事务
+ * @method static void rollback() 回滚所有事务
+ *
+ * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\Db
  */
 class Db extends Facade
 {

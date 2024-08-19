@@ -13,10 +13,11 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Driver\PDO;
+namespace Viswoole\Database\Channel\PDO;
 
 use AllowDynamicProperties;
 use PDO;
+use PDOStatement;
 use Swoole\Database\PDOProxy as SwoolePDOProxy;
 use Swoole\Database\PDOStatementProxy;
 
@@ -32,8 +33,8 @@ use Swoole\Database\PDOStatementProxy;
  * @method array getAvailableDrivers() 返回 PDO 驱动程序名称的数组。如果没有可用的驱动程序，它将返回一个空数组。
  * @method bool inTransaction() 检查当前连接是否处于事务中
  * @method false|string lastInsertId(?string $name = null) 返回最后插入的行或序列值的 ID
- * @method false|PDOStatementProxy prepare(string $query, array $options) 准备要执行的语句并返回语句对象
- * @method false|PDOStatementProxy query(string $query, ?int $fetchMode = PDO::ATTR_DEFAULT_FETCH_MODE, mixed $fetchModeArgs = null) 执行 SQL 语句，返回作为 PDOStatement 对象的结果集
+ * @method false|PDOStatementProxy|PDOStatement prepare(string $query, array $options = []) 准备要执行的语句并返回语句对象
+ * @method false|PDOStatementProxy|PDOStatement query(string $query, ?int $fetchMode = PDO::ATTR_DEFAULT_FETCH_MODE, mixed $fetchModeArgs = null) 执行 SQL 语句，返回作为 PDOStatement 对象的结果集
  * @method false|string quote(string $string, int $type = PDO::PARAM_STR) 引用用于查询的字符串
  * @method bool rollBack() 回归事务，成功时返回true，失败时返回false，未启动事务会抛出PDOException异常
  * @method bool setAttribute(int $attribute, mixed $value) 设置属性
@@ -41,11 +42,19 @@ use Swoole\Database\PDOStatementProxy;
 #[AllowDynamicProperties]
 class PDOProxy extends SwoolePDOProxy
 {
+  /**
+   * @param string $dsn
+   * @param string|null $username
+   * @param string|null $password
+   * @param array|null $options
+   * @param bool $onlyRead
+   */
   public function __construct(
-    string  $dsn,
-    ?string $username = null,
-    ?string $password = null,
-    ?array  $options = null
+    string               $dsn,
+    ?string              $username = null,
+    ?string              $password = null,
+    ?array               $options = null,
+    public readonly bool $onlyRead = false
   )
   {
     $constructor = function () use ($dsn, $username, $password, $options) {

@@ -25,6 +25,8 @@ use Viswoole\Database\DataSet\Row;
  */
 trait CrudTrait
 {
+  const array READ_METHODS = ['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'SELECT', 'FIND'];
+
   /**
    * 更新
    *
@@ -47,7 +49,7 @@ trait CrudTrait
   protected function runCrud(CrudMethod $method): mixed
   {
     $options = $this->options;
-    $isQuery = in_array($method->name, ['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'SELECT', 'FIND']);
+    $isQuery = in_array($method->name, self::READ_METHODS);
     $cache = $options->cache;
     if ($isQuery) {
       if ($options->cache) {
@@ -90,7 +92,7 @@ trait CrudTrait
    *
    * @param array<string,mixed>|array<int,array<string,mixed>> $data 关联数组[字段=>值]或[[字段=>值...],[字段=>值]...]
    * @param bool $getId 是否获取写入成功数据的主键。 默认为false
-   * @return int|string|array 如果$getId为true，返回主键值，否则返回受影响的行数，如果插入多行数据且$getId=true则返回主键值数组
+   * @return int|string|array 如果$getId为true则返回主键值，否则返回受影响的行数，如果插入多行数据且$getId=true则返回主键值数组
    */
   public function create(array $data = null, bool $getId = false): int|string|array
   {

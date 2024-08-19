@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Database\Driver\PDO;
+namespace Viswoole\Database\Channel\PDO;
 
 use Exception;
 use Override;

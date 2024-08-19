@@ -17,7 +17,6 @@ namespace Viswoole\Database\DataSet;
 
 use InvalidArgumentException;
 use Override;
-use SebastianBergmann\CodeCoverage\Driver\Driver;
 
 /**
  * 查询结果数据集
@@ -32,7 +31,7 @@ class DataSetCollection extends ArrayObject
   /**
    * @param array<int,array<string,mixed>> $list
    */
-  public function __construct(array $list, array $sqlRunInfo, Driver $driver)
+  public function __construct(array $list, array $sqlRunInfo)
   {
     $this->data = $list;
   }
