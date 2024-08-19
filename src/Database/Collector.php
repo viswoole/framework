@@ -18,7 +18,6 @@ namespace Viswoole\Database;
 use Viswoole\Database\Collector\CrudMethod;
 use Viswoole\Database\Collector\QueryOptions;
 use Viswoole\Database\Collector\Raw;
-use Viswoole\Database\Collector\Trait\ComputeTrait;
 use Viswoole\Database\Collector\Trait\CrudTrait;
 use Viswoole\Database\Collector\Trait\GroupTrait;
 use Viswoole\Database\Collector\Trait\JoinTrait;
@@ -32,7 +31,7 @@ use Viswoole\Database\Collector\Trait\WhereTrait;
  */
 class Collector
 {
-  use WhereTrait, JoinTrait, CrudTrait, ComputeTrait, PageTrait, UnionTrait, MysqlTrait,
+  use WhereTrait, JoinTrait, CrudTrait, PageTrait, UnionTrait, MysqlTrait,
     GroupTrait;
 
   /**
@@ -51,6 +50,7 @@ class Collector
     protected string  $pk
   )
   {
+    $this->options = new QueryOptions($table, $pk);
   }
 
   /**
@@ -220,6 +220,7 @@ class Collector
   public function build(CrudMethod $crud = CrudMethod::SELECT, bool $merge = true): string|array
   {
     $this->options->crudMethod = $crud;
+    if ($crud === CrudMethod::FIND) $this->limit(1);
     $sql = $this->driver->build($this->options, $merge);
     $this->options = new QueryOptions($this->table, $this->pk);
     return $sql;

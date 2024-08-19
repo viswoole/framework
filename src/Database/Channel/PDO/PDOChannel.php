@@ -20,6 +20,8 @@ use PDO;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
 use Viswoole\Database\Channel;
+use Viswoole\Database\Collector;
+use Viswoole\Database\Collector\QueryOptions;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Manager\Connect;
 
@@ -83,6 +85,21 @@ class PDOChannel extends Channel
   }
 
   /**
+   * 选择要查询的表
+   *
+   * @param string $table 表名称
+   * @param string $pk 表主键名称
+   * @return Collector
+   */
+  public function table(string $table, string $pk = 'id'): Collector
+  {
+    if (!str_starts_with($table, $this->table_prefix)) {
+      $table = $this->table_prefix . $table;
+    }
+    return parent::table($table, $pk);
+  }
+
+  /**
    * 查询
    *
    * @param string $sql
@@ -97,7 +114,7 @@ class PDOChannel extends Channel
     $result = $stmt->fetchAll();
     Connect::factory()->put($this, $connect);
     if (false === $result) {
-      throw new DbException('fetch dataset failed', sql: self::sqlMergeParams($sql, $params));
+      throw new DbException('fetch dataset failed', sql: SqlBuilder::sqlMergeParams($sql, $params));
     }
     return $result;
   }
@@ -119,7 +136,7 @@ class PDOChannel extends Channel
    * @param string $type
    * @return PDOProxy
    */
-  #[Override] public function pop(string $type = 'write'): PDOProxy
+  #[Override] public function pop(string $type): PDOProxy
   {
     return $this->getPool($type)->pop($this->pool_timeout_time);
   }
@@ -157,39 +174,14 @@ class PDOChannel extends Channel
     $stmt = $connect->prepare($sql);
     if ($stmt === false) {
       $err = $connect->errorInfo();
-      throw new DbException($err[2], $err[1], self::sqlMergeParams($sql, $params));
+      throw new DbException($err[2], $err[1], SqlBuilder::sqlMergeParams($sql, $params));
     }
     $result = $stmt->execute($params);
     if ($result === false) {
       $err = $connect->errorInfo();
-      throw new DbException($err[2], $err[1], self::sqlMergeParams($sql, $params));
+      throw new DbException($err[2], $err[1], SqlBuilder::sqlMergeParams($sql, $params));
     }
     return $stmt;
-  }
-
-  /**
-   * 合并参数
-   *
-   * @param string $sql
-   * @param array $params
-   * @return string
-   */
-  public static function sqlMergeParams(string $sql, array $params): string
-  {
-    if (!empty($params)) {
-      // 替换参数值
-      $patterns = array_map(function ($param) {
-        return '/(?<!\w):' . preg_quote($param, '/') . '(?!\w)/';
-      }, array_keys($params));
-
-      $sql = preg_replace_callback($patterns, function ($matches) use ($params) {
-        $paramKey = ltrim($matches[0], ':');
-        $paramValue = $params[$paramKey];
-        if ($paramValue === null) return 'NULL';
-        return is_string($paramValue) ? "'" . addslashes($paramValue) . "'" : $paramValue;
-      }, $sql);
-    }
-    return $sql;
   }
 
   /**
@@ -235,5 +227,18 @@ class PDOChannel extends Channel
         $this->getPool('write')->put($connect);
       }
     }
+  }
+
+  /**
+   * 构建sql
+   *
+   * @param QueryOptions $options
+   * @param bool $merge
+   * @return array|string
+   */
+  #[Override] public function build(QueryOptions $options, bool $merge = true): array|string
+  {
+    $build = new SqlBuilder($this, $options);
+    return $build->build($merge);
   }
 }

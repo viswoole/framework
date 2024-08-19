@@ -41,15 +41,15 @@ trait JoinTrait
    * 关联查询
    *
    * @access public
-   * @param string|Raw $table 要关联的表,以及别名
+   * @param string $table 要关联的表
    * @param string $condition 连接条件，例如 a.id = b.id,注意运算符两侧需要使用空格隔开
    * @param string $type ['INNER', 'LEFT', 'RIGHT', 'FULL']，不区分大小写
    * @return static
    */
   public function join(
-    string|Raw $table,
-    string     $condition,
-    string     $type = 'INNER'
+    string $table,
+    string $condition,
+    string $type = 'INNER'
   ): static
   {
     $type = strtoupper($type);

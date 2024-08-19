@@ -39,28 +39,6 @@ class QueryOptions
     'NOT BETWEEN',
     'IN',
     'NOT IN',
-    '= DATE',
-    '!= DATE',
-    '<> DATE',
-    '> DATE',
-    '>= DATE',
-    '< DATE',
-    '<= DATE',
-    'BETWEEN DATE',
-    'NOT BETWEEN DATE',
-    'IN DATE',
-    'NOT IN DATE',
-    '= TIME',
-    '!= TIME',
-    '<> TIME',
-    '> TIME',
-    '>= TIME',
-    '< TIME',
-    '<= TIME',
-    'BETWEEN TIME',
-    'NOT BETWEEN TIME',
-    'IN TIME',
-    'NOT IN TIME',
   ];
   /**
    * @var CrudMethod 查询的方法
@@ -103,7 +81,7 @@ class QueryOptions
    */
   public ?string $having = null;
   /**
-   * @var array{column:array,direction:string} 排序
+   * @var array<string,string> 排序
    */
   public array $order = [];
   /**
@@ -114,14 +92,6 @@ class QueryOptions
    * @var false|array{key:string,store:string|null,tag:string|null,expiry:int} 是否读取缓存
    */
   public false|array $cache = false;
-  /**
-   * @var array<string,int> 自动递减
-   */
-  public array $autoDec = [];
-  /**
-   * @var array<string,int> 自动递增
-   */
-  public array $autoInc = [];
   /**
    * @var array<int,array{table:string,alias:string,condition:string,type:string}> 连接查询
    */
@@ -187,7 +157,7 @@ class QueryOptions
   ): void
   {
     $operator = strtoupper($operator);
-    if (in_array($operator, self::OPERATOR)) {
+    if (!in_array($operator, self::OPERATOR)) {
       throw new InvalidArgumentException(
         'where condition operator must be in ' . implode(',', self::OPERATOR)
       );

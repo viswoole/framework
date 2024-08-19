@@ -28,15 +28,15 @@ trait WhereTrait
   /**
    * 查询条件(AND连接符)
    *
-   * @param string|array $column 要筛选的列(字段名称)
+   * @param string $column 要筛选的列(字段名称)
    * @param mixed $operator 比较运算符或需要比对的值
    * @param mixed $value 比较值
    * @return static
    */
   public function whereAnd(
-    string|array $column,
-    mixed        $operator,
-    mixed        $value,
+    string $column,
+    mixed  $operator,
+    mixed  $value,
   ): static
   {
     return $this->where($column, $operator, $value);
@@ -45,45 +45,35 @@ trait WhereTrait
   /**
    * 查询条件
    *
-   * @param string|array $column 要筛选的列(字段名称)
+   * @param string $column 要筛选的列(字段名称)
    * @param mixed $operator 比较运算符或需要比对的值
    * @param mixed $value 比较值
    * @param string $connector 连接符,用于连接上一个查询条件，开头第一个条件该参数无效
    * @return static
    */
   public function where(
-    string|array $column,
-    mixed        $operator,
-    mixed        $value,
-    string       $connector = 'AND'
+    string $column,
+    mixed  $operator,
+    mixed  $value,
+    string $connector = 'AND'
   ): static
   {
-    if (is_array($column)) {
-      foreach ($column as $key => $item) {
-        if (is_string($key)) {
-          $this->where($key, '=', $item);
-        } else {
-          $this->where(...$item);
-        }
-      }
-    } else {
-      $this->options->addWhere($column, $operator, $value, $connector);
-    }
+    $this->options->addWhere($column, $operator, $value, $connector);
     return $this;
   }
 
   /**
    * 查询条件(OR连接符)
    *
-   * @param string|array $column 要筛选的列(字段名称)
+   * @param string $column 要筛选的列(字段名称)
    * @param mixed $operator 比较运算符或需要比对的值
    * @param mixed $value 比较值
    * @return static
    */
   public function whereOr(
-    string|array $column,
-    mixed        $operator,
-    mixed        $value,
+    string $column,
+    mixed  $operator,
+    mixed  $value,
   ): static
   {
     return $this->where($column, $operator, $value, 'OR');
@@ -207,15 +197,15 @@ trait WhereTrait
    * $query->table('users')->whereEq('name','小明')->find();
    * ```
    *
-   * @param string|array $column 列
+   * @param string $column 列
    * @param mixed $value 值
    * @param string $connector 连接符,用于连接上一个查询条件
    * @return static
    */
   public function whereEq(
-    string|array $column,
-    mixed        $value,
-    string       $connector = 'AND'
+    string $column,
+    mixed  $value,
+    string $connector = 'AND'
   ): static
   {
     return $this->where($column, '=', $value, $connector);
@@ -224,7 +214,7 @@ trait WhereTrait
   /**
    * 原生where语句
    *
-   * @param string $sql where查询语句，不需要添加where!例如：`age > 10 AND name = '小明'`
+   * @param string $sql where查询语句 例如：`age > 10 AND name = '小明'`
    * @param array $params 参数
    * @return $this
    */

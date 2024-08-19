@@ -17,6 +17,7 @@ namespace Viswoole\Database\Facade;
 
 use Viswoole\Core\Facade;
 use Viswoole\Database\Channel;
+use Viswoole\Database\Collector\Raw;
 use Viswoole\Database\Manager\DbChannel;
 
 /**
@@ -24,11 +25,11 @@ use Viswoole\Database\Manager\DbChannel;
  *
  * @method static Channel channel(?string $name = null) 获取数据库通道
  * @method static bool hasChannel(string $channel_name) 判断通道是否存在
- * @method static void start(bool $cross = false) 开启事务(startTrans别名方法)
- * @method static void startTrans(bool $cross = false) 开启事务
- * @method static bool inTransaction() 判断当前是否在事务中
+ * @method static void start() 开启事务
+ * @method static void startTransaction() 开启事务
  * @method static void commit() 提交事务
  * @method static void rollback() 回滚所有事务
+ * @method static Raw raw(string $sql) 原生sql
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\Db
  */

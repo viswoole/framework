@@ -19,6 +19,7 @@ use InvalidArgumentException;
 use Viswoole\Core\Common\Str;
 use Viswoole\Core\Config;
 use Viswoole\Database\Channel;
+use Viswoole\Database\Collector\Raw;
 use Viswoole\Database\Exception\DbException;
 
 /**
@@ -119,5 +120,16 @@ class DbChannel
   public function rollback(): void
   {
     Connect::factory()->rollback();
+  }
+
+  /**
+   * 原生sql
+   *
+   * @param string $sql
+   * @return Raw
+   */
+  public function raw(string $sql): Raw
+  {
+    return new Raw($sql);
   }
 }

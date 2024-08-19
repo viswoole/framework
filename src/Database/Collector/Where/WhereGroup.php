@@ -30,6 +30,10 @@ class WhereGroup
    */
   public array $items;
 
+  /**
+   * @param array $wheres
+   * @param string $connector
+   */
   public function __construct(array $wheres, string $connector)
   {
     $newWheres = [];

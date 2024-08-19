@@ -15,6 +15,8 @@ declare (strict_types=1);
 
 namespace Viswoole\Database;
 
+use Viswoole\Database\Collector\QueryOptions;
+
 /**
  * 数据库通道
  */
@@ -64,7 +66,7 @@ abstract class Channel
    * @param string $type
    * @return mixed
    */
-  abstract public function pop(string $type = 'write'): mixed;
+  abstract public function pop(string $type): mixed;
 
   /**
    * 归还连接
@@ -73,4 +75,13 @@ abstract class Channel
    * @return void
    */
   abstract public function put(mixed $connect): void;
+
+  /**
+   * 构建sql
+   *
+   * @param QueryOptions $options
+   * @param bool $merge
+   * @return array|string
+   */
+  abstract public function build(QueryOptions $options, bool $merge = true): array|string;
 }

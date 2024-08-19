@@ -69,7 +69,6 @@ trait DateTrait
     } elseif (is_array($date)) {
       foreach ($date as &$t) if (is_int($t)) $t = date('Y-m-d', $t);
     }
-    $operator = $operator . ' DATE';
     $this->where($column, $operator, $date, $connector);
     return $this;
   }
@@ -142,7 +141,6 @@ trait DateTrait
     } elseif (is_array($time)) {
       foreach ($time as &$t) if (is_int($t)) $t = date('Y-m-d H:i:s', $t);
     }
-    $operator = $operator . ' TIME';
     $this->where($column, $operator, $time, $connector);
     return $this;
   }

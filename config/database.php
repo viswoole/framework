@@ -27,7 +27,7 @@ return [
     // 驱动类需继承Viswoole\Database\Driver\ConnectionDriver
     'default' => new PDOChannel(
       host    : env('DATABASE_HOST', '127.0.0.1'),
-      port    : env('DATABASE_PORT', 3306),
+      port    : (int)env('DATABASE_PORT', 3306),
       database: env('DATABASE_NAME', ''),
       username: env('DATABASE_USER', 'root'),
       password: env('DATABASE_PASSWORD', ''),

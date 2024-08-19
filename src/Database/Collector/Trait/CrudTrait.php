@@ -25,13 +25,13 @@ use Viswoole\Database\DataSet\Row;
  */
 trait CrudTrait
 {
-  const array READ_METHODS = ['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'SELECT', 'FIND'];
+  const array QUERY_METHODS = ['COUNT', 'SUM', 'MIN', 'MAX', 'AVG', 'SELECT', 'FIND'];
 
   /**
    * 更新
    *
    * @access public
-   * @param array<string,mixed> $data 关联数组[字段=>值...],如果使用了inc或dec方法则可不传
+   * @param array<string,mixed> $data 关联数组[字段=>值...]
    * @return int
    */
   public function update(array $data = null): int
@@ -49,8 +49,7 @@ trait CrudTrait
   protected function runCrud(CrudMethod $method): mixed
   {
     $options = $this->options;
-    $isQuery = in_array($method->name, self::READ_METHODS);
-    $cache = $options->cache;
+    $isQuery = in_array($method->name, self::QUERY_METHODS);
     if ($isQuery) {
       if ($options->cache) {
         $result = Cache::store($options->cache['store'])->get($options->cache['key']);
@@ -60,13 +59,21 @@ trait CrudTrait
         $result = $this->driver->query($sql['sql'], $sql['params']);
       }
     } else {
-      if ($cache['tag']) {
-        Cache::store($options->cache['store'])->tag($cache['tag'])->remove($cache['key']);
-      } else {
-        Cache::store($options->cache['store'])->delete($options->cache['key']);
+      $sql = $this->build($method, false);
+      $result = $this->driver->execute($sql['sql'], $sql['params'], $options->insertGetId);
+      // 删除缓存
+      if ($options->cache) {
+        if ($options->cache['tag']) {
+          Cache::store($options->cache['store'])
+               ->tag($options->cache['tag'])
+               ->remove($options->cache['key']);
+        } else {
+          Cache::store($options->cache['store'])
+               ->delete($options->cache['key']);
+        }
       }
     }
-    return '';
+    return $result;
   }
 
   /**
@@ -98,7 +105,7 @@ trait CrudTrait
   {
     if (!empty($data)) $this->options->data = $data;
     $this->options->insertGetId = $getId;
-    return $this->runCrud(CrudMethod::CREATE);
+    return $this->runCrud(CrudMethod::INSERT);
   }
 
   /**
@@ -111,6 +118,7 @@ trait CrudTrait
   public function find(int|string $pk = null): Row
   {
     if (!is_null($pk)) $this->whereEq($this->pk, $pk);
+    $this->limit(1);
     return $this->runCrud(CrudMethod::FIND);
   }
 

@@ -15,8 +15,15 @@ declare (strict_types=1);
 
 namespace Viswoole\Database\Collector\Where;
 
+/**
+ * 原生where语句
+ */
 class WhereRaw
 {
+  /**
+   * @param string $sql
+   * @param array $params
+   */
   public function __construct(public string $sql, public array $params = [])
   {
   }

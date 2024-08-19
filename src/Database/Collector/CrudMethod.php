@@ -19,7 +19,7 @@ namespace Viswoole\Database\Collector;
  */
 enum CrudMethod
 {
-  case CREATE;
+  case INSERT;
   case DELETE;
   case UPDATE;
   case SELECT;
