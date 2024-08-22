@@ -20,6 +20,9 @@ use Viswoole\Core\Coroutine;
 use Viswoole\Log\Drive;
 use Viswoole\Log\LogManager;
 
+/**
+ * 日志文件驱动
+ */
 class File extends Drive
 {
   /**
