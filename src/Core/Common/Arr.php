@@ -20,34 +20,30 @@ namespace Viswoole\Core\Common;
 class Arr
 {
   /**
+   * 判断是否为关联数组
+   *
+   * @access public
+   * @param array $array
+   * @return bool
+   */
+  public static function isAssociativeArray(array $array): bool
+  {
+    return !self::isIndexArray($array);
+  }
+
+  /**
    * 判断是否为索引数组
    *
    * @access public
    * @param array $array
    * @return bool
    */
-  public static function isIndexArray(mixed $array): bool
+  public static function isIndexArray(array $array): bool
   {
-    if (!is_array($array)) return false;
-    return is_numeric(implode('', array_keys($array)));
-  }
-
-  /**
-   * 判断是否为关联数组
-   *
-   * @access public
-   * @param array $array
-   * @param bool $strict 是否严格检测为纯关联数组，不包含int键,默认严格检测
-   * @return bool
-   */
-  public static function isAssociativeArray(mixed $array, bool $strict = true): bool
-  {
-    if (!is_array($array)) return false;
+    if (empty($array)) return true;
+    // 检查数组的第一个键是否为 0 并且所有的键都是连续的整数
     $keys = array_keys($array);
-    if (is_numeric(implode('', $keys))) return false;
-    if (!$strict) return true;
-    foreach ($keys as $key) if (is_int($key)) return false;
-    return true;
+    return $keys[0] === 0 && $keys === range(0, count($array) - 1);
   }
 
   /**
