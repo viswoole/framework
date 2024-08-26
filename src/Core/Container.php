@@ -242,7 +242,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $shapes = $reflect->getParameters();
     // 如果没有参数 则返回空待注入参数数组
     if (empty($shapes)) return [];
-    /** @var $args array<int,mixed> 最终要注入的参数 */
+    /** @var array<int,mixed> $args 最终要注入的参数 */
     $args = [];
     foreach ($shapes as $index => $shape) {
       // 参数类型
