@@ -263,7 +263,7 @@ class Atomic
    */
   public static function object(mixed $value): object
   {
-    if (Arr::isAssociativeArray($value)) {
+    if (is_array($value) && Arr::isAssociativeArray($value)) {
       $value = (object)$value;
     } elseif (!is_object($value)) {
       self::unifiedExceptionHandling('object', $value);
