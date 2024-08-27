@@ -17,6 +17,9 @@ namespace Viswoole\Core\Channel\Contract;
 
 use RuntimeException;
 
+/**
+ * 连接池接口
+ */
 interface ConnectionPoolInterface
 {
   /**
