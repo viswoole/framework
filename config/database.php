@@ -23,7 +23,7 @@ return [
   // 默认通道
   'default' => env('DATABASE_DEFAULT', 'default'),
   // 通道列表
-  'channel' => [
+  'channels' => [
     // 驱动类需继承Viswoole\Database\Driver\ConnectionDriver
     'default' => new PDOChannel(
       host    : env('DATABASE_HOST', '127.0.0.1'),
