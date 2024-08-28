@@ -96,33 +96,35 @@ class SqlBuilder
    */
   public function buildInsert(): string
   {
+    // 表名
     $table = $this->quote($this->options->table);
-    if ($this->options->replace && $this->channel->type === DriverType::MYSQL) {
-      $sql = 'REPLACE INTO ';
-    } else {
-      $sql = 'INSERT INTO ';
-    }
+    // 插入语句
+    $sql = ($this->options->replace && $this->channel->type === DriverType::MYSQL)
+      ? 'REPLACE INTO '
+      : 'INSERT INTO ';
+    // 获得写入的字段
+    $keys = Arr::isIndexArray($this->options->data)
+      ? array_keys(reset($this->options->data))
+      : array_keys($this->options->data);
+
+    // 要写入的列
+    $quotedKeys = array_map([$this, 'quote'], $keys);
+    $columns = implode(', ', $quotedKeys);
+    // 如果是索引数组，说明是批量写入
     if (Arr::isIndexArray($this->options->data)) {
-      $keys = array_keys(reset($this->options->data));
-      array_walk($keys, function (&$item) {
-        $item = $this->quote($item);
-      });
-      // 多条记录插入
-      $columns = implode(', ', array_keys(reset($this->options->data)));
-      $values = [];
+      $rows = [];
       foreach ($this->options->data as $record) {
-        $this->params = array_merge($this->params, array_values($record));
-        $values[] = '(' . implode(', ', array_fill(0, count($record), '?')) . ')';
+        if (array_keys($record) !== $keys) {
+          throw new DbException('批量写入数据时，所有写入数据的字段必须一致');
+        }
+        $values = $this->parseDataToValues($record);
+        $rows[] = '(' . implode(', ', $values) . ')';
       }
-      $sql .= "$table ($columns) VALUES " . implode(', ', $values);
+      $sql .= "$table ($columns) VALUES " . implode(', ', $rows);
     } else {
-      $keys = array_keys($this->options->data);
-      array_walk($keys, function (&$item) {
-        $item = $this->quote($item);
-      });
-      $columns = implode(', ', $keys);
-      $values = implode(', ', array_fill(0, count($this->options->data), '?'));
-      $this->params = array_merge($this->params, array_values($this->options->data));
+      // 单条记录写入
+      $values = $this->parseDataToValues($this->options->data);
+      $values = implode(', ', $values);
       $sql .= "$table ($columns) VALUES ($values)";
     }
     return $sql;
@@ -142,6 +144,27 @@ class SqlBuilder
     }
     $type = $this->channel->type->name;
     return self::TAG[$type]['left'] . $str . self::TAG[$type]['right'];
+  }
+
+  /**
+   * 解析数据为values
+   *
+   * @param $row
+   * @return array
+   */
+  private function parseDataToValues($row): array
+  {
+    $values = [];
+    foreach ($row as $value) {
+      if ($value instanceof Raw) {
+        $this->params = array_merge($this->params, $value->bindings);
+        $values[] = $value->sql;
+      } else {
+        $this->params[] = $value;
+        $values[] = '?';
+      }
+    }
+    return $values;
   }
 
   /**
