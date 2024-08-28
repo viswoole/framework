@@ -91,9 +91,9 @@ class Options implements ArrayAccess
   public string $type = '';
 
   /**
-   * @var array|null 要写入的数据
+   * @var array 要写入的数据
    */
-  public ?array $data = null;
+  public array $data = [];
   /**
    * @var bool 排他锁，其他事务不能读取或修改该记录
    */
