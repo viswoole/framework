@@ -91,26 +91,44 @@ class Query
   /**
    * 对结果进行排序。
    *
+   * Example:
+   * ```
+   * $query->orderBy('sort','desc');// SELECT ... ORDER BY `sort` DESC;
+   * $query->orderBy(['sort' => 'asc', 'age' => 'desc']);// SELECT ... ORDER BY `sort` ASC,`age` DESC;
+   * $query->orderBy(['sort','age'],'desc');// SELECT ... ORDER BY `sort` DESC,`age` DESC;
+   * $query->orderBy(Db::raw('RAND()'));// SELECT ... ORDER BY RAND();
+   * ```
    * @access public
-   * @param string|string[]|array<string,string> $column 排序依据的列名
+   * @param string|string[]|array<string,string>|Raw $column 排序依据的列名
    * @param string $direction 排序方向，可选`asc`|`desc`,默认为`asc`。
    * @return static
    */
-  public function orderBy(string|array $column, string $direction = 'asc'): static
+  public function orderBy(string|array|Raw $column, string $direction = 'asc'): static
   {
     $direction = strtoupper(trim($direction));
     $direction = in_array($direction, ['ASC', 'DESC']) ? $direction : 'ASC';
     if (is_array($column)) {
       foreach ($column as $key => $value) {
         if (is_int($key)) {
-          $this->options->orderBy[trim($value)] = $direction;
+          $this->options->orderBy[] = [
+            'column' => trim($value),
+            'direction' => $direction
+          ];
         } else {
           $value = strtoupper(trim($value));
-          $this->options->orderBy[$key] = in_array($value, ['ASC', 'DESC']) ? $value : 'ASC';
+          $this->options->orderBy[] = [
+            'column' => $key,
+            'direction' => in_array($value, ['ASC', 'DESC']) ? $value : 'ASC'
+          ];
         }
       }
+    } elseif ($column instanceof Raw) {
+      $this->options->orderBy[] = $column;
     } else {
-      $this->options->orderBy[$column] = $direction;
+      $this->options->orderBy[] = [
+        'column' => $column,
+        'direction' => $direction
+      ];
     }
     return $this;
   }

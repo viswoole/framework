@@ -136,6 +136,7 @@ class SqlBuilder
    */
   protected function quote(string $str): string
   {
+    $str = trim($str);
     if (preg_match('/[.`"[\]()]| /', $str)) {
       return $str;
     }
@@ -494,8 +495,15 @@ class SqlBuilder
   {
     if (!empty($this->options->orderBy)) {
       $order = [];
-      foreach ($this->options->orderBy as $col => $direction) {
-        $order[] = $this->quote($col) . ' ' . $direction;
+      foreach ($this->options->orderBy as $item) {
+        if ($item instanceof Raw) {
+          $this->params = array_merge($this->params, $item->bindings);
+          $order[] = trim($item->sql);
+        } else {
+          $col = $item['column'];
+          $direction = $item['direction'];
+          $order[] = $this->quote($col) . ' ' . $direction;
+        }
       }
       return 'ORDER BY ' . implode(', ', $order);
     }

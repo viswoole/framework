@@ -62,7 +62,7 @@ class Options implements ArrayAccess
    */
   public array $having = [];
   /**
-   * @var array<string,string> 排序
+   * @var array<int,array{column:string,direction:string}|Raw> 排序
    */
   public array $orderBy = [];
   /**
