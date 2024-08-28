@@ -34,6 +34,7 @@ trait Crud
    */
   public function insert(array $data): int|Raw
   {
+    if (empty($data)) throw new InvalidArgumentException('The data cannot be empty.');
     $this->options->data = $data;
     return $this->runCrud('insert');
   }
@@ -102,6 +103,7 @@ trait Crud
    */
   public function insertGetId(array $data): string|int|array|Raw
   {
+    if (empty($data)) throw new InvalidArgumentException('The data cannot be empty.');
     if (!Arr::isAssociativeArray($data)) {
       throw new InvalidArgumentException('The data must be an associative array.');
     }
@@ -117,6 +119,7 @@ trait Crud
    */
   public function update(array $data): int|Raw
   {
+    if (empty($data)) throw new InvalidArgumentException('The data cannot be empty.');
     $this->options->data = $data;
     return $this->runCrud('update');
   }
