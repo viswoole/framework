@@ -260,7 +260,7 @@ class SqlBuilder
           $where = "$connector $column IS NOT NULL";
         } else {
           throw new DbException(
-            '当查询条件值为null时，只能使用=,!=,<>,IS NULL,IS NOT NULL',
+            '当查询条件值为null时，有效的运算符为=,!=,<>,IS NULL,IS NOT NULL',
             sql: "... $connector $column $operator null"
           );
         }
