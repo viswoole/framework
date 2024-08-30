@@ -47,10 +47,47 @@ class Raw
    */
   public static function merge(string $sql, array $bindings): string
   {
-    if (empty($bindings)) {
-      return $sql;
-    } else {
-      return str_replace('?', array_shift($bindings), $sql);
+    if (!empty($bindings)) {
+      // 分离位置占位符和命名占位符
+      $positionBindings = [];
+      $namedBindings = [];
+      foreach ($bindings as $key => $value) {
+        if (is_array($value)) {
+          $value = implode(',', $value);
+        } elseif (is_string($value)) {
+          $value = "'$value'";
+        } elseif (is_null($value)) {
+          $value = 'NULL';
+        } else {
+          $value = (string)$value;
+        }
+        if (is_int($key)) {
+          $positionBindings[] = $value;
+        } else {
+          $namedBindings[$key] = $value;
+        }
+      }
+      // 替换位置占位符 '?'
+      $sql = preg_replace_callback('/\?/', function () use (&$positionBindings) {
+        return array_shift($positionBindings);
+      }, $sql);
+      // 替换命名占位符 ':name'
+      foreach ($namedBindings as $key => $value) {
+        $placeholder = ":$key";
+        $sql = str_replace($placeholder, $value, $sql);
+      }
     }
+    return $sql;
+  }
+
+  /**
+   * 将绑定的参数合并到sql语句中
+   *
+   * @access public
+   * @return string
+   */
+  public function toSql(): string
+  {
+    return self::merge($this->sql, $this->bindings);
   }
 }
