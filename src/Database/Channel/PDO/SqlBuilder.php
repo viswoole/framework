@@ -175,9 +175,21 @@ class SqlBuilder
   public function buildUpdate(): string
   {
     $table = $this->quote($this->options->table);
-    $data = $this->parseUpdateData();
-    $where = $this->parseWhere();
-    return "UPDATE $table SET $data $where";
+    $sql = [];
+    // SELECT 和 FROM 子句
+    $sql[] = "UPDATE $table SET";
+    // 数据
+    $sql[] = $this->parseUpdateData();
+    // WHERE 子句
+    $sql[] = $this->parseWhere();
+    // LIMIT 子句
+    $sql[] = $this->parseLimitAndOffset();
+    // 移除空字符串项
+    $sql = array_filter($sql, function ($item) {
+      return !empty($item);
+    });
+    // 拼接 SQL 语句
+    return implode(' ', $sql);
   }
 
   /**
@@ -299,6 +311,23 @@ class SqlBuilder
   }
 
   /**
+   * 解析Limit和Offset
+   *
+   * @return string
+   */
+  protected function parseLimitAndOffset(): string
+  {
+    $sql = [];
+    if ($this->options->limit) {
+      $sql[] = 'LIMIT ' . $this->options->limit;
+    }
+    if ($this->options->offset) {
+      $sql[] = 'OFFSET ' . $this->options->offset;
+    }
+    return implode(' ', $sql);
+  }
+
+  /**
    * 打包删除语句
    *
    * @return string
@@ -306,8 +335,19 @@ class SqlBuilder
   public function buildDelete(): string
   {
     $table = $this->quote($this->options->table);
-    $where = $this->parseWhere();
-    return "DELETE FROM $table $where";
+    $sql = [];
+    // SELECT 和 FROM 子句
+    $sql[] = "DELETE FROM $table";
+    // WHERE 子句
+    $sql[] = $this->parseWhere();
+    // LIMIT 子句
+    $sql[] = $this->parseLimitAndOffset();
+    // 移除空字符串项
+    $sql = array_filter($sql, function ($item) {
+      return !empty($item);
+    });
+    // 拼接 SQL 语句
+    return implode(' ', $sql);
   }
 
   /**
@@ -341,7 +381,7 @@ class SqlBuilder
     // ORDER BY 子句
     $sql[] = $this->parseOrderBy();
     // LIMIT 子句
-    $sql[] = $this->parseLimit();
+    $sql[] = $this->parseLimitAndOffset();
     // 移除空字符串项
     $sql = array_filter($sql, function ($item) {
       return !empty($item);
@@ -531,16 +571,6 @@ class SqlBuilder
       return 'ORDER BY ' . implode(', ', $order);
     }
     return '';
-  }
-
-  /**
-   * 解析Limit语句
-   *
-   * @return string
-   */
-  protected function parseLimit(): string
-  {
-    return $this->options->limit ? 'LIMIT ' . $this->options->limit : '';
   }
 
   /**
