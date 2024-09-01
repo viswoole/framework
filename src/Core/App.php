@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use Swoole\Table;
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
 use Viswoole\Core\Service\Middleware as MiddlewareService;
@@ -68,9 +69,16 @@ class App extends Container
     HttpService::class,
     DbService::class
   ];
+  /**
+   * @var Table 全局配置
+   */
+  protected Table $_config;
 
   protected function __construct()
   {
+    $this->_config = new Table(1);
+    $this->_config->column('debug', Table::TYPE_INT, 4);
+    $this->_config->create();
     self::$instance = $this;
     $this->bind(App::class, $this);
     $this->initialize();
@@ -83,6 +91,8 @@ class App extends Container
    */
   protected function initialize(): void
   {
+    // 初始化配置
+    $this->setDebug($this->config->get('app.debug', false));
     // 系统默认时区
     date_default_timezone_set(
       $this->config->get(
@@ -92,6 +102,18 @@ class App extends Container
     );
     // 注册服务
     $this->loadService();
+  }
+
+  /**
+   * 设置是否启用debug模式，debug值由跨域共享表记录，会影响所有worker进程
+   *
+   * @access public
+   * @param bool $debug
+   * @return void
+   */
+  public function setDebug(bool $debug): void
+  {
+    $this->_config->set('config', ['debug' => $debug ? 1 : 0]);
   }
 
   /**
@@ -201,18 +223,6 @@ class App extends Container
    */
   public function isDebug(): bool
   {
-    return $this->config->get('app.debug', false);
-  }
-
-  /**
-   * 设置是否启用debug模式，在请求中设置仅对当前请求的worker进程生效
-   *
-   * @access public
-   * @param bool $debug
-   * @return void
-   */
-  public function setDebug(bool $debug): void
-  {
-    $this->config->set('app.debug', $debug);
+    return (bool)$this->_config->get('config')['debug'];
   }
 }
