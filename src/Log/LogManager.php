@@ -248,7 +248,7 @@ class LogManager
     if ($this->recordLogTraceSource) {
       $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
       foreach (array_reverse($backtrace) as $trace) {
-        if ($trace['class'] === Facade::class || $trace['class'] === self::class) {
+        if (isset($trace['class']) && ($trace['class'] === Facade::class || $trace['class'] === self::class)) {
           $backtrace = $trace;
           break;
         }
