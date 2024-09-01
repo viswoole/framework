@@ -18,6 +18,7 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use JsonSerializable;
 use Override;
+use Viswoole\Database\Model;
 use Viswoole\Database\Query;
 
 /**
@@ -36,8 +37,8 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    * @param array $data 查询结果
    */
   public function __construct(
-    protected Query $query,
-    array           $data
+    protected Query|Model $query,
+    array                 $data
   )
   {
     parent::__construct($data, $this->flags);
