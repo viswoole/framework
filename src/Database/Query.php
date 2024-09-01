@@ -376,4 +376,14 @@ class Query
     $this->options->replace = $flag;
     return $this;
   }
+
+  /**
+   * 获取查询选项
+   *
+   * @return Options
+   */
+  public function getOptions(): Options
+  {
+    return $this->options;
+  }
 }
