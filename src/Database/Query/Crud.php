@@ -20,6 +20,7 @@ use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\Row;
+use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Raw;
 
 /**
@@ -119,6 +120,8 @@ trait Crud
       'cost_time_ms' => $executionTimeMilliseconds
     ];
     $this->lastQuery = new RunInfo($raw, $this->options->cache, $time);
+    // 保存
+    Db::saveDebugInfo($this->lastQuery);
   }
 
   /**
