@@ -22,9 +22,13 @@ use Viswoole\Database\Channel\PDO\PDOChannel;
 return [
   // 默认通道
   'default' => env('DATABASE_DEFAULT', 'default'),
+  // 是否开启调试模式
+  'debug' => env('app_debug', true),
+  // 调试信息保存方式logger|console 输出到日志或输出到控制台
+  'debug_info_save' => 'console',
   // 通道列表
   'channels' => [
-    // 驱动类需继承Viswoole\Database\Driver\ConnectionDriver
+    // 驱动类需继承Viswoole\Database\Channel
     'default' => new PDOChannel(
       host    : env('DATABASE_HOST', '127.0.0.1'),
       port    : (int)env('DATABASE_PORT', 3306),
