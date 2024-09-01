@@ -18,6 +18,7 @@ namespace Viswoole\Database;
 use Viswoole\Database\Query\Crud;
 use Viswoole\Database\Query\Join;
 use Viswoole\Database\Query\Options;
+use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Query\Where;
 
 /**
@@ -31,6 +32,10 @@ class Query
    * @var Options 查询配置选项
    */
   protected Options $options;
+  /**
+   * @var RunInfo 最后一次查询的信息
+   */
+  protected RunInfo $lastQuery;
 
   /**
    * 表名称
@@ -65,6 +70,18 @@ class Query
     }
     $this->options->groupBy = $columns;
     return $this;
+  }
+
+  /**
+   * 获取最后一次查询
+   *
+   * @access public
+   * @return RunInfo|null 如果没有查询，返回 null。
+   */
+  public function getLastQuery(): ?RunInfo
+  {
+    if (!isset($this->lastQuery)) return null;
+    return $this->lastQuery;
   }
 
   /**
@@ -226,6 +243,34 @@ class Query
   }
 
   /**
+   * 重置查询选项。
+   *
+   * 为了减少创建查询实例的额外开销，可调用该方法重置查询实例，会保留表名和主键配置，其他条件都会被重置。
+   *
+   * 一般无需手动调用，每次执行完查询过后，会自动调用该方法，可继续引用当前实例构建新查询。
+   *
+   * 如果手动调用该方法，则会丢失构建的查询条件。
+   *
+   * @return static
+   */
+  public function reset(): static
+  {
+    $this->options = new Options($this->options->table, $this->options->pk);
+    return $this;
+  }
+
+  /**
+   * 新查询实例
+   *
+   * @access public
+   * @return $this 返回一个全新的查询实例
+   */
+  public function newQuery(): static
+  {
+    return new static($this->channel, $this->options->table, $this->options->pk);
+  }
+
+  /**
    * 选择要查询的列。
    *
    * @access public
@@ -266,6 +311,20 @@ class Query
   }
 
   /**
+   * 自动写入缓存
+   *
+   * @param string $key 缓存标识
+   * @param int $expiry 缓存有效时间 默认0 永久有效
+   * @param string|null $tag 缓存标签
+   * @return static
+   */
+  public function cache(string $key, int $expiry = 0, string $tag = null): static
+  {
+    $this->options->cache = compact('key', 'expiry', 'tag');
+    return $this;
+  }
+
+  /**
    * 锁定记录以进行更新。
    *
    * 其他事务不能读取或修改该记录
@@ -294,15 +353,15 @@ class Query
   }
 
   /**
-   * 获取sql语句，不执行任何查询
+   * 返回Raw对象，不执行查询
    *
    *
    * @access public
    * @return $this
    */
-  public function getSql(): static
+  public function toRaw(): static
   {
-    $this->options->getSql = true;
+    $this->options->toRaw = true;
     return $this;
   }
 
