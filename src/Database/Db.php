@@ -92,6 +92,7 @@ class Db
   /**
    * 设置debug模式
    *
+   * @access public
    * @param bool $debug
    * @return void
    */
@@ -272,6 +273,7 @@ class Db
   /**
    * 返回所有通道
    *
+   * @access public
    * @return array<string,Channel>
    */
   public function getChannels(): array
