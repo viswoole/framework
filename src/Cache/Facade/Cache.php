@@ -18,9 +18,11 @@ namespace Viswoole\Cache\Facade;
 use Closure;
 use DateTime;
 use Override;
+use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Cache\Driver\File;
+use Viswoole\Cache\Driver\Redis;
 use Viswoole\Core\Facade;
 
 /**
@@ -54,11 +56,14 @@ use Viswoole\Core\Facade;
  */
 class Cache extends Facade
 {
+  public const string FILE_DRIVER = File::class;
+  public const string REDIS_DRIVER = Redis::class;
+
   /**
    * @inheritDoc
    */
   #[Override] protected static function getMappingClass(): string
   {
-    return \Viswoole\Cache\CacheManager::class;
+    return CacheManager::class;
   }
 }
