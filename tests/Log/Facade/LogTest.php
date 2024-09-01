@@ -17,7 +17,6 @@ namespace Viswoole\Tests\Log\Facade;
 
 use PHPUnit\Framework\TestCase;
 use Viswoole\Core\App;
-use Viswoole\Core\Console\Output;
 
 class LogTest extends TestCase
 {
@@ -27,7 +26,7 @@ class LogTest extends TestCase
     try {
       App::factory()->log->debug('test');
     } catch (\Exception $e) {
-      echo_log($e->getMessage(), Output::LEVEL_COLOR['ERROR']);
+      echo_log($e->getMessage());
       $this->fail();
     }
     $this->assertTrue(true);
