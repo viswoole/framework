@@ -38,7 +38,7 @@ class Collection extends BaseCollection
      * 遍历数据集，将每个元素转换为Row对象
      */
     array_walk($data, function (&$item) {
-      $item = is_array($item) ? new DataSet($this->query, $item) : $item;
+      $item = is_array($item) ? new DataSet(clone $this->query, $item) : $item;
     });
     parent::__construct($query, $data);
   }
