@@ -22,6 +22,9 @@ use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Cache\Driver\Tag;
 
+/**
+ * 缓存驱动基类
+ */
 abstract class Driver implements CacheDriverInterface
 {
   /**
