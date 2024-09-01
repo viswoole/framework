@@ -177,7 +177,7 @@ class DbManager
   /**
    * 开启事务
    *
-   * @param Closure|null $query 如果传入闭包则自动捕获异常并执行commit|rollback
+   * @param Closure|null $query 如果传入闭包则自动捕获异常并执行commit|rollBack
    * @return void
    */
   public function startTransaction(Closure $query = null): void
@@ -188,7 +188,7 @@ class DbManager
         $query();
         $this->commit();
       } catch (Throwable) {
-        $this->rollback();
+        $this->rollBack();
       }
     }
   }
