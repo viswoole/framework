@@ -298,6 +298,16 @@ class Query
   }
 
   /**
+   * 获取主键字段名
+   *
+   * @return string
+   */
+  public function getPrimaryKey(): string
+  {
+    return $this->options->pk;
+  }
+
+  /**
    * 排除字段
    *
    * @access public
@@ -375,15 +385,5 @@ class Query
   {
     $this->options->replace = $flag;
     return $this;
-  }
-
-  /**
-   * 获取查询选项
-   *
-   * @return Options
-   */
-  public function getOptions(): Options
-  {
-    return $this->options;
   }
 }
