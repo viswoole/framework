@@ -29,10 +29,10 @@ class Collection extends BaseCollection
   /**
    * 数据集列表
    *
-   * @param Query $query 查询对象
+   * @param Query|Model $query 查询对象
    * @param array $data 查询结果
    */
-  public function __construct(protected Query $query, array $data)
+  public function __construct(protected Query|Model $query, array $data)
   {
     /**
      * 遍历数据集，将每个元素转换为Row对象
@@ -91,19 +91,6 @@ class Collection extends BaseCollection
   {
     $arrayCopy = $this->getArrayCopy();
     return end($arrayCopy) ?: null;
-  }
-
-  /**
-   * 遍历集合中的每一行数据
-   *
-   * @param callable $callback
-   * @return void
-   */
-  public function each(callable $callback): void
-  {
-    foreach ($this->getIterator() as $row) {
-      $callback($row);
-    }
   }
 
   /**
@@ -275,20 +262,30 @@ class Collection extends BaseCollection
   #[Override] public function delete(bool $real = false): int
   {
     $pk = $this->query->getOptions()->pk;
+    $pkList = $this->getPks($pk);
+    return $this->query->whereIn($pk, $pkList)->delete($real);
+  }
+
+  /**
+   * 获取所有行主键
+   *
+   * @param string $pk
+   * @return array|int
+   */
+  private function getPks(string $pk): array|int
+  {
     $pkList = [];
     foreach ($this as /** @var DataSet $row */ $row) {
       if (isset($row[$pk])) {
         $pkList[] = $row[$pk];
       } else {
         throw new RuntimeException(
-          "快捷删除记录失败，缺少主键字段($pk)"
+          "操作失败，缺少主键字段($pk) index:$row"
         );
       }
     }
-    if (!empty($pkList)) {
-      return $this->query->whereIn($pk, $pkList)->delete($real);
-    }
-    return 0;
+    if (empty($pkList)) return 0;
+    return $pkList;
   }
 
   /**
@@ -309,5 +306,38 @@ class Collection extends BaseCollection
         }
       )
     );
+  }
+
+  /**
+   * 批量更新数据
+   *
+   * @param array $data
+   * @return int 返回更新的记录数。
+   */
+  public function update(array $data): int
+  {
+    $pk = $this->query->getOptions()->pk;
+    $pkList = $this->getPks($pk);
+    $result = $this->query->whereIn($pk, $pkList)->update($data);
+    if ($result) {
+      // 更新每一行数据
+      $this->each(function (DataSet $row) use ($data) {
+        $row->merge($data);
+      });
+    }
+    return $result;
+  }
+
+  /**
+   * 遍历集合中的每一行数据
+   *
+   * @param callable $callback
+   * @return void
+   */
+  public function each(callable $callback): void
+  {
+    foreach ($this->getIterator() as $row) {
+      $callback($row);
+    }
   }
 }
