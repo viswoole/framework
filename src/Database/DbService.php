@@ -46,6 +46,6 @@ class DbService extends Provider
     /**
      * 绑定数据库通道管理器
      */
-    $this->app->bind('db', Db::class);
+    $this->app->bind('db', DbManager::class);
   }
 }

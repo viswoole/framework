@@ -18,6 +18,7 @@ namespace Viswoole\Database\Facade;
 use Closure;
 use Viswoole\Core\Facade;
 use Viswoole\Database\Channel;
+use Viswoole\Database\DbManager;
 use Viswoole\Database\Query;
 use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Raw;
@@ -65,6 +66,6 @@ class Db extends Facade
    */
   #[\Override] protected static function getMappingClass(): string
   {
-    return \Viswoole\Database\Db::class;
+    return DbManager::class;
   }
 }

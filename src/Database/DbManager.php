@@ -35,7 +35,7 @@ use Viswoole\Log\LogManager;
  * @method mixed pop(string $type) 获取可用的连接$type可选值为`read`|`write`
  * @method void put(mixed $connect) 归还一个可用的连接，如果连接已被损坏，请归还null
  */
-class Db
+class DbManager
 {
   /**
    * debug信息直接输出到控制台
