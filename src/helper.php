@@ -143,21 +143,22 @@ if (!function_exists('dump')) {
 }
 if (!function_exists('echo_log')) {
   /**
-   * 输出一个日志到控制台
+   * 输出一条文本日志
    *
-   * @access public
-   * @param int|string $message 日志消息
-   * @param string $color 颜色
+   * @param string|int $message 要输出的内容
+   * @param string $label 标签
+   * @param string|null $color 转义颜色,如果标签未映射颜色，且传入null，则使用默认颜色
    * @param int $backtrace 1为输出调用源，0为不输出
    * @return void
    */
   function echo_log(
-    int|string $message,
-    string     $color = Output::COLORS['GREEN'],
+    string|int $message,
+    string     $label = 'INFO',
+    ?string    $color = null,
     int        $backtrace = 1
   ): void
   {
-    Output::echo($message, $color, $backtrace === 0 ? 0 : 2);
+    Output::echo($message, $label, $color, $backtrace === 0 ? 0 : 2);
   }
 }
 if (!function_exists('getAllPhpFiles')) {
