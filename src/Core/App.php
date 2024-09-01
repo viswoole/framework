@@ -76,7 +76,12 @@ class App extends Container
     $this->initialize();
   }
 
-  private function initialize(): void
+  /**
+   * 初始化
+   *
+   * @return void
+   */
+  protected function initialize(): void
   {
     // 系统默认时区
     date_default_timezone_set(
