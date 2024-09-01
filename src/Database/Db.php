@@ -66,10 +66,7 @@ class Db
    */
   public function start(): void
   {
-    try {
-      $this->startTransaction();
-    } catch (Throwable $e) {
-    }
+    $this->startTransaction();
   }
 
   /**
