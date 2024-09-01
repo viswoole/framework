@@ -14,8 +14,8 @@ return [
   'type_channel' => [],
   // 是否跟踪日志来源
   'trace_source' => true,
-  // 是否将日志输出到控制台
-  'console' => true,
+  // 是否同时将日志输出到控制台（只建议在开发环境中使用）
+  'console' => false,
   // 日志驱动通道，可自行实现日志驱动需继承\Viswoole\Log\Drive类
   'channels' => [
     'file' => new File()
