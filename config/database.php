@@ -18,7 +18,7 @@
 declare (strict_types=1);
 
 use Viswoole\Database\Channel\PDO\PDOChannel;
-use Viswoole\Database\Db;
+use Viswoole\Database\Facade\Db;
 
 return [
   // 默认通道
