@@ -29,6 +29,10 @@ use RuntimeException;
 class DataSet extends BaseCollection
 {
   protected int $flags = ArrayObject::STD_PROP_LIST | ArrayObject::ARRAY_AS_PROPS;
+  /**
+   * @var array 修改过的字段
+   */
+  protected array $change = [];
 
   /**
    * 删除集合中的所有记录
@@ -47,6 +51,17 @@ class DataSet extends BaseCollection
         "快捷删除记录失败，缺少主键字段($pk)"
       );
     }
+  }
+
+  /**
+   * @inheritDoc
+   */
+  public function offsetSet(mixed $key, mixed $value): void
+  {
+    if ($value !== $this->offsetGet($key)) {
+      $this->change[] = $key;
+    }
+    parent::offsetSet($key, $value);
   }
 
   /**
@@ -75,12 +90,21 @@ class DataSet extends BaseCollection
     $pk = $this->query->getPrimaryKey();
     if (isset($this[$pk])) {
       $change = [];
-      foreach ($this as $key => $value) {
-        if (!$value instanceof BaseCollection) {
-          $change[$key] = $value;
-        }
+      foreach ($this->change as $key) {
+        // 如果字段不存在，则跳过
+        if (!$this->offsetExists($key)) continue;
+        $value = $this[$key];
+        // 如果值是集合，则跳过
+        if ($value instanceof BaseCollection) continue;
+        $change[$key] = $value;
       }
-      return $this->query->update($change);
+      if (empty($change)) {
+        $changeCount = 0;
+      } else {
+        $changeCount = $this->query->where($pk, $this[$pk])->update($change);
+      }
+      $this->change = [];
+      return $changeCount;
     } else {
       throw new RuntimeException("保存数据失败，缺少主键字段($pk)");
     }
