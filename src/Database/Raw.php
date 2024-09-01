@@ -15,10 +15,13 @@ declare (strict_types=1);
 
 namespace Viswoole\Database;
 
+use JsonSerializable;
+use Override;
+
 /**
  * 原生SQL
  */
-class Raw
+class Raw implements JsonSerializable
 {
   /**
    * @param string $sql
@@ -81,12 +84,20 @@ class Raw
   }
 
   /**
+   * @inheritDoc
+   */
+  #[Override] public function jsonSerialize(): string
+  {
+    return $this->toString();
+  }
+
+  /**
    * 将绑定的参数合并到sql语句中
    *
    * @access public
    * @return string
    */
-  public function toSql(): string
+  public function toString(): string
   {
     return self::merge($this->sql, $this->bindings);
   }
