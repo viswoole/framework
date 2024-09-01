@@ -41,10 +41,6 @@ use Viswoole\Core\Exception\ValidateException;
  */
 abstract class Container implements ArrayAccess, IteratorAggregate, Countable
 {
-  /**
-   * 允许新建实例
-   */
-  const string allowNewInstance = 'allowNewInstance';
   protected string $CONTEXT_PREFIX = '__container_singleton_';
   /**
    * @var array<string,string> 接口标识映射
