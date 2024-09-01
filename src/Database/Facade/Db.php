@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Database\Facade;
 
 use Closure;
+use Override;
 use Viswoole\Core\Facade;
 use Viswoole\Database\Channel;
 use Viswoole\Database\DbManager;
@@ -31,7 +32,7 @@ use Viswoole\Database\Raw;
  * @method static void start() 开启事务
  * @method static void startTransaction(Closure $query = null) 开启事务, 传入闭包则自动管理事务
  * @method static void commit() 提交事务
- * @method static void rollback() 回滚所有事务
+ * @method static void rollBack() 回滚所有事务
  * @method static Raw raw(string $sql, array $bindings = []) 原生sql
  * @method static Query table(string $table, string $pk = 'id') 选择要查询的表
  * @method static array query(string $sql, array $bindings = []) 原生查询 select
@@ -64,7 +65,7 @@ class Db extends Facade
    * @access protected
    * @return string
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return DbManager::class;
   }

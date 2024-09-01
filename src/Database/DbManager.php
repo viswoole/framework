@@ -209,9 +209,9 @@ class DbManager
    * @access public
    * @return void
    */
-  public function rollback(): void
+  public function rollBack(): void
   {
-    ConnectManager::factory()->rollback();
+    ConnectManager::factory()->rollBack();
   }
 
   /**

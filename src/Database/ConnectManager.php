@@ -150,7 +150,7 @@ class ConnectManager
    */
   public function __destruct()
   {
-    $this->rollback();
+    $this->rollBack();
   }
 
   /**
@@ -159,7 +159,7 @@ class ConnectManager
    * @access public
    * @return void
    */
-  public function rollback(): void
+  public function rollBack(): void
   {
     $array = $this->connections;
     foreach ($array as $key => $item) {
