@@ -105,7 +105,7 @@ class Options implements ArrayAccess
   /**
    * @var bool 返回SQL语句，不执行查询
    */
-  public bool $getSql = false;
+  public bool $toRaw = false;
   /**
    * @var bool 强制写入，仅mysql有效
    */
