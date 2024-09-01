@@ -19,6 +19,7 @@ use PDO;
 use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
 use Viswoole\Core\Coroutine\Context;
+use Viswoole\Database\Exception\DbException;
 
 /**
  * 连接管理
@@ -93,6 +94,7 @@ class ConnectManager
    */
   public function start(): void
   {
+    if ($this->inTransaction) throw new DbException('同一个进程中不允许开启多个事务');
     $this->inTransaction = true;
   }
 
