@@ -15,44 +15,269 @@ declare (strict_types=1);
 
 namespace Viswoole\Database;
 
-use ArrayObject;
-use Viswoole\Database\Query\Options;
+use InvalidArgumentException;
+use Viswoole\Database\Collection\BaseCollection;
+use Viswoole\Database\Collection\Row;
 
 /**
- * 数据集合
+ * 数据集合，可通过数组方式访问
  */
-class Collection extends ArrayObject
+class Collection extends BaseCollection
 {
   /**
-   * @param Channel $channel 数据库通道
-   * @param Options $options 查询配置
+   * 数据集列表
+   *
+   * @param Query $query 查询对象
    * @param array $data 查询结果
    */
-  public function __construct(
-    protected Channel       $channel,
-    public readonly Options $options,
-    array                   $data
-  )
+  public function __construct(Query $query, array $data)
   {
-    parent::__construct($data);
+    /**
+     * 遍历数据集，将每个元素转换为Row对象
+     */
+    array_walk($data, function (&$item) {
+      $item = is_array($item) ? new Row($this->query, $item) : $item;
+    });
+    parent::__construct($query, $data);
   }
 
   /**
-   * @param string $name
-   * @return mixed|null
+   * 获取第一行数据
+   *
+   * @return Row|null 如果集合为空，则返回null。
    */
-  public function __get(string $name)
+  public function first(): ?Row
   {
-    return $this->offsetGet($name);
+    return $this->getArrayCopy()[0] ?? null;
   }
 
   /**
-   * @param string $name
-   * @param $value
+   * 根据回调函数过滤集合中的元素
+   *
+   * 示例:
+   * ```
+   * // 通过以下方式获得满足条件的数据集列表
+   * $filtered = $collection->filter(function (Row $row) { return $row->age > 25; });
+   * print_r($filtered->toArray());
+   * ```
+   *
+   * @param callable $callback 回调函数
+   * @return Collection 过滤后的集合
+   */
+  public function filter(callable $callback): Collection
+  {
+    return new self($this->query, array_filter($this->getArrayCopy(), $callback));
+  }
+
+  /**
+   * 给当前集合中的每一行数据应用回调函数
+   *
+   * @param callable $callback
+   * @return static
+   */
+  public function map(callable $callback): static
+  {
+    return new self($this->query, array_map($callback, $this->getArrayCopy()));
+  }
+
+  /**
+   * 返回集合中的最后一行数据
+   *
+   * @return Row|null 如果集合为空，则返回null。
+   */
+  public function last(): ?Row
+  {
+    $arrayCopy = $this->getArrayCopy();
+    return end($arrayCopy) ?: null;
+  }
+
+  /**
+   * 遍历集合中的每一行数据
+   *
+   * @param callable $callback
    * @return void
    */
-  public function __set(string $name, $value): void
+  public function each(callable $callback): void
   {
-    $this->offsetSet($name, $value);
+    foreach ($this->getIterator() as $row) {
+      $callback($row);
+    }
+  }
+
+  /**
+   * 获取所有数据
+   *
+   * @return Row[]
+   */
+  public function all(): array
+  {
+    return $this->getArrayCopy();
+  }
+
+  /**
+   * 根据字段值过滤集合中的元素
+   *
+   * @param string $column 字段名
+   * @param mixed $value 字段值
+   * @return Collection 过滤后的集合
+   */
+  public function where(string $column, mixed $value): Collection
+  {
+    return new Collection(
+      $this->query,
+      array_filter(
+        $this->getArrayCopy(),
+        function ($item) use ($column, $value) {
+          return isset($item[$column]) && $item[$column] == $value;
+        }
+      )
+    );
+  }
+
+  /**
+   * 反向过滤，返回不满足条件的元素集合
+   *
+   * @access public
+   * @param callable $callback 回调函数
+   * @return Collection 过滤后的集合
+   */
+  public function reject(callable $callback): Collection
+  {
+    return new Collection(
+      $this->query,
+      array_filter(
+        $this->getArrayCopy(),
+        function ($item) use ($callback) {
+          return !$callback($item);
+        }
+      )
+    );
+  }
+
+  /**
+   * 降序排序
+   *
+   * @access public
+   * @param string $column 排序列名
+   * @return Collection 排序后的集合
+   */
+  public function sortByDesc(string $column): Collection
+  {
+    return $this->sortBy($column, SORT_DESC);
+  }
+
+  /**
+   * 根据指定的属性对集合进行排序
+   *
+   * @access public
+   * @param string $column 排序列名
+   * @param int $sortOrder 排序顺序 (SORT_ASC 或 SORT_DESC)
+   * @return Collection 排序后的集合
+   */
+  public function sortBy(string $column, int $sortOrder = SORT_ASC): Collection
+  {
+    $items = $this->getArrayCopy();
+    usort($items, function ($a, $b) use ($column, $sortOrder) {
+      if ($a[$column] == $b[$column]) {
+        return 0;
+      }
+      return ($sortOrder == SORT_ASC)
+        ? ($a[$column] < $b[$column] ? -1 : 1)
+        : ($a[$column] > $b[$column] ? -1 : 1);
+    });
+    return new Collection($this->query, $items);
+  }
+
+  /**
+   * 计算集合中所有元素特定属性的平均值
+   *
+   * @access public
+   * @param string $attribute 属性名
+   * @return float|int 平均值，如果集合为空，则返回0
+   */
+  public function avg(string $attribute): float|int
+  {
+    $sum = $this->sum($attribute);
+    return $sum / count($this);
+  }
+
+  /**
+   * 计算集合中所有行特定列的总和
+   *
+   * @param string $column 字段名,字段数据类型必须为int、float
+   * @return int|float 总和，如果集合为空，则返回0
+   */
+  public function sum(string $column): int|float
+  {
+    $sum = 0;
+    foreach ($this as $item) {
+      $value = $item[$column] ?? 0;
+      $sum += $value;
+    }
+    return $sum;
+  }
+
+  /**
+   * 找到集合中某个列的最大值
+   *
+   * @param string $column 字段名称，类型必须为int、float
+   * @return int|float|null 最大值,数据集为空时返回null
+   */
+  public function max(string $column): int|float|null
+  {
+    $maxValue = null;
+    foreach ($this as $item) {
+      $value = $item[$column] ?? 0;
+      // 检查值是否为 int 或 float 类型
+      if (!is_int($value) && !is_float($value)) {
+        throw new InvalidArgumentException(
+          "Column '$column' must contain values of type int or float."
+        );
+      }
+      if ($maxValue === null || $value > $maxValue) {
+        $maxValue = $value;
+      }
+    }
+    return $maxValue;
+  }
+
+  /**
+   * 找到集合中某个列的最小值
+   *
+   * @param string $column 字段名称，类型必须为int、float
+   * @return int|float|null 最大值,数据集为空时返回null
+   */
+  public function min(string $column): int|float|null
+  {
+    $minValue = null;
+    foreach ($this as $item) {
+      $value = $item[$column] ?? 0;
+      // 检查值是否为 int 或 float 类型
+      if (!is_int($value) && !is_float($value)) {
+        throw new InvalidArgumentException(
+          "Column '$column' must contain values of type int or float."
+        );
+      }
+      if ($minValue === null || $value < $minValue) {
+        $minValue = $value;
+      }
+    }
+    return $minValue;
+  }
+
+  /**
+   * @param mixed $value
+   * @return void
+   */
+  public function append(mixed $value): void
+  {
+    if ($value instanceof Row) {
+      parent::append($value);
+    } else {
+      if (!is_array($value)) {
+        throw new InvalidArgumentException('Value must be an array or Row object.');
+      }
+      parent::append(new Row($this->query, $value));
+    }
   }
 }
