@@ -17,6 +17,9 @@ namespace Viswoole\Log\Contract;
 
 use Stringable;
 
+/**
+ * 日志收集器接口
+ */
 interface CollectorInterface
 {
   /**

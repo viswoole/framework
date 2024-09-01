@@ -18,10 +18,16 @@ namespace Viswoole\Log;
 use Stringable;
 use Viswoole\Log\Contract\DriveInterface;
 
+/**
+ * 日志记录器
+ */
 class Recorder
 {
   protected array $records = [];
 
+  /**
+   * @param DriveInterface $drive
+   */
   public function __construct(protected DriveInterface $drive)
   {
 

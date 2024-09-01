@@ -17,6 +17,9 @@ namespace Viswoole\Log\Contract;
 
 use Stringable;
 
+/**
+ * 日志驱动接口
+ */
 interface DriveInterface extends CollectorInterface
 {
   /**
