@@ -16,6 +16,8 @@ declare (strict_types=1);
 namespace Viswoole\Database;
 
 use InvalidArgumentException;
+use Override;
+use RuntimeException;
 use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\Row;
 
@@ -30,7 +32,7 @@ class Collection extends BaseCollection
    * @param Query $query 查询对象
    * @param array $data 查询结果
    */
-  public function __construct(Query $query, array $data)
+  public function __construct(protected Query $query, array $data)
   {
     /**
      * 遍历数据集，将每个元素转换为Row对象
@@ -112,26 +114,6 @@ class Collection extends BaseCollection
   public function all(): array
   {
     return $this->getArrayCopy();
-  }
-
-  /**
-   * 根据字段值过滤集合中的元素
-   *
-   * @param string $column 字段名
-   * @param mixed $value 字段值
-   * @return Collection 过滤后的集合
-   */
-  public function where(string $column, mixed $value): Collection
-  {
-    return new Collection(
-      $this->query,
-      array_filter(
-        $this->getArrayCopy(),
-        function ($item) use ($column, $value) {
-          return isset($item[$column]) && $item[$column] == $value;
-        }
-      )
-    );
   }
 
   /**
@@ -279,5 +261,53 @@ class Collection extends BaseCollection
       }
       parent::append(new Row($this->query, $value));
     }
+  }
+
+  /**
+   * 删除集合中的所有记录
+   *
+   * 前提条件是集合中的每一行记录都必须存在主键字段。
+   *
+   * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
+   * @return int 成功返回删除的记录数，失败返回0。
+   * @throws RuntimeException 如果缺少主键字段
+   */
+  #[Override] public function delete(bool $real = false): int
+  {
+    $pk = $this->query->getOptions()->pk;
+    $pkList = [];
+    foreach ($this as /** @var Row $row */ $row) {
+      if (isset($row[$pk])) {
+        $pkList[] = $row[$pk];
+      } else {
+        throw new RuntimeException(
+          "快捷删除记录失败，缺少主键字段($pk)"
+        );
+      }
+    }
+    if (!empty($pkList)) {
+      return $this->query->whereIn($pk, $pkList)->delete($real);
+    }
+    return 0;
+  }
+
+  /**
+   * 根据字段值过滤集合中的元素
+   *
+   * @param string $column 字段名
+   * @param mixed $value 字段值
+   * @return Collection 过滤后的集合
+   */
+  public function where(string $column, mixed $value): Collection
+  {
+    return new Collection(
+      $this->query,
+      array_filter(
+        $this->getArrayCopy(),
+        function ($item) use ($column, $value) {
+          return isset($item[$column]) && $item[$column] == $value;
+        }
+      )
+    );
   }
 }

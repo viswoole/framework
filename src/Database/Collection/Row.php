@@ -16,6 +16,8 @@ declare (strict_types=1);
 namespace Viswoole\Database\Collection;
 
 use ArrayObject;
+use Override;
+use RuntimeException;
 
 /**
  * 数据行，键为字段名，值为字段值，支持快捷更新
@@ -37,5 +39,24 @@ class Row extends BaseCollection
   public function value(string $column): mixed
   {
     return $this->offsetGet($column);
+  }
+
+  /**
+   * 删除集合中的所有记录
+   *
+   * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
+   * @return int 成功返回1，失败返回0
+   * @throws RuntimeException 如果缺少主键字段
+   */
+  #[Override] public function delete(bool $real = false): int
+  {
+    $pk = $this->query->getOptions()->pk;
+    if (isset($this[$pk])) {
+      return $this->query->where($pk, $this[$pk])->delete($real);
+    } else {
+      throw new RuntimeException(
+        "快捷删除记录失败，缺少主键字段($pk)"
+      );
+    }
   }
 }

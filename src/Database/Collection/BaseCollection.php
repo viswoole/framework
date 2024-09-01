@@ -126,4 +126,14 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
     }
     return $arrayCopy;
   }
+
+  /**
+   * 删除集合中的所有记录
+   *
+   * 前提条件是集合中的每一行记录都必须存在主键字段。
+   *
+   * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
+   * @return int
+   */
+  abstract public function delete(bool $real = false): int;
 }
