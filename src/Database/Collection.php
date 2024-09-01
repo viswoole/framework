@@ -261,7 +261,7 @@ class Collection extends BaseCollection
    */
   #[Override] public function delete(bool $real = false): int
   {
-    $pk = $this->query->getOptions()->pk;
+    $pk = $this->query->getPrimaryKey();
     $pkList = $this->getPks($pk);
     return $this->query->whereIn($pk, $pkList)->delete($real);
   }
@@ -316,7 +316,7 @@ class Collection extends BaseCollection
    */
   public function update(array $data): int
   {
-    $pk = $this->query->getOptions()->pk;
+    $pk = $this->query->getPrimaryKey();
     $pkList = $this->getPks($pk);
     $result = $this->query->whereIn($pk, $pkList)->update($data);
     if ($result) {
