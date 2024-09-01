@@ -17,10 +17,14 @@ namespace Viswoole\Database;
 
 use Closure;
 use InvalidArgumentException;
+use Swoole\Table;
 use Throwable;
 use Viswoole\Core\Common\Str;
 use Viswoole\Core\Config;
+use Viswoole\Core\Console\Output;
 use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\Query\RunInfo;
+use Viswoole\Log\LogManager;
 
 /**
  * 数据库通道管理器
@@ -33,16 +37,29 @@ use Viswoole\Database\Exception\DbException;
  */
 class Db
 {
+  /**
+   * debug信息直接输出到控制台
+   */
+  const int DEBUG_SAVE_CONSOLE = 1;
+  /**
+   * debug信息保存到日志文件
+   */
+  const int DEBUG_SAVE_LOGGER = 2;
   public readonly string $defaultChannel;
   /**
    * @var array<string,Channel> 数据库通道
    */
   protected array $channels = [];
+  /**
+   * @var Table 高性能共享表
+   */
+  private Table $table;
 
   /**
-   * @param Config $config
+   * @param Config $config 配置管理器
+   * @param LogManager $logManager 日志管理器
    */
-  public function __construct(protected Config $config)
+  public function __construct(Config $config, protected LogManager $logManager)
   {
     $channels = $config->get('database.channel', []);
     if (!empty($channels)) {
@@ -57,6 +74,93 @@ class Db
         $this->channels[$key] = $driver;
       }
     }
+    $this->table = new Table(1);
+    $this->table->column('debug', Table::TYPE_INT, 4);
+    $this->table->column('save', Table::TYPE_INT, 4);
+    $this->table->create();
+    $debug = $config->get('database.debug', true);
+    $save = $config->get('info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER);
+    if (!is_int($save)) {
+      $save = self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER;
+    }
+    $this->table->set('config', [
+      'debug' => $debug ? 1 : 0,
+      'save' => $save,
+    ]);
+  }
+
+  /**
+   * 设置debug模式
+   *
+   * @param bool $debug
+   * @return void
+   */
+  public function setDebug(bool $debug): void
+  {
+    $this->table->set('config', [
+      'debug' => $debug ? 1 : 0,
+    ]);
+  }
+
+  /**
+   * 设置调试信息保存方式
+   *
+   * @access public
+   * @param int $manner
+   * @return void
+   */
+  public function setDebugInfoSaveManner(int $manner): void
+  {
+    $this->table->set('config', [
+      'save' => $manner,
+    ]);
+  }
+
+  /**
+   * 保存调试信息
+   *
+   * @access public
+   * @param RunInfo $debugInfo
+   * @return void
+   */
+  public function saveDebugInfo(RunInfo $debugInfo): void
+  {
+    if ($this->debug()) {
+      $manner = $this->debugInfoSaveManner();
+      $time = $debugInfo->time['cost_time_s'];
+      $sql = $debugInfo->sql->toString();
+      $cache = $debugInfo->cache ? 'true' : 'false';
+      $log = "$sql [Runtime:{$time}s,Cache:$cache]";
+      if ($manner & self::DEBUG_SAVE_CONSOLE) {
+        Output::echo($log, 'SQL', backtrace: 0);
+      }
+      if ($manner & self::DEBUG_SAVE_LOGGER) {
+        $this->logManager->sql(
+          $log,
+          ['sql' => $sql, 'cache' => $debugInfo->cache, 'time' => $debugInfo->time]
+        );
+      }
+    }
+  }
+
+  /**
+   * 是否开启debug
+   *
+   * @return bool
+   */
+  public function debug(): bool
+  {
+    return (bool)$this->table->get('config')['debug'];
+  }
+
+  /**
+   * 调试信息保存方式
+   *
+   * @return int 1 代表控制台，2 代表日志文件，3 代表同时保存到控制台和日志文件
+   */
+  public function debugInfoSaveManner(): int
+  {
+    return $this->table->get('config')['save'];
   }
 
   /**
@@ -163,5 +267,15 @@ class Db
   public function hasChannel(string $channel_name): bool
   {
     return isset($this->channels[Str::camelCaseToSnakeCase($channel_name)]);
+  }
+
+  /**
+   * 返回所有通道
+   *
+   * @return array<string,Channel>
+   */
+  public function getChannels(): array
+  {
+    return $this->channels;
   }
 }

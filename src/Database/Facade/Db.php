@@ -19,6 +19,7 @@ use Closure;
 use Viswoole\Core\Facade;
 use Viswoole\Database\Channel;
 use Viswoole\Database\Query;
+use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Raw;
 
 /**
@@ -36,11 +37,25 @@ use Viswoole\Database\Raw;
  * @method static int|string execute(string $sql, array $bindings = []) 原生写入，包括 insert、update、delete
  * @method static mixed pop(string $type) 获取可用的连接$type可选值为`read`|`write`
  * @method static void put(mixed $connect) 归还一个可用的连接，如果连接已被损坏，请归还null
+ * @method static void setDebug(bool $debug) 设置debug模式
+ * @method static void setDebugInfoSaveManner(int $manner) 设置调试信息保存方式
+ * @method static void saveDebugInfo(RunInfo $debugInfo) 保存调试信息
+ * @method static bool debug() 是否开启debug
+ * @method static int debugInfoSaveManner() 调试信息保存方式
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\Db
  */
 class Db extends Facade
 {
+
+  /**
+   * debug信息直接输出到控制台
+   */
+  const int DEBUG_SAVE_CONSOLE = 1;
+  /**
+   * debug信息保存到日志文件
+   */
+  const int DEBUG_SAVE_LOGGER = 2;
 
   /**
    * 获取当前Facade对应类名
