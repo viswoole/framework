@@ -59,4 +59,18 @@ class DataSet extends BaseCollection
       );
     }
   }
+
+  /**
+   * 合并数据，相同的字段将被新数据覆盖
+   *
+   * @param array $data
+   * @return static
+   */
+  public function merge(array $data): static
+  {
+    foreach ($data as $key => $value) {
+      $this[$key] = $value;
+    }
+    return $this;
+  }
 }
