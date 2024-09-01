@@ -157,6 +157,7 @@ class Options implements ArrayAccess
 
   /**
    * @inheritDoc
+   * @throws Exception
    */
   #[Override] public function offsetUnset(mixed $offset): void
   {
