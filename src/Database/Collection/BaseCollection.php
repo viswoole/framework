@@ -62,7 +62,7 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   {
     $array = [];
     foreach ($this as $key => $value) {
-      if ($value instanceof Row) {
+      if ($value instanceof DataSet) {
         $value = $value->toArray();
       }
       // 应用获取器

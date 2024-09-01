@@ -19,7 +19,7 @@ use InvalidArgumentException;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
-use Viswoole\Database\Collection\Row;
+use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Raw;
 
@@ -262,15 +262,15 @@ trait Crud
    * ```
    *
    * @param int|string|null $value 主键值
-   * @return Row|Raw
+   * @return DataSet|Raw
    */
-  public function find(int|string $value = null): Row|Raw
+  public function find(int|string $value = null): DataSet|Raw
   {
     $this->limit(1);
     if (!empty($value)) $this->where($this->options->pk, $value);
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
-    return new Row($this->newQuery(), $result[0] ?? []);
+    return new DataSet($this->newQuery(), $result[0] ?? []);
   }
 
   /**

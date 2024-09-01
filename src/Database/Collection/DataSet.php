@@ -26,7 +26,7 @@ use RuntimeException;
  *
  * 实现了JsonSerializable接口，可以安全的转换为json
  */
-class Row extends BaseCollection
+class DataSet extends BaseCollection
 {
   protected int $flags = ArrayObject::STD_PROP_LIST | ArrayObject::ARRAY_AS_PROPS;
 

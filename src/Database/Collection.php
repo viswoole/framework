@@ -19,7 +19,7 @@ use InvalidArgumentException;
 use Override;
 use RuntimeException;
 use Viswoole\Database\Collection\BaseCollection;
-use Viswoole\Database\Collection\Row;
+use Viswoole\Database\Collection\DataSet;
 
 /**
  * 数据集合，可通过数组方式访问
@@ -38,7 +38,7 @@ class Collection extends BaseCollection
      * 遍历数据集，将每个元素转换为Row对象
      */
     array_walk($data, function (&$item) {
-      $item = is_array($item) ? new Row($this->query, $item) : $item;
+      $item = is_array($item) ? new DataSet($this->query, $item) : $item;
     });
     parent::__construct($query, $data);
   }
@@ -46,9 +46,9 @@ class Collection extends BaseCollection
   /**
    * 获取第一行数据
    *
-   * @return Row|null 如果集合为空，则返回null。
+   * @return DataSet|null 如果集合为空，则返回null。
    */
-  public function first(): ?Row
+  public function first(): ?DataSet
   {
     return $this->getArrayCopy()[0] ?? null;
   }
@@ -85,9 +85,9 @@ class Collection extends BaseCollection
   /**
    * 返回集合中的最后一行数据
    *
-   * @return Row|null 如果集合为空，则返回null。
+   * @return DataSet|null 如果集合为空，则返回null。
    */
-  public function last(): ?Row
+  public function last(): ?DataSet
   {
     $arrayCopy = $this->getArrayCopy();
     return end($arrayCopy) ?: null;
@@ -109,7 +109,7 @@ class Collection extends BaseCollection
   /**
    * 获取所有数据
    *
-   * @return Row[]
+   * @return DataSet[]
    */
   public function all(): array
   {
@@ -253,13 +253,13 @@ class Collection extends BaseCollection
    */
   public function append(mixed $value): void
   {
-    if ($value instanceof Row) {
+    if ($value instanceof DataSet) {
       parent::append($value);
     } else {
       if (!is_array($value)) {
         throw new InvalidArgumentException('Value must be an array or Row object.');
       }
-      parent::append(new Row($this->query, $value));
+      parent::append(new DataSet($this->query, $value));
     }
   }
 
@@ -276,7 +276,7 @@ class Collection extends BaseCollection
   {
     $pk = $this->query->getOptions()->pk;
     $pkList = [];
-    foreach ($this as /** @var Row $row */ $row) {
+    foreach ($this as /** @var DataSet $row */ $row) {
       if (isset($row[$pk])) {
         $pkList[] = $row[$pk];
       } else {
