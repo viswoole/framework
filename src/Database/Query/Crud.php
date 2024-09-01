@@ -19,6 +19,7 @@ use InvalidArgumentException;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
+use Viswoole\Database\Collection\Row;
 use Viswoole\Database\Raw;
 
 /**
@@ -46,42 +47,42 @@ trait Crud
   protected function runCrud(string $type): mixed
   {
     $this->options->type = $type;
-    $options = $this->options;
-    if ($this->options->getSql) {
-      return $this->channel->build($options);
-    }
-    // 查询方法
-    if ($type === 'select') {
-      if ($options->cache) {
-        $result = Cache::store($options->cache['store'])->get($options->cache['key']);
-        if ($result) return $result;
-      }
-      if (!isset($result)) {
-        $sql = $this->channel->build($options);
-        $result = $this->channel->query($sql->sql, $sql->bindings);
-        if ($options->cache) {
-          $cacheData = $result;
-          $cache = Cache::store($options->cache['store']);
-          if ($options->cache['tag']) $cache = $cache->tag($options->cache['tag']);
-          $cache->set($options->cache['key'], $cacheData, $options->cache['expire']);
-        }
-        return $result;
-      }
+    $raw = $this->channel->build($this->options);
+    $start = microtime(true);
+    if ($this->options->toRaw) {
+      $result = $raw;
     } else {
-      $sql = $this->channel->build($options);
-      $result = $this->channel->execute($sql->sql, $sql->bindings, $type === 'insertGetId');
-      // 删除缓存
-      if ($options->cache) {
-        if ($options->cache['tag']) {
-          Cache::store($options->cache['store'])
-               ->tag($options->cache['tag'])
-               ->remove($options->cache['key']);
+      // 查询方法
+      if ($type === 'select') {
+        if ($this->options->cache) {
+          $result = Cache::store($this->options->cache['store'])->get($this->options->cache['key']);
         } else {
-          Cache::store($options->cache['store'])
-               ->delete($options->cache['key']);
+          $result = $this->channel->query($raw->sql, $raw->bindings);
+          if ($this->options->cache) {
+            $cache = Cache::store($this->options->cache['store']);
+            if ($this->options->cache['tag']) $cache = $cache->tag($this->options->cache['tag']);
+            $cache->set($this->options->cache['key'], $result, $this->options->cache['expire']);
+          }
+        }
+      } else {
+        $result = $this->channel->execute(
+          $raw->sql, $raw->bindings, $type === 'insertGetId'
+        );
+        // 删除缓存
+        if ($this->options->cache) {
+          if ($this->options->cache['tag']) {
+            Cache::store($this->options->cache['store'])
+                 ->tag($this->options->cache['tag'])
+                 ->remove($this->options->cache['key']);
+          } else {
+            Cache::store($this->options->cache['store'])
+                 ->delete($this->options->cache['key']);
+          }
         }
       }
     }
+    $this->setRunInfo($start, $raw);
+    $this->reset();
     return $result;
   }
 
@@ -93,6 +94,31 @@ trait Crud
   public function delete(): int|Raw
   {
     return $this->runCrud('delete');
+  }
+
+  /**
+   * 获取sql运行时间
+   *
+   * @param float $start
+   * @param Raw $raw
+   * @return void
+   */
+  private function setRunInfo(float $start, Raw $raw): void
+  {
+    $end = microtime(true);
+    // 间隔了多少秒
+    $interval = $end - $start;
+    // 执行时间秒
+    $executionTime = round($interval, 6);
+    // 计算执行时间毫秒
+    $executionTimeMilliseconds = round($interval * 1000); // 执行时间（毫秒）
+    $time = [
+      'start_time' => $start,
+      'end_time' => $end,
+      'cost_time_s' => $executionTime,
+      'cost_time_ms' => $executionTimeMilliseconds
+    ];
+    $this->lastQuery = new RunInfo($raw, $this->options->cache, $time);
   }
 
   /**
@@ -132,16 +158,32 @@ trait Crud
    */
   public function count(string $column = '*'): int|Raw
   {
-    $this->columns("COUNT($column) AS count");
-    $this->options->withoutColumns = [];
-    return $this->value('count');
+    return $this->aggregateQueries(__METHOD__, $column);
   }
 
   /**
-   * 只查看某一列的值
+   * 聚合查询
+   *
+   * @param string $type
+   * @param string $column
+   * @return mixed|Raw
+   */
+  private function aggregateQueries(string $type, string $column): mixed
+  {
+    $fn = strtoupper($type);
+    $this->columns("$fn($column) AS $type");
+    $result = $this->runCrud('select');
+    if ($result instanceof Raw) return $result;
+    return $result[0][$type];
+  }
+
+  /**
+   * 返回某个字段的值
+   *
+   * 该方法会自动添加上limit = 1
    *
    * @param string $column
-   * @return mixed
+   * @return mixed 如果查询结果为空，则返回null。
    */
   public function value(string $column): mixed
   {
@@ -159,9 +201,7 @@ trait Crud
    */
   public function min(string $column): string|int|float|Raw
   {
-    $this->columns("MIN($column) AS min");
-    $this->options->withoutColumns = [];
-    return $this->value('min');
+    return $this->aggregateQueries(__METHOD__, $column);
   }
 
   /**
@@ -172,51 +212,62 @@ trait Crud
    */
   public function max(string $column): string|int|float|Raw
   {
-    $this->columns("MAX($column) AS max");
-    $this->options->withoutColumns = [];
-    return $this->value('max');
+    return $this->aggregateQueries(__METHOD__, $column);
   }
 
   /**
    * 获取平均值。
    *
    * @param string $column 列名。
-   * @return float|Raw 平均值。
+   * @return float|int|Raw 平均值。
    */
-  public function avg(string $column): float|Raw
+  public function avg(string $column): float|int|Raw
   {
-    $this->columns("AVG($column) AS avg");
-    $this->options->withoutColumns = [];
-    return $this->value('avg');
+    return $this->aggregateQueries(__METHOD__, $column);
   }
 
   /**
    * 获取总和。
    *
    * @param string $column 列名。
-   * @return float|Raw 总和。
+   * @return float|int|Raw 总和。
    */
-  public function sum(string $column): float|Raw
+  public function sum(string $column): float|int|Raw
   {
-    $this->columns("SUM($column) AS sum");
-    $result = $this->find();
-    if ($result instanceof Raw) return $result;
-    return $result->sum;
+    return $this->aggregateQueries(__METHOD__, $column);
   }
 
   /**
    * 查询单条记录
    *
-   * @param int|string|null $id 主键ID
-   * @return Collection|Raw
+   * 和select()方法不同，find()方法会自动添加上limit = 1，
+   * 且返回的是Row对象，可以直接通过属性方式获取/修改字段值。支持save()方法直接保存修改过后的数据。
+   *
+   * 示例:
+   * ```
+   * // 查询id为1的用户
+   * $user = Db::table('users','id')->find(1);
+   * // 上面的查询生成的sql等效于下一行查询,唯一不同的是find方法会直接返回Row对象，可以快捷操作当前数据
+   * // $user = Db::table('users','id')->where('id',1)->limit(1)->select();
+   * // 可支持同时使用where条件
+   * // $user = Db::table('users','id')->where('status',1)->find(1);
+   * // 修改用户名
+   * $user->name = 'John';// $user['name'] = 'John' 两种语法都可以使用
+   * // 保存修改
+   * $user->save();
+   *
+   * ```
+   *
+   * @param int|string|null $value 主键值
+   * @return Row|Raw
    */
-  public function find(int|string $id = null): Collection|Raw
+  public function find(int|string $value = null): Row|Raw
   {
     $this->limit(1);
-    if (!empty($id)) $this->where($this->options->pk, $id);
+    if (!empty($value)) $this->where($this->options->pk, $value);
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
-    return new Collection($this->channel, $this->options, $result[0] ?? []);
+    return new Row($this->newQuery(), $result[0] ?? []);
   }
 
   /**
@@ -228,6 +279,6 @@ trait Crud
   {
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
-    return new Collection($this->channel, $this->options, $result);
+    return new Collection($this->newQuery(), $result);
   }
 }
