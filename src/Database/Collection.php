@@ -68,7 +68,23 @@ class Collection extends BaseCollection
    */
   public function filter(callable $callback): Collection
   {
-    return new self($this->query, array_filter($this->getArrayCopy(), $callback));
+    return $this->cloneSelf(array_filter($this->getArrayCopy(), $callback));
+  }
+
+  /**
+   * 克隆当前对象
+   *
+   * @param array $data
+   * @return static
+   */
+  private function cloneSelf(array $data): static
+  {
+    $instance = new static($this->query, $data);
+    $instance->hidden(...$this->hidden);
+    foreach ($this->withAttr as $key => $value) {
+      $instance->withAttr($key, $value);
+    }
+    return $instance;
   }
 
   /**
@@ -79,7 +95,7 @@ class Collection extends BaseCollection
    */
   public function map(callable $callback): static
   {
-    return new self($this->query, array_map($callback, $this->getArrayCopy()));
+    return $this->cloneSelf(array_map($callback, $this->getArrayCopy()));
   }
 
   /**
@@ -112,8 +128,7 @@ class Collection extends BaseCollection
    */
   public function reject(callable $callback): Collection
   {
-    return new Collection(
-      $this->query,
+    return $this->cloneSelf(
       array_filter(
         $this->getArrayCopy(),
         function ($item) use ($callback) {
@@ -154,7 +169,7 @@ class Collection extends BaseCollection
         ? ($a[$column] < $b[$column] ? -1 : 1)
         : ($a[$column] > $b[$column] ? -1 : 1);
     });
-    return new Collection($this->query, $items);
+    return $this->cloneSelf($items);
   }
 
   /**
@@ -297,8 +312,7 @@ class Collection extends BaseCollection
    */
   public function where(string $column, mixed $value): Collection
   {
-    return new Collection(
-      $this->query,
+    return $this->cloneSelf(
       array_filter(
         $this->getArrayCopy(),
         function ($item) use ($column, $value) {
@@ -339,5 +353,59 @@ class Collection extends BaseCollection
     foreach ($this->getIterator() as $row) {
       $callback($row);
     }
+  }
+
+  /**
+   * 根据主键值进行排序
+   *
+   * @param int $flags
+   * @return true
+   */
+  public function asort(int $flags = SORT_REGULAR): true
+  {
+    $pk = $this->query->getPrimaryKey();
+
+    // 自定义排序函数
+    $sortFunction = function ($a, $b) use ($pk, $flags) {
+      // 获取主键值
+      $aPkValue = $a[$pk] ?? 0;
+      $bPkValue = $b[$pk] ?? 0;
+      // 根据 $flags 进行排序
+      return match ($flags) {
+        SORT_NUMERIC => (float)$aPkValue - (float)$bPkValue,
+        SORT_STRING => strcmp((string)$aPkValue, (string)$bPkValue),
+        default => $aPkValue <=> $bPkValue,
+      };
+    };
+    return $this->uasort($sortFunction);
+  }
+
+  /**
+   * 给集合中的每一行数据的键进行排序
+   *
+   * @param int $flags
+   * @return true
+   */
+  public function ksort(int $flags = SORT_REGULAR): true
+  {
+    foreach ($this as $row) {
+      $row->ksort($flags);
+    }
+    return true;
+  }
+
+  /**
+   * 分块处理
+   *
+   * @param int $size
+   * @return Collection[]
+   */
+  public function chunk(int $size): array
+  {
+    $chunks = array_chunk($this->getArrayCopy(), $size);
+    array_walk($chunks, function (&$chunk) {
+      $chunk = $this->cloneSelf($chunk);
+    });
+    return $chunks;
   }
 }
