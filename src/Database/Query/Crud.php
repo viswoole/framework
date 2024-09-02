@@ -24,6 +24,7 @@ use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Exception\DataNotFoundException;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Raw;
@@ -298,30 +299,39 @@ trait Crud
    * $user->name = 'John';// $user['name'] = 'John' 两种语法都可以使用
    * // 保存修改
    * $user->save();
-   *
    * ```
    *
    * @param int|string|null $value 主键值
+   * @param bool $allowEmpty 是否允许为空
    * @return DataSet|Raw
+   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
    */
-  public function find(int|string $value = null): DataSet|Raw
+  public function find(int|string $value = null, bool $allowEmpty = true): DataSet|Raw
   {
     $this->limit(1);
     if (!empty($value)) $this->where($this->options->pk, $value);
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
+    if (empty($result) && !$allowEmpty) {
+      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+    }
     return new DataSet($this->newQuery(), $result[0] ?? []);
   }
 
   /**
    * 执行查询，并返回查询结果
    *
+   * @param bool $allowEmpty 是否允许为空。
    * @return Collection|Raw
+   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
    */
-  public function select(): Collection|Raw
+  public function select(bool $allowEmpty = true): Collection|Raw
   {
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
+    if (empty($result) && !$allowEmpty) {
+      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+    }
     return new Collection($this->newQuery(), $result);
   }
 

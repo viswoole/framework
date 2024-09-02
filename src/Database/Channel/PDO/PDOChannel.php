@@ -191,7 +191,7 @@ class PDOChannel extends Channel
       // 归还连接
       $manager->put($this, $connect);
       // 抛出异常
-      throw new DbException($e->getMessage(), $e->getCode(), Raw::merge($sql, $bindings), $e);
+      throw new DbException($e->getMessage(), Raw::merge($sql, $bindings), previous: $e);
     }
     return $stmt;
   }
