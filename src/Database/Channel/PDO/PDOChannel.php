@@ -17,7 +17,7 @@ namespace Viswoole\Database\Channel\PDO;
 
 use InvalidArgumentException;
 use Override;
-use PDO;
+use PDOException;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
 use Swoole\Table;
@@ -65,9 +65,7 @@ class PDOChannel extends Channel
     string                     $username = 'root',
     string                     $password = 'root',
     string                     $charset = 'utf8mb4',
-    array                      $options = [
-      PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-    ],
+    array                      $options = [],
     int                        $pool_max_size = 64,
     int                        $pool_fill_size = 0,
     public int                 $pool_timeout_time = 5,
@@ -150,34 +148,52 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 查询
+   * 构建sql
    *
-   * @param string $sql
-   * @param array $bindings
-   * @return array
+   * @param Options $options
+   * @return Raw
    */
-  #[Override] public function query(string $sql, array $bindings = []): array
+  #[Override] public function build(Options $options): Raw
   {
-    if ($this->getType($sql) === 'write') throw new DbException('Read-only operation');
-    $connect = ConnectManager::factory()->pop($this, 'read');
-    $stmt = $this->exec($connect, $sql, $bindings);
-    $result = $stmt->fetchAll();
-    ConnectManager::factory()->put($this, $connect);
-    if (false === $result) {
-      throw new DbException('fetch dataset failed', sql: Raw::merge($sql, $bindings));
-    }
-    return $result;
+    $build = new SqlBuilder($this, $options);
+    return $build->build();
   }
 
   /**
-   * 是否为写操作
-   *
-   * @param string $sql
-   * @return string
+   * @inheritDoc
    */
-  protected function getType(string $sql): string
+  public function execute(
+    string|Raw $sql,
+    array      $bindings = [],
+    bool       $getId = false
+  ): PDOStatementProxy|PDOStatement|int|string
   {
-    return str_starts_with(strtoupper($sql), 'SELECT') ? 'read' : 'write';
+    $manager = ConnectManager::factory();
+    if ($sql instanceof Raw) {
+      $bindings = $sql->bindings;
+      $sql = $sql->sql;
+    }
+    /**
+     * @var PDOProxy $connect
+     */
+    $connect = $manager->pop($this, $this->getType($sql));
+    try {
+      $stmt = $connect->prepare($sql);
+      $stmt->execute($bindings);
+      if ($getId) {
+        if (str_starts_with($sql, 'INSERT') || str_starts_with($sql, 'REPLACE')) {
+          return $connect->lastInsertId();
+        }
+      }
+      // 归还连接
+      $manager->put($this, $connect);
+    } catch (PDOException $e) {
+      // 归还连接
+      $manager->put($this, $connect);
+      // 抛出异常
+      throw new DbException($e->getMessage(), $e->getCode(), Raw::merge($sql, $bindings), $e);
+    }
+    return $stmt;
   }
 
   /**
@@ -241,58 +257,14 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 原生查询
-   *
-   * @param PDOProxy $connect
-   * @param string $sql
-   * @param array $bindings
-   * @return PDOStatementProxy|PDOStatement
-   */
-  protected function exec(
-    PDOProxy $connect,
-    string   $sql,
-    array    $bindings = [],
-  ): PDOStatementProxy|PDOStatement
-  {
-    $stmt = $connect->prepare($sql);
-    if ($stmt === false) {
-      $err = $connect->errorInfo();
-      throw new DbException($err[2], $err[1], Raw::merge($sql, $bindings));
-    }
-    $result = $stmt->execute($bindings);
-    if ($result === false) {
-      $err = $connect->errorInfo();
-      throw new DbException($err[2], $err[1], Raw::merge($sql, $bindings));
-    }
-    return $stmt;
-  }
-
-  /**
-   * 写入
+   * 是否为写操作
    *
    * @param string $sql
-   * @param array $bindings
-   * @param bool $getId
-   * @return int|string
+   * @return string
    */
-  #[Override] public function execute(
-    string $sql,
-    array  $bindings = [],
-    bool   $getId = false,
-  ): int|string
+  protected function getType(string $sql): string
   {
-    /**
-     * @var PDOProxy $connect
-     */
-    $connect = ConnectManager::factory()->pop($this, 'write');
-    $stmt = $this->exec($connect, $sql, $bindings);
-    if ($getId) {
-      $result = $connect->lastInsertId();
-    } else {
-      $result = $stmt->rowCount();
-    }
-    ConnectManager::factory()->put($this, $connect);
-    return $result;
+    return str_starts_with(strtoupper($sql), 'SELECT') ? 'read' : 'write';
   }
 
   /**
@@ -330,17 +302,5 @@ class PDOChannel extends Channel
   private function removeCurrentPoolIndex(): void
   {
     Context::remove('$_pdo_current_index');
-  }
-
-  /**
-   * 构建sql
-   *
-   * @param Options $options
-   * @return Raw
-   */
-  #[Override] public function build(Options $options): Raw
-  {
-    $build = new SqlBuilder($this, $options);
-    return $build->build();
   }
 }

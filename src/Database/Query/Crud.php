@@ -16,6 +16,8 @@ declare (strict_types=1);
 namespace Viswoole\Database\Query;
 
 use InvalidArgumentException;
+use PDO;
+use PDOStatement;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
@@ -58,7 +60,11 @@ trait Crud
         if ($this->options->cache) {
           $result = Cache::store($this->options->cache['store'])->get($this->options->cache['key']);
         } else {
-          $result = $this->channel->query($raw->sql, $raw->bindings);
+          /**
+           * @var PDOStatement $statement
+           */
+          $statement = $this->channel->execute($raw->sql, $raw->bindings);
+          $result = $statement->fetchAll(PDO::FETCH_ASSOC);
           if ($this->options->cache) {
             $cache = Cache::store($this->options->cache['store']);
             if ($this->options->cache['tag']) $cache = $cache->tag($this->options->cache['tag']);
@@ -66,9 +72,16 @@ trait Crud
           }
         }
       } else {
-        $result = $this->channel->execute(
+        /**
+         * @var PDOStatement|string $result
+         */
+        $statement = $this->channel->execute(
           $raw->sql, $raw->bindings, $type === 'insertGetId'
         );
+        if ($type !== 'insertGetId') {
+          $result->rowCount();
+          $result->closeCursor();
+        }
         // 删除缓存
         if ($this->options->cache) {
           if ($this->options->cache['tag']) {

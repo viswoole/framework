@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Database;
 
 
+use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\Options;
 
 /**
@@ -36,30 +37,19 @@ abstract class Channel
   }
 
   /**
-   * 查询
+   * 执行
    *
-   * @param string $sql SQL语句
-   * @param array $bindings 参数
-   * @return array
-   */
-  abstract public function query(
-    string $sql,
-    array  $bindings = []
-  ): array;
-
-  /**
-   * 写入
-   *
-   * @param string $sql SQL语句
+   * @param string|Raw $sql SQL语句,或者Raw对象
    * @param array $bindings 参数
    * @param bool $getId 是否获取写入数据的ID
-   * @return int|string 返回自增主键或受影响的记录数
+   * @return mixed
+   * @throws DbException 如果执行失败，抛出 DbException 异常
    */
   abstract public function execute(
-    string $sql,
-    array  $bindings = [],
-    bool   $getId = false
-  ): int|string;
+    string|Raw $sql,
+    array      $bindings = [],
+    bool       $getId = false
+  ): mixed;
 
   /**
    * 获取连接
