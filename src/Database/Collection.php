@@ -356,26 +356,34 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 根据主键值进行排序
+   * 按指定字段进行排序，默认按主键排序，影响当前集合
    *
-   * @param int $flags
+   * @param int $flags 支持`SORT_ASC`|`SORT_DESC`
+   * @param string|null $column
    * @return true
    */
-  public function asort(int $flags = SORT_REGULAR): true
+  public function asort(int $flags = SORT_ASC, ?string $column = null): true
   {
-    $pk = $this->query->getPrimaryKey();
-
+    $pk = is_null($column) ? $this->query->getPrimaryKey() : $column;
     // 自定义排序函数
     $sortFunction = function ($a, $b) use ($pk, $flags) {
       // 获取主键值
       $aPkValue = $a[$pk] ?? 0;
       $bPkValue = $b[$pk] ?? 0;
       // 根据 $flags 进行排序
-      return match ($flags) {
-        SORT_NUMERIC => (float)$aPkValue - (float)$bPkValue,
-        SORT_STRING => strcmp((string)$aPkValue, (string)$bPkValue),
-        default => $aPkValue <=> $bPkValue,
-      };
+      if (is_string($aPkValue)) {
+        if ($flags === SORT_ASC) {
+          return strcmp($aPkValue, $bPkValue);
+        } else {
+          return strcmp($bPkValue, $aPkValue);
+        }
+      } else {
+        if ($flags === SORT_ASC) {
+          return $aPkValue <=> $bPkValue;
+        } else {
+          return $bPkValue <=> $aPkValue;
+        }
+      }
     };
     return $this->uasort($sortFunction);
   }
