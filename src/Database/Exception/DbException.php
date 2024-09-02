@@ -27,19 +27,20 @@ class DbException extends RuntimeException
 
   /**
    * @param string $message 错误信息
-   * @param int $code 错误码
+   * @param int|string $code 错误码
    * @param string|null $sql 出错的sql语句
    * @param Throwable|null $previous
    */
   public function __construct(
     string     $message,
-    int        $code = 0,
+    int|string $code = 0,
     ?string    $sql = null,
     ?Throwable $previous = null
   )
   {
     $this->sql = $sql;
-    parent::__construct($message, $code, $previous);
+    $this->code = $code;
+    parent::__construct($message, 0, $previous);
   }
 
   /**
