@@ -48,9 +48,9 @@ trait Crud
 
   /**
    * @param string $type
-   * @return Raw|string|array
+   * @return Raw|string|array|int
    */
-  protected function runCrud(string $type): Raw|string|array
+  protected function runCrud(string $type): Raw|string|array|int
   {
     $this->options->type = $type;
     $raw = $this->channel->build($this->options);
@@ -358,5 +358,40 @@ trait Crud
     }
     // 关闭PDOStatement
     $statement->closeCursor();
+  }
+
+  /**
+   * 分段查询
+   *
+   * @param int $size 每次读取的数量
+   * @return Generator 返回生成器
+   */
+  public function chunk(int $size): Generator
+  {
+    // 关闭缓存
+    $this->options->cache = false;
+    $this->options->type = 'select';
+    $this->limit($size);
+    // 偏移量
+    $offset = $this->options->offset ?? 0;
+    $this->offset($offset);
+    // 打包SQL
+    $raw = $this->channel->build($this->options);
+    while (true) {
+      $start = microtime(true);
+      // 替换 OFFSET 的值
+      $raw->sql = preg_replace('/OFFSET\s+\d+/', "OFFSET $offset", $raw->sql);
+      /**
+       * @var PDOStatement $statement
+       */
+      $statement = $this->channel->execute($raw);
+      $results = $statement->fetchAll(PDO::FETCH_ASSOC);
+      $statement->closeCursor();
+      $this->setRunInfo($start, $raw);
+      if (empty($results)) break;
+      yield new Collection($this->newQuery(), $results);
+      $offset += $size;
+    }
+    $this->reset();
   }
 }
