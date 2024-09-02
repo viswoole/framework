@@ -48,8 +48,7 @@ class PDOConfig
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ],
     public int        $pool_max_size = 64,
-    public int        $pool_fill_size = 0,
-    public bool       $onlyRead = false
+    public int        $pool_fill_size = 0
   )
   {
   }

@@ -47,14 +47,12 @@ class PDOProxy extends SwoolePDOProxy
    * @param string|null $username
    * @param string|null $password
    * @param array|null $options
-   * @param bool $onlyRead
    */
   public function __construct(
-    string               $dsn,
-    ?string              $username = null,
-    ?string              $password = null,
-    ?array               $options = null,
-    public readonly bool $onlyRead = false
+    string  $dsn,
+    ?string $username = null,
+    ?string $password = null,
+    ?array  $options = null,
   )
   {
     $constructor = function () use ($dsn, $username, $password, $options) {
