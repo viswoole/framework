@@ -68,16 +68,29 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   public function toArray(bool $withAttr = true, bool $hidden = true): array
   {
     $array = [];
+    $withAttrColumn = array_keys($this->withAttr);
+    // 将 $this->hidden 转换为关联数组以提高查找速度
+    $hiddenSet = array_flip($this->hidden);
     foreach ($this as $key => $value) {
       if ($value instanceof DataSet) {
         $value = $value->toArray($withAttr, $hidden);
-      }
-      // 隐藏字段
-      if ($hidden && in_array($key, $this->hidden)) {
+        // 应用隐藏器
+        if ($hidden) {
+          $value = array_filter($value, function ($v, $column) use ($hiddenSet) {
+            return !isset($hiddenSet[$column]);
+          }, ARRAY_FILTER_USE_BOTH);
+        }
+        // 应用获取器
+        if ($withAttr && !empty($withAttrColumn)) {
+          array_walk($value, function (&$v, $k) use ($withAttrColumn, $value) {
+            if (in_array($k, $withAttrColumn)) {
+              $v = $this->withAttr[$k]($v);
+            }
+          });
+        }
+      } elseif ($hidden && isset($hiddenSet[$key])) {
         continue;
-      }
-      // 应用获取器
-      if ($withAttr && isset($this->withAttr[$key])) {
+      } elseif ($withAttr && isset($this->withAttr[$key])) {
         $value = $this->withAttr[$key]($value);
       }
       $array[$key] = $value;
