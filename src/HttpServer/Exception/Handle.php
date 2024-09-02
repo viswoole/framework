@@ -37,6 +37,11 @@ class Handle extends \Viswoole\Core\Exception\Handle
     RouteNotFoundException::class
   ];
 
+  /**
+   * @param LogManager $log
+   * @param ResponseInterface $response
+   * @param RequestInterface $request
+   */
   public function __construct(
     LogManager                           $log,
     protected readonly ResponseInterface $response,
