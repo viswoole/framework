@@ -142,9 +142,9 @@ abstract class Model extends Query
    * 运行crud方法
    *
    * @param string $type
-   * @return mixed
+   * @return Raw|string|array|int
    */
-  protected function runCrud(string $type): mixed
+  protected function runCrud(string $type): Raw|string|array|int
   {
     switch ($type) {
       case 'select':
