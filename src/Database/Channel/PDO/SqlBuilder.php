@@ -318,10 +318,10 @@ class SqlBuilder
   protected function parseLimitAndOffset(): string
   {
     $sql = [];
-    if ($this->options->limit) {
+    if (!is_null($this->options->limit)) {
       $sql[] = 'LIMIT ' . $this->options->limit;
     }
-    if ($this->options->offset) {
+    if (!is_null($this->options->offset)) {
       $sql[] = 'OFFSET ' . $this->options->offset;
     }
     return implode(' ', $sql);
