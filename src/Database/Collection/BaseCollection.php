@@ -21,6 +21,7 @@ use Override;
 use Viswoole\Database\Model;
 use Viswoole\Database\Query;
 
+
 /**
  * 数据集合基类
  */
@@ -31,6 +32,10 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    * @var array 获取器
    */
   protected array $withAttr = [];
+  /**
+   * @var array 要隐藏的字段
+   */
+  protected array $hidden = [];
 
   /**
    * @param Query $query 查询对象
@@ -57,14 +62,19 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    *
    * @access public
    * @param bool $withAttr 是否使用获取器对数据进行处理
+   * @param bool $hidden 是否应用隐藏字段
    * @return array
    */
-  public function toArray(bool $withAttr = true): array
+  public function toArray(bool $withAttr = true, bool $hidden = true): array
   {
     $array = [];
     foreach ($this as $key => $value) {
       if ($value instanceof DataSet) {
-        $value = $value->toArray();
+        $value = $value->toArray($withAttr, $hidden);
+      }
+      // 隐藏字段
+      if ($hidden && in_array($key, $this->hidden)) {
+        continue;
       }
       // 应用获取器
       if ($withAttr && isset($this->withAttr[$key])) {
@@ -89,13 +99,25 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    * 定义获取器
    *
    * @access public
-   * @param string $key
+   * @param string $column
    * @param callable $callback
    * @return static
    */
-  public function withAttr(string $key, callable $callback): static
+  public function withAttr(string $column, callable $callback): static
   {
-    $this->withAttr[$key] = $callback;
+    $this->withAttr[$column] = $callback;
+    return $this;
+  }
+
+  /**
+   * 要隐藏的字段
+   *
+   * @param string ...$column
+   * @return static
+   */
+  public function hidden(string ...$column): static
+  {
+    $this->hidden = $column;
     return $this;
   }
 
