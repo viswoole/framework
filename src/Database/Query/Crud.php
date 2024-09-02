@@ -15,13 +15,16 @@ declare (strict_types=1);
 
 namespace Viswoole\Database\Query;
 
+use Generator;
 use InvalidArgumentException;
 use PDO;
 use PDOStatement;
+use Swoole\Database\PDOStatementProxy;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Raw;
 
@@ -45,9 +48,9 @@ trait Crud
 
   /**
    * @param string $type
-   * @return mixed
+   * @return Raw|string|array
    */
-  protected function runCrud(string $type): mixed
+  protected function runCrud(string $type): Raw|string|array
   {
     $this->options->type = $type;
     $raw = $this->channel->build($this->options);
@@ -57,46 +60,70 @@ trait Crud
     } else {
       // 查询方法
       if ($type === 'select') {
-        if ($this->options->cache) {
-          $result = Cache::store($this->options->cache['store'])->get($this->options->cache['key']);
-        } else {
-          /**
-           * @var PDOStatement $statement
-           */
-          $statement = $this->channel->execute($raw->sql, $raw->bindings);
-          $result = $statement->fetchAll(PDO::FETCH_ASSOC);
-          if ($this->options->cache) {
-            $cache = Cache::store($this->options->cache['store']);
-            if ($this->options->cache['tag']) $cache = $cache->tag($this->options->cache['tag']);
-            $cache->set($this->options->cache['key'], $result, $this->options->cache['expire']);
-          }
-        }
+        $result = $this->runSelect($raw);
       } else {
-        /**
-         * @var PDOStatement|string $result
-         */
-        $statement = $this->channel->execute(
-          $raw->sql, $raw->bindings, $type === 'insertGetId'
-        );
-        if ($type !== 'insertGetId') {
-          $result->rowCount();
-          $result->closeCursor();
-        }
-        // 删除缓存
-        if ($this->options->cache) {
-          if ($this->options->cache['tag']) {
-            Cache::store($this->options->cache['store'])
-                 ->tag($this->options->cache['tag'])
-                 ->remove($this->options->cache['key']);
-          } else {
-            Cache::store($this->options->cache['store'])
-                 ->delete($this->options->cache['key']);
-          }
-        }
+        $result = $this->runWrite($raw, $type === 'insertGetId');
       }
     }
     $this->setRunInfo($start, $raw);
     $this->reset();
+    return $result;
+  }
+
+  /**
+   * 执行查询
+   *
+   * @param Raw $raw
+   * @return array
+   */
+  protected function runSelect(Raw $raw): array
+  {
+    if ($this->options->cache) {
+      $result = Cache::store($this->options->cache['store'])->get($this->options->cache['key']);
+    } else {
+      /**
+       * @var PDOStatement $statement
+       */
+      $statement = $this->channel->execute($raw->sql, $raw->bindings);
+      $result = $statement->fetchAll(PDO::FETCH_ASSOC);
+      $statement->closeCursor();
+      if ($this->options->cache) {
+        $cache = Cache::store($this->options->cache['store']);
+        if ($this->options->cache['tag']) $cache = $cache->tag($this->options->cache['tag']);
+        $cache->set($this->options->cache['key'], $result, $this->options->cache['expire']);
+      }
+    }
+    return $result;
+  }
+
+  /**
+   * @param Raw $raw
+   * @param bool $getId
+   * @return int|string
+   */
+  protected function runWrite(Raw $raw, bool $getId): string|int
+  {
+    /**
+     * @var PDOStatement|string $result
+     */
+    $statement = $this->channel->execute(
+      $raw->sql, $raw->bindings, $getId
+    );
+    if ($statement instanceof PDOStatementProxy || $statement instanceof PDOStatement) {
+      $result = $statement->rowCount();
+      $statement->closeCursor();
+    }
+    // 删除缓存
+    if ($this->options->cache) {
+      if ($this->options->cache['tag']) {
+        Cache::store($this->options->cache['store'])
+             ->tag($this->options->cache['tag'])
+             ->remove($this->options->cache['key']);
+      } else {
+        Cache::store($this->options->cache['store'])
+             ->delete($this->options->cache['key']);
+      }
+    }
     return $result;
   }
 
@@ -296,5 +323,40 @@ trait Crud
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     return new Collection($this->newQuery(), $result);
+  }
+
+  /**
+   * 游标查询
+   *
+   * 该方法和select()方法类似，不同之处在于，该方法返回的是一个生成器，可以逐条读取数据。
+   *
+   * 该方法不适用cache，因为缓存大量数据依旧会造成内存溢出。
+   *
+   * @return Generator 返回生成器
+   * @throws DbException
+   */
+  public function cursor(): Generator
+  {
+    $start = microtime(true);
+    // 关闭缓存功能
+    $this->options->cache = false;
+    // 设置查询类型
+    $this->options->type = 'select';
+    // 打包SQL
+    $raw = $this->channel->build($this->options);
+    /**
+     * @var PDOStatement $statement
+     */
+    $statement = $this->channel->execute($raw);
+    // 保存执行信息
+    $this->setRunInfo($start, $raw);
+    // 重置查询参数
+    $this->reset();
+    // 返回生成器
+    while ($result = $statement->fetch(PDO::FETCH_ASSOC)) {
+      yield new DataSet($this->newQuery(), $result);
+    }
+    // 关闭PDOStatement
+    $statement->closeCursor();
   }
 }
