@@ -18,7 +18,7 @@ namespace Viswoole\Database;
 use Generator;
 use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Model\ModelQuery;
-use Viswoole\Database\Model\RelateQuery;
+use Viswoole\Database\Model\RelationQuery;
 use Viswoole\Database\Query\RunInfo;
 
 /**
@@ -224,17 +224,17 @@ abstract class Model
    * @param string $relateModel 要关联的模型
    * @param string $foreignKey 关联模型外键（为空时为当前模型表名+_id）
    * @param string $localKey 当前模型主键（为空时为当前模型$pk属性）
-   * @return RelateQuery
+   * @return RelationQuery
    */
   public function hasOne(
     string $relateModel,
     string $foreignKey = '',
     string $localKey = '',
-  ): RelateQuery
+  ): RelationQuery
   {
     if (empty($foreignKey)) $foreignKey = $this->table . '_id';
     if (empty($localKey)) $localKey = $this->pk;
-    return new RelateQuery($relateModel, $foreignKey, $localKey);
+    return new RelationQuery($relateModel, $foreignKey, $localKey);
   }
 
   /**
@@ -243,17 +243,17 @@ abstract class Model
    * @param string $relateModel 要关联的模型
    * @param string $foreignKey 关联模型外键（为空时为当前模型表名+_id）
    * @param string $localKey 当前模型主键（为空时为当前模型$pk属性）
-   * @return RelateQuery
+   * @return RelationQuery
    */
   public function hasMany(
     string $relateModel,
     string $foreignKey = '',
     string $localKey = '',
-  ): RelateQuery
+  ): RelationQuery
   {
     if (empty($foreignKey)) $foreignKey = $this->table . '_id';
     if (empty($localKey)) $localKey = $this->pk;
-    return new RelateQuery($relateModel, $foreignKey, $localKey, null, true);
+    return new RelationQuery($relateModel, $foreignKey, $localKey, null, true);
   }
 
   /**
@@ -276,17 +276,17 @@ abstract class Model
    * @param string $pivotModel 中间表模型
    * @param string $foreignKey 关联模型表在pivot模型中的外键，为空时为关联模型表名+_id
    * @param string $localKey 当前模型在pivot模型中的外键，为空时为当前模型表名+_id
-   * @return RelateQuery
+   * @return RelationQuery
    */
   public function belongsToMany(
     string $relateModel,
     string $pivotModel,
     string $foreignKey = '',
     string $localKey = '',
-  ): RelateQuery
+  ): RelationQuery
   {
     if (empty($foreignKey)) $foreignKey = call_user_func("$relateModel::getTableName") . '_id';
     if (empty($localKey)) $localKey = $this->table . '_id';
-    return new RelateQuery($relateModel, $foreignKey, $localKey, $pivotModel, true);
+    return new RelationQuery($relateModel, $foreignKey, $localKey, $pivotModel, true);
   }
 }

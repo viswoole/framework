@@ -18,7 +18,7 @@ namespace Viswoole\Database\Model;
 /**
  * 关联查询
  */
-class RelateQuery
+class RelationQuery
 {
   /**
    * @param string $relateModel 关联的模型
