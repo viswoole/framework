@@ -270,14 +270,19 @@ trait Crud
    * 该方法会自动添加上limit = 1
    *
    * @param string $column
-   * @return mixed 如果查询结果为空，则返回null。
+   * @return mixed|false 如果查询结果为空，则返回false。
    */
   public function value(string $column): mixed
   {
     $this->limit(1);
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
-    return $result[0][$column] ?? null;
+    $data = $result[0] ?? [];
+    if (empty($data)) return false;
+    if (!array_key_exists($column, $data)) {
+      throw new InvalidArgumentException("查询结果中不存在指定的列名：$column");
+    }
+    return $result[0][$column];
   }
 
   /**
