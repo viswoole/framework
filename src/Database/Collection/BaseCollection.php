@@ -18,6 +18,7 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use JsonSerializable;
 use Override;
+use Viswoole\Core\Common\Str;
 use Viswoole\Database\Model;
 use Viswoole\Database\Query;
 
@@ -46,6 +47,10 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
     array                 $data
   )
   {
+    // 同步隐藏字段
+    if ($this->query instanceof Model) {
+      $this->hidden = array_merge($this->hidden, $this->query->getHiddenColumn());
+    }
     parent::__construct($data, $this->flags);
   }
 
@@ -81,17 +86,34 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
           }, ARRAY_FILTER_USE_BOTH);
         }
         // 应用获取器
-        if ($withAttr && !empty($withAttrColumn)) {
-          array_walk($value, function (&$v, $k) use ($withAttrColumn, $value) {
-            if (in_array($k, $withAttrColumn)) {
-              $v = $this->withAttr[$k]($v);
-            }
-          });
+        if ($withAttr) {
+          if (!empty($withAttrColumn) || $this->query instanceof Model) {
+            array_walk($value, function (&$v, $k) use ($withAttrColumn, $value) {
+              if (in_array($k, $withAttrColumn)) {
+                $v = $this->withAttr[$k]($v);
+              } elseif ($this->query instanceof Model) {
+                $method = 'get' . Str::snakeCaseToCamelCase($k) . 'Attr';
+                if (method_exists($this->query, $method)) {
+                  $v = $this->query->$method($v, $value);
+                }
+              }
+
+            });
+          }
         }
       } elseif ($hidden && isset($hiddenSet[$key])) {
         continue;
-      } elseif ($withAttr && isset($this->withAttr[$key])) {
-        $value = $this->withAttr[$key]($value);
+      } elseif ($withAttr) {
+        // 应用集合获取器
+        if (isset($this->withAttr[$key])) {
+          $value = $this->withAttr[$key]($value);
+        } elseif ($this->query instanceof Model) {
+          // 应用模型获取器
+          $method = 'get' . Str::snakeCaseToCamelCase($key) . 'Attr';
+          if (method_exists($this->query, $method)) {
+            $value = $this->query->$method($value);
+          }
+        }
       }
       $array[$key] = $value;
     }
