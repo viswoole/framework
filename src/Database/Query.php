@@ -260,17 +260,6 @@ class Query
   }
 
   /**
-   * 新查询实例
-   *
-   * @access public
-   * @return $this 返回一个全新的查询实例
-   */
-  public function newQuery(): static
-  {
-    return new static($this->channel, $this->options->table, $this->options->pk);
-  }
-
-  /**
    * 选择要查询的列。
    *
    * @access public
@@ -385,5 +374,16 @@ class Query
   {
     $this->options->replace = $flag;
     return $this;
+  }
+
+  /**
+   * 新查询实例
+   *
+   * @access public
+   * @return $this 返回一个全新的查询实例
+   */
+  protected function newQuery(): static
+  {
+    return new static($this->channel, $this->options->table, $this->options->pk);
   }
 }
