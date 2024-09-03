@@ -15,18 +15,20 @@ declare (strict_types=1);
 
 namespace Viswoole\Database;
 
+use InvalidArgumentException;
 use Override;
 use RuntimeException;
 use Viswoole\Core\Common\Arr;
+use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\Facade\Db;
 
 /**
  * 模型基类
  */
 abstract class Model extends Query
 {
-  /**
-   * @var array 隐藏字段，不对外暴露
-   */
+  /** @var array 隐藏字段，不对外暴露 */
   protected array $hidden = [];
   /** @var bool 是否启用软删除 */
   protected bool $enableSoftDelete = false;
@@ -55,7 +57,9 @@ abstract class Model extends Query
   /** @var string 表主键 */
   protected string $pk = 'id';
   /** @var string|null 数据库通道名称，为null则使用默认通道 */
-  protected ?string $channel_name = null;
+  protected ?string $channelName = null;
+  /** @var bool 自动写入主键 */
+  protected bool $autoWritePk = false;
   /*** @var bool 查询是否包含软删除数据 */
   private bool $withTrashed = false;
 
@@ -71,9 +75,31 @@ abstract class Model extends Query
       $this->table = $className;
     }
     parent::__construct(
-      \Viswoole\Database\Facade\Db::channel($this->channel_name),
+      Db::channel($this->channelName),
       $this->table, $this->pk
     );
+  }
+
+  /**
+   * 创建一条数据，并返回数据集
+   *
+   * @param array $data
+   * @param array $columns 只允许写入的列
+   * @return DataSet
+   */
+  public static function create(array $data, array $columns = []): DataSet
+  {
+    if (!Arr::isAssociativeArray($data)) {
+      throw new InvalidArgumentException('Model::create() 输入数据必须是关联数组');
+    }
+    // 拿到只写入的列
+    $filteredData = empty($columns) ? $data : array_intersect_key($data, array_flip($columns));
+    $db = self::db();
+    // 写入数据并获取主键
+    $id = $db->insertGetId($filteredData);
+    if (!$id) throw new DbException('Model::create() 创建数据失败');
+    $data[$db->pk] = $id;
+    return new DataSet(self::db(), $data);
   }
 
   /**
@@ -182,18 +208,31 @@ abstract class Model extends Query
         break;
       case 'insertGetId':
       case 'insert':
+        $isMoreWrite = Arr::isIndexArray($this->options->data);
         // 自动写入创建时间
         if (in_array($this->autoWriteTimestamp, [1, 3])) {
-          if (Arr::isIndexArray($this->options->data)) {
+          if ($isMoreWrite) {
             array_walk($this->options->data, function (&$item) {
-              if (array_key_exists($this->createTimeFieldName, $item)) {
+              if (!array_key_exists($this->createTimeFieldName, $item)) {
                 $item[$this->createTimeFieldName] = $this->_getTime($this->createTimeFormatType);
               }
             });
-          } elseif (array_key_exists($this->createTimeFieldName, $this->options->data)) {
+          } elseif (!array_key_exists($this->createTimeFieldName, $this->options->data)) {
             $this->options->data[$this->createTimeFieldName] = $this->_getTime(
               $this->createTimeFormatType
             );
+          }
+        }
+        // 自动写入主键
+        if ($this->autoWritePk && property_exists($this, 'autoWritePk')) {
+          if ($isMoreWrite) {
+            array_walk($this->options->data, function (&$item) {
+              if (!array_key_exists($this->pk, $item)) {
+                $item[$this->pk] = $this->{'autoWritePk'}();
+              }
+            });
+          } elseif (!array_key_exists($this->pk, $this->options->data)) {
+            $this->options->data[$this->pk] = $this->{'autoWritePk'}();
           }
         }
         break;
