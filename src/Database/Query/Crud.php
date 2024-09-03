@@ -345,7 +345,7 @@ trait Crud
    * ```
    * // 查询id为1的用户
    * $user = Db::table('users','id')->find(1);
-   * // 上面的查询生成的sql等效于下一行查询,唯一不同的是find方法会直接返回Row对象，可以快捷操作当前数据
+   * // 上面的查询生成的sql等效于下一行查询,唯一不同的是find方法会直接返回DataSet对象，可以快捷操作当前数据
    * // $user = Db::table('users','id')->where('id',1)->limit(1)->select();
    * // 可支持同时使用where条件
    * // $user = Db::table('users','id')->where('status',1)->find(1);
