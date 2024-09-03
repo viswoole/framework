@@ -24,11 +24,12 @@ class Arr
    *
    * @access public
    * @param array $array
+   * @param bool $allowEmpty
    * @return bool
    */
-  public static function isAssociativeArray(array $array): bool
+  public static function isAssociativeArray(array $array, bool $allowEmpty = false): bool
   {
-    return !self::isIndexArray($array);
+    return !self::isIndexArray($array, $allowEmpty);
   }
 
   /**
@@ -36,11 +37,12 @@ class Arr
    *
    * @access public
    * @param array $array
+   * @param bool $allowEmpty
    * @return bool
    */
-  public static function isIndexArray(array $array): bool
+  public static function isIndexArray(array $array, bool $allowEmpty = false): bool
   {
-    if (empty($array)) return true;
+    if (empty($array)) return $allowEmpty;
     // 检查数组的第一个键是否为 0 并且所有的键都是连续的整数
     $keys = array_keys($array);
     return $keys[0] === 0 && $keys === range(0, count($array) - 1);
