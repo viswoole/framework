@@ -297,6 +297,16 @@ class Query
   }
 
   /**
+   * 获取当前查询的表名
+   *
+   * @return string
+   */
+  public function getTableName(): string
+  {
+    return $this->options->table;
+  }
+
+  /**
    * 排除字段
    *
    * @access public
