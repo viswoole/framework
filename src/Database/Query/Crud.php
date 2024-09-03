@@ -37,6 +37,21 @@ trait Crud
   /**
    * 插入数据
    *
+   * 示例：
+   * ```
+   * // 要写入的用户信息
+   * $userInfo = [
+   *    'name'=>'张三',
+   *    'age'=>18
+   * ];
+   * // 写入单条记录示例
+   * $result = \Viswoole\Database\Db::table('user')->insert($userInfo);
+   * print_r('写入数据结果：'.$result>0?true:false);
+   * // 写入多条记录示例
+   * $result = \Viswoole\Database\Db::table('user')->insert([$userInfo,$userInfo])
+   * print_r("成功创建数据：$result 条");
+   * ```
+   *
    * @param array<string,mixed>|array<int,array<string,mixed>> $data 要插入的数据
    * @return int|Raw 返回插入的记录数
    */
@@ -166,14 +181,13 @@ trait Crud
   }
 
   /**
-   * 插入数据，并返回自增ID
+   * 插入数据，返回主键值
    *
    * @param array $data
-   * @return string|int|array|Raw 返回插入的ID, 如果插入多条数据，则返回数组，元素为插入的ID。
+   * @return string|int|Raw 写入成功返回主键值
    */
-  public function insertGetId(array $data): string|int|array|Raw
+  public function insertGetId(array $data): string|int|Raw
   {
-    if (empty($data)) throw new InvalidArgumentException('要写入数据不能为空');
     if (!Arr::isAssociativeArray($data)) {
       throw new InvalidArgumentException('要写入的数据格式必须是关联数组');
     }
