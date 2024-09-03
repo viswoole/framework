@@ -44,7 +44,7 @@ use Viswoole\Database\Raw;
 //* @property bool $autoWritePk 自动写入主键
 
 /**
- * 模型基类
+ * 模型查询构造器
  */
 class ModelQuery extends Query
 {

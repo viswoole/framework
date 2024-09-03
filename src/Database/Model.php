@@ -126,7 +126,19 @@ abstract class Model
       $className = strtolower(preg_replace('/([a-z])([A-Z])/', '$1_$2', $className));
       $this->table = $className;
     }
-    $this->query = new ModelQuery($this);
+    $this->query = $this->createQuery();
+  }
+
+  /**
+   * 创建构造器
+   *
+   * 如果需要重写构造器中的方法，可以重写该方法，并返回你自定义的构造器。
+   *
+   * @return ModelQuery
+   */
+  protected function createQuery(): ModelQuery
+  {
+    return new ModelQuery($this);
   }
 
   /**
@@ -143,6 +155,29 @@ abstract class Model
 
   /**
    * 获取查询器
+   *
+   * 该方法主要是为了实现动态调用智能提示
+   *
+   * 示例：
+   * ```
+   * // 实例化模型
+   * $model = new UserModel();
+   * // 直接动态调用select方法idea会提示：static 方法 'select' 不应被动态调用，但类具有 '__magic' 方法。
+   * $collection = $model->select();
+   * // 为了避免上述提示，可以使用以下方式调用。
+   * $collection = $model->query()->select();
+   * $collection = $model->query->select();
+   * // 以上两种调用方式都可以实现动态调用，且带有IDE智能提示，我们也建议这样调用。
+   * // 这样能有效减少了魔术方法转发调用的开销，虽然这样的性能影响是微乎其微的。
+   *
+   * // 除了上述的动态调用方式，还可以静态调用。
+   * $collection = UserModel::select();
+   *
+   * // 如果是在模型方法中链式调用有以下方式
+   * $this->query->select();
+   * $this->query()->select();
+   * self::select();
+   * ```
    *
    * @return ModelQuery
    */
