@@ -16,6 +16,8 @@ declare (strict_types=1);
 namespace Viswoole\Database;
 
 
+use PDOStatement;
+use Swoole\Database\PDOStatementProxy;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\Options;
 
@@ -42,7 +44,7 @@ abstract class Channel
    * @param string|Raw $sql SQL语句,或者Raw对象
    * @param array $bindings 参数
    * @param bool $getId 是否获取写入数据的ID
-   * @return mixed
+   * @return mixed|PDOStatementProxy|PDOStatement 执行成功返回结果，假设是PDOChannel则返回PDOStatement|PDOStatementProxy对象
    * @throws DbException 如果执行失败，抛出 DbException 异常
    */
   abstract public function execute(
