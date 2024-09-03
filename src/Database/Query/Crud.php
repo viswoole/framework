@@ -113,6 +113,35 @@ trait Crud
   }
 
   /**
+   * 执行查询
+   *
+   * 该方法和select方法相同
+   *
+   * @see self::select()
+   */
+  public function get(bool $allowEmpty = true): Collection|Raw
+  {
+    return $this->select($allowEmpty);
+  }
+
+  /**
+   * 执行查询，并返回查询结果
+   *
+   * @param bool $allowEmpty 是否允许为空。
+   * @return Collection|Raw
+   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
+   */
+  public function select(bool $allowEmpty = true): Collection|Raw
+  {
+    $result = $this->runCrud('select');
+    if ($result instanceof Raw) return $result;
+    if (empty($result) && !$allowEmpty) {
+      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+    }
+    return new Collection($this->newQuery(), $result);
+  }
+
+  /**
    * @param Raw $raw
    * @param bool $getId
    * @return int|string
@@ -296,6 +325,17 @@ trait Crud
   }
 
   /**
+   * 查询单条记录，并返回DataSet对象
+   *
+   * @param bool $allowEmpty
+   * @return DataSet|Raw
+   */
+  public function first(bool $allowEmpty = true): DataSet|Raw
+  {
+    return $this->find(null, $allowEmpty);
+  }
+
+  /**
    * 查询单条记录
    *
    * 和select()方法不同，find()方法会自动添加上limit = 1，
@@ -330,23 +370,6 @@ trait Crud
       throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
     }
     return new DataSet($this->newQuery(), $result[0] ?? []);
-  }
-
-  /**
-   * 执行查询，并返回查询结果
-   *
-   * @param bool $allowEmpty 是否允许为空。
-   * @return Collection|Raw
-   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
-   */
-  public function select(bool $allowEmpty = true): Collection|Raw
-  {
-    $result = $this->runCrud('select');
-    if ($result instanceof Raw) return $result;
-    if (empty($result) && !$allowEmpty) {
-      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
-    }
-    return new Collection($this->newQuery(), $result);
   }
 
   /**

@@ -76,7 +76,9 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Raw|int|float avg(string $column) 获取平均值。
  * @method static Raw|int|float sum(string $column) 获取总和。
  * @method static DataSet|Raw find(string|int|null $value = null, bool $allowEmpty = true) 查询单条记录
+ * @method static DataSet|Raw first(bool $allowEmpty = true) 查询单条记录
  * @method static Collection|Raw select(bool $allowEmpty = true) 执行查询，并返回查询结果
+ * @method static Collection|Raw get(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static Generator cursor() 游标查询
  * @method static Generator chunk(int $size) 分段查询
  */
