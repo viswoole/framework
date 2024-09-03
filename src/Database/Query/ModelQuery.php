@@ -45,7 +45,6 @@ use Viswoole\Database\Raw;
 
 /**
  * 模型基类
- *
  */
 class ModelQuery extends Query
 {

@@ -27,11 +27,11 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Raw|int delete(bool $real = false) 删除记录
  * @method static Raw|int restore(array|string|int|null $id = null) 恢复软删除的数据
  * @method static array getHiddenColumn() 获取隐藏字段
- * @method static ModelQuery|static withTrashed(bool $withTrashed = true) 查询结果中包含软删除的数据
- * @method static ModelQuery|static groupBy(array|string $columns) 对结果进行分组
+ * @method static ModelQuery withTrashed(bool $withTrashed = true) 查询结果中包含软删除的数据
+ * @method static ModelQuery groupBy(array|string $columns) 对结果进行分组
  * @method static null|RunInfo getLastQuery() 获取最后一次查询
- * @method static ModelQuery|static having(string $column, string $operator, mixed $value, string $connector = 'AND') 添加 HAVING 子句到分组查询。
- * @method static ModelQuery|static orderBy(Raw|array|string $column, string $direction = 'asc') 对结果进行排序。
+ * @method static ModelQuery having(string $column, string $operator, mixed $value, string $connector = 'AND') 添加 HAVING 子句到分组查询。
+ * @method static ModelQuery orderBy(Raw|array|string $column, string $direction = 'asc') 对结果进行排序。
  * @method static Query page(int $page, int $pageSize) 分页查询
  * @method static ModelQuery limit(int $limit) 限制返回的结果数量。
  * @method static ModelQuery offset(int $offset) 设置结果的偏移量。
