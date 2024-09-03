@@ -210,6 +210,16 @@ trait Crud
   }
 
   /**
+   * 执行查询，并以数组返回查询结果。
+   *
+   * @return array|Raw
+   */
+  public function getArray(): array|Raw
+  {
+    return $this->runCrud('select');
+  }
+
+  /**
    * 插入数据，返回主键值
    *
    * @param array $data
