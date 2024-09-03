@@ -24,11 +24,15 @@ use Viswoole\Core\Common\Arr;
  */
 abstract class Model extends Query
 {
+  /**
+   * @var array 隐藏字段，不对外暴露
+   */
+  protected array $hidden = [];
   /** @var bool 是否启用软删除 */
   protected bool $enableSoftDelete = false;
   /** @var string 软删除字段 */
   protected string $softDeleteFieldName = 'delete_time';
-  /** @var string 软删除字段类型 datetime|timestamp|date|int则删除为1 */
+  /** @var string 软删除字段类型 datetime|timestamp|date|int */
   protected string $softDeleteFieldType = 'datetime';
   /** @var string|int|null 软删除默认记录值 */
   protected null|string|int $softDeleteFieldDefaultValue = null;
@@ -136,6 +140,16 @@ abstract class Model extends Query
     return $this->update([
       $this->softDeleteFieldName => $this->softDeleteFieldDefaultValue
     ]);
+  }
+
+  /**
+   * 获取隐藏字段
+   *
+   * @return array
+   */
+  public function getHiddenColumn(): array
+  {
+    return $this->hidden;
   }
 
   /**
