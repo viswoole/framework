@@ -18,9 +18,8 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use JsonSerializable;
 use Override;
-use Viswoole\Core\Common\Str;
-use Viswoole\Database\Model;
 use Viswoole\Database\Query;
+use Viswoole\Database\Query\ModelQuery;
 
 
 /**
@@ -43,12 +42,12 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    * @param array $data 查询结果
    */
   public function __construct(
-    protected Query|Model $query,
-    array                 $data
+    protected Query $query,
+    array           $data
   )
   {
     // 同步隐藏字段
-    if ($this->query instanceof Model) {
+    if ($this->query instanceof ModelQuery) {
       $this->hidden = array_merge($this->hidden, $this->query->getHiddenColumn());
     }
     parent::__construct($data, $this->flags);
@@ -87,17 +86,13 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
         }
         // 应用获取器
         if ($withAttr) {
-          if (!empty($withAttrColumn) || $this->query instanceof Model) {
+          if (!empty($withAttrColumn) || $this->query instanceof ModelQuery) {
             array_walk($value, function (&$v, $k) use ($withAttrColumn, $value) {
               if (in_array($k, $withAttrColumn)) {
                 $v = $this->withAttr[$k]($v);
-              } elseif ($this->query instanceof Model) {
-                $method = 'get' . Str::snakeCaseToCamelCase($k) . 'Attr';
-                if (method_exists($this->query, $method)) {
-                  $v = $this->query->$method($v, $value);
-                }
+              } elseif ($this->query instanceof ModelQuery) {
+                $v = $this->query->withGetAttr($k, $v);
               }
-
             });
           }
         }
@@ -107,12 +102,8 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
         // 应用集合获取器
         if (isset($this->withAttr[$key])) {
           $value = $this->withAttr[$key]($value);
-        } elseif ($this->query instanceof Model) {
-          // 应用模型获取器
-          $method = 'get' . Str::snakeCaseToCamelCase($key) . 'Attr';
-          if (method_exists($this->query, $method)) {
-            $value = $this->query->$method($value);
-          }
+        } elseif ($this->query instanceof ModelQuery) {
+          $value = $this->query->withGetAttr($key, $value);
         }
       }
       $array[$key] = $value;

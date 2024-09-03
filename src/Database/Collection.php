@@ -29,10 +29,10 @@ class Collection extends BaseCollection
   /**
    * 数据集列表
    *
-   * @param Query|Model $query 查询对象
+   * @param Query $query 查询对象
    * @param array $data 查询结果
    */
-  public function __construct(protected Query|Model $query, array $data)
+  public function __construct(protected Query $query, array $data)
   {
     /**
      * 遍历数据集，将每个元素转换为Row对象
