@@ -32,7 +32,7 @@ class Str
   }
 
   /**
-   * 蛇形到骆驼形
+   * 蛇形到骆驼形(单词首字母大写)
    *
    * @param $input
    * @return string
