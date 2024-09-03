@@ -14,6 +14,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Database\Model;
 
+use Closure;
 use InvalidArgumentException;
 use Override;
 use RuntimeException;
@@ -61,6 +62,17 @@ class ModelQuery extends Query
       Db::channel($this->channelName),
       $this->table, $this->pk
     );
+  }
+
+  /**
+   * 关联查询
+   *
+   * @param array<string,Closure>|string[]|string $relations 关联关系
+   * @return $this
+   */
+  public function with(array|string $relations): static
+  {
+    return $this;
   }
 
   /**

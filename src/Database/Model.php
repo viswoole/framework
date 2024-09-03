@@ -18,6 +18,7 @@ namespace Viswoole\Database;
 use Generator;
 use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Model\ModelQuery;
+use Viswoole\Database\Model\RelateQuery;
 use Viswoole\Database\Query\RunInfo;
 
 /**
@@ -42,6 +43,8 @@ use Viswoole\Database\Query\RunInfo;
  * @method static ModelQuery reset() 重置查询选项。
  * @method static ModelQuery columns(string $column) 选择要查询的列。
  * @method static string getPrimaryKey() 获取主键字段名
+ * @method static string getTableName() 获取表名。
+ * @method static ModelQuery with(array|string $relation) 关联查询。
  * @method static ModelQuery withoutColumns(string $column) 排除字段
  * @method static ModelQuery cache(string $key, int $expiry = 0, null|string $tag = null) 自动写入缓存
  * @method static ModelQuery lockForUpdate() 锁定记录以进行更新。
@@ -213,5 +216,77 @@ abstract class Model
   public function __call(string $name, array $arguments)
   {
     return call_user_func_array([$this->query, $name], $arguments);
+  }
+
+  /**
+   * 1对1关联
+   *
+   * @param string $relateModel 要关联的模型
+   * @param string $foreignKey 关联模型外键（为空时为当前模型表名+_id）
+   * @param string $localKey 当前模型主键（为空时为当前模型$pk属性）
+   * @return RelateQuery
+   */
+  public function hasOne(
+    string $relateModel,
+    string $foreignKey = '',
+    string $localKey = '',
+  ): RelateQuery
+  {
+    if (empty($foreignKey)) $foreignKey = $this->table . '_id';
+    if (empty($localKey)) $localKey = $this->pk;
+    return new RelateQuery($relateModel, $foreignKey, $localKey);
+  }
+
+  /**
+   * 1对N关联
+   *
+   * @param string $relateModel 要关联的模型
+   * @param string $foreignKey 关联模型外键（为空时为当前模型表名+_id）
+   * @param string $localKey 当前模型主键（为空时为当前模型$pk属性）
+   * @return RelateQuery
+   */
+  public function hasMany(
+    string $relateModel,
+    string $foreignKey = '',
+    string $localKey = '',
+  ): RelateQuery
+  {
+    if (empty($foreignKey)) $foreignKey = $this->table . '_id';
+    if (empty($localKey)) $localKey = $this->pk;
+    return new RelateQuery($relateModel, $foreignKey, $localKey, null, true);
+  }
+
+  /**
+   * 多对多关联
+   *
+   * 场景示例：
+   * ```
+   * // 假设我们有一个用户表和角色表，用户同时拥有多个角色，则可以使用中间表。
+   * // 配置中间表模型为UserRolesModel，关联模型为RolesModel，外键为role_id，主键为user_id。
+   * // 在UserModel定义如下方法
+   * public function roles(){
+   *   $this->belongsToMany(RolesModel::class,UserRolesModel::class,'role_id','user_id');
+   * }
+   * // 通过这样配置过后在查询时即可自动查询出用户所具有的角色
+   * $user = UserModel::with(['roles'])->find(1);
+   * dump($user->roles); // 这里会输出一个Collection对象,里面包含了该用户所拥有的所有角色
+   * ```
+   *
+   * @param string $relateModel 关联模型
+   * @param string $pivotModel 中间表模型
+   * @param string $foreignKey 关联模型表在pivot模型中的外键，为空时为关联模型表名+_id
+   * @param string $localKey 当前模型在pivot模型中的外键，为空时为当前模型表名+_id
+   * @return RelateQuery
+   */
+  public function belongsToMany(
+    string $relateModel,
+    string $pivotModel,
+    string $foreignKey = '',
+    string $localKey = '',
+  ): RelateQuery
+  {
+    if (empty($foreignKey)) $foreignKey = call_user_func("$relateModel::getTableName") . '_id';
+    if (empty($localKey)) $localKey = $this->table . '_id';
+    return new RelateQuery($relateModel, $foreignKey, $localKey, $pivotModel, true);
   }
 }
