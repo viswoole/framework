@@ -17,7 +17,7 @@ namespace Viswoole\Database;
 
 use Generator;
 use Viswoole\Database\Collection\DataSet;
-use Viswoole\Database\Query\ModelQuery;
+use Viswoole\Database\Model\ModelQuery;
 use Viswoole\Database\Query\RunInfo;
 
 /**

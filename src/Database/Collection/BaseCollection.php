@@ -18,8 +18,8 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use JsonSerializable;
 use Override;
+use Viswoole\Database\Model\ModelQuery;
 use Viswoole\Database\Query;
-use Viswoole\Database\Query\ModelQuery;
 
 
 /**

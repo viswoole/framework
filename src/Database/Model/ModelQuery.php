@@ -1,5 +1,4 @@
-<?php /** @noinspection PhpUndefinedFieldInspection */
-/*
+<?php /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
  *  +----------------------------------------------------------------------
@@ -10,10 +9,10 @@
  *  | Author: ZhuChongLin <8210856@qq.com>
  *  +----------------------------------------------------------------------
  */
-
+/** @noinspection PhpUndefinedFieldInspection */
 declare (strict_types=1);
 
-namespace Viswoole\Database\Query;
+namespace Viswoole\Database\Model;
 
 use InvalidArgumentException;
 use Override;
