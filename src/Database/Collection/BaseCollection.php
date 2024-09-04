@@ -19,7 +19,6 @@ use ArrayObject;
 use JsonSerializable;
 use Override;
 use Viswoole\Database\BaseQuery;
-use Viswoole\Database\Collection;
 use Viswoole\Database\Model\Query;
 
 
@@ -72,38 +71,15 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    */
   public function toArray(bool $withAttr = true, bool $hidden = true): array
   {
-    $array = [];
     $withAttrColumn = array_keys($this->withAttr);
-    // 将 $this->hidden 转换为关联数组以提高查找速度
-    $hiddenSet = array_flip($this->hidden);
+    $array = [];
     foreach ($this as $key => $value) {
-      if ($value instanceof DataSet) {
+      if ($value instanceof BaseCollection) {
         $value = $value->toArray($withAttr, $hidden);
-        // 应用隐藏器
-        if ($hidden) {
-          $value = array_filter($value, function ($v, $column) use ($hiddenSet) {
-            return !isset($hiddenSet[$column]);
-          }, ARRAY_FILTER_USE_BOTH);
-        }
-        // 应用获取器
-        if ($withAttr) {
-          if (!empty($withAttrColumn) || $this->query instanceof Query) {
-            array_walk($value, function (&$v, $k) use ($withAttrColumn, $value) {
-              if (in_array($k, $withAttrColumn)) {
-                $v = $this->withAttr[$k]($v);
-              } elseif ($this->query instanceof Query) {
-                $v = $this->query->withGetAttr($k, $v);
-              }
-            });
-          }
-        }
-      } elseif ($value instanceof Collection) {
-        $value = $value->toArray();
-      } elseif ($hidden && isset($hiddenSet[$key])) {
-        continue;
-      } elseif ($withAttr) {
-        // 应用集合获取器
-        if (isset($this->withAttr[$key])) {
+      }
+      if (is_array($value)) $this->removeHiddenKeys($value, $this->hidden);
+      if (is_string($key)) {
+        if (in_array($key, $withAttrColumn)) {
           $value = $this->withAttr[$key]($value);
         } elseif ($this->query instanceof Query) {
           $value = $this->query->withGetAttr($key, $value);
@@ -112,6 +88,27 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
       $array[$key] = $value;
     }
     return $array;
+  }
+
+  /**
+   * 删除隐藏字段
+   *
+   * @param $data
+   * @param array $hidden
+   * @param string $parentKey
+   * @return void
+   */
+  private function removeHiddenKeys(&$data, array $hidden, string $parentKey = ''): void
+  {
+    foreach ($data as $key => &$value) {
+      $currentKey = $parentKey ? $parentKey . '.' . $key : $key;
+      // 检查当前键是否在需要隐藏的列表中
+      if (in_array($currentKey, $hidden)) {
+        unset($data[$key]); // 删除该键
+      } elseif (is_array($value)) { // 如果值还是数组，则递归处理
+        $this->removeHiddenKeys($value, $hidden, $currentKey);
+      }
+    }
   }
 
   /**
@@ -141,12 +138,22 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   /**
    * 要隐藏的字段
    *
+   * 示例：
+   * ```
+   * // 该方法对多行数据集和单行数据集都有效
+   * $collection = $query->table('user')->select();
+   * // 隐藏所有数据的password字段
+   * $collection->hidden('password');
+   * // 隐藏所有数据的address.city字段，用.可以嵌套层级
+   * $collection->hidden('address.city');
+   * ```
+   *
    * @param string ...$column
    * @return static
    */
   public function hidden(string ...$column): static
   {
-    $this->hidden = $column;
+    $this->hidden = array_merge($this->hidden, $column);
     return $this;
   }
 
