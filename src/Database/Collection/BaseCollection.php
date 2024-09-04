@@ -18,8 +18,9 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use JsonSerializable;
 use Override;
-use Viswoole\Database\Model\ModelQuery;
-use Viswoole\Database\Query;
+use Viswoole\Database\BaseQuery;
+use Viswoole\Database\Collection;
+use Viswoole\Database\Model\Query;
 
 
 /**
@@ -38,16 +39,16 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   protected array $hidden = [];
 
   /**
-   * @param Query $query 查询对象
+   * @param BaseQuery $query 查询对象
    * @param array $data 查询结果
    */
   public function __construct(
-    protected Query $query,
-    array           $data
+    protected BaseQuery $query,
+    array               $data
   )
   {
     // 同步隐藏字段
-    if ($this->query instanceof ModelQuery) {
+    if ($this->query instanceof Query) {
       $this->hidden = array_merge($this->hidden, $this->query->getHiddenColumn());
     }
     parent::__construct($data, $this->flags);
@@ -86,23 +87,25 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
         }
         // 应用获取器
         if ($withAttr) {
-          if (!empty($withAttrColumn) || $this->query instanceof ModelQuery) {
+          if (!empty($withAttrColumn) || $this->query instanceof Query) {
             array_walk($value, function (&$v, $k) use ($withAttrColumn, $value) {
               if (in_array($k, $withAttrColumn)) {
                 $v = $this->withAttr[$k]($v);
-              } elseif ($this->query instanceof ModelQuery) {
+              } elseif ($this->query instanceof Query) {
                 $v = $this->query->withGetAttr($k, $v);
               }
             });
           }
         }
+      } elseif ($value instanceof Collection) {
+        $value = $value->toArray();
       } elseif ($hidden && isset($hiddenSet[$key])) {
         continue;
       } elseif ($withAttr) {
         // 应用集合获取器
         if (isset($this->withAttr[$key])) {
           $value = $this->withAttr[$key]($value);
-        } elseif ($this->query instanceof ModelQuery) {
+        } elseif ($this->query instanceof Query) {
           $value = $this->query->withGetAttr($key, $value);
         }
       }

@@ -29,16 +29,16 @@ class Collection extends BaseCollection
   /**
    * 数据集列表
    *
-   * @param Query $query 查询对象
+   * @param BaseQuery $query 查询对象
    * @param array $data 查询结果
    */
-  public function __construct(protected Query $query, array $data)
+  public function __construct(protected BaseQuery $query, array $data)
   {
     /**
      * 遍历数据集，将每个元素转换为Row对象
      */
     array_walk($data, function (&$item) {
-      $item = is_array($item) ? new DataSet(clone $this->query, $item) : $item;
+      $item = is_array($item) ? new DataSet($this->query->newQuery(), $item) : $item;
     });
     parent::__construct($query, $data);
   }

@@ -24,7 +24,7 @@ use Viswoole\Database\Query\Where;
 /**
  * 查询构造器
  */
-class Query
+class BaseQuery
 {
   use Where, Join, Crud;
 
@@ -51,6 +51,16 @@ class Query
   )
   {
     $this->options = new Options($table, $pk);
+  }
+
+  /**
+   * 克隆重置属性
+   *
+   * @return void
+   */
+  public function __clone(): void
+  {
+    $this->options = clone $this->options;
   }
 
   /**
@@ -156,9 +166,9 @@ class Query
    * @access public
    * @param int $page 页码
    * @param int $pageSize 每页数量
-   * @return Query
+   * @return BaseQuery
    */
-  public function page(int $page, int $pageSize): Query
+  public function page(int $page, int $pageSize): BaseQuery
   {
     if ($page < 1) $page = 1;
     $offset = ($page - 1) * $pageSize;
@@ -392,7 +402,7 @@ class Query
    * @access public
    * @return $this 返回一个全新的查询实例
    */
-  protected function newQuery(): static
+  public function newQuery(): static
   {
     return new static($this->channel, $this->options->table, $this->options->pk);
   }

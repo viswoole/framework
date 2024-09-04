@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Database\Query;
 
 use InvalidArgumentException;
-use Viswoole\Database\Query;
+use Viswoole\Database\BaseQuery;
 use Viswoole\Database\Raw;
 
 /**
@@ -70,7 +70,7 @@ class WhereGroup
           throw new InvalidArgumentException("无效的查询条件 index：$key");
         }
         $operator = $item[1];
-        if (!in_array($operator, Query::OPERATORS)) {
+        if (!in_array($operator, BaseQuery::OPERATORS)) {
           throw new InvalidArgumentException("无效的查询条件运算符 index：$key");
         }
         $where = [

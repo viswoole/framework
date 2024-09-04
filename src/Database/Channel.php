@@ -31,11 +31,11 @@ abstract class Channel
    *
    * @param string $table 表
    * @param string $pk 表主键名称
-   * @return Query
+   * @return BaseQuery
    */
-  public function table(string $table, string $pk = 'id'): Query
+  public function table(string $table, string $pk = 'id'): BaseQuery
   {
-    return new Query($this, $table, $pk);
+    return new BaseQuery($this, $table, $pk);
   }
 
   /**

@@ -17,7 +17,7 @@ namespace Viswoole\Database;
 
 use Generator;
 use Viswoole\Database\Collection\DataSet;
-use Viswoole\Database\Model\ModelQuery;
+use Viswoole\Database\Model\Query;
 use Viswoole\Database\Model\RelationQuery;
 use Viswoole\Database\Query\RunInfo;
 
@@ -28,52 +28,52 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Raw|int delete(bool $real = false) 删除记录
  * @method static Raw|int restore(array|string|int|null $id = null) 恢复软删除的数据
  * @method static array getHiddenColumn() 获取隐藏字段
- * @method static ModelQuery withTrashed(bool $withTrashed = true) 查询结果中包含软删除的数据
- * @method static ModelQuery groupBy(array|string $columns) 对结果进行分组
+ * @method static Query withTrashed(bool $withTrashed = true) 查询结果中包含软删除的数据
+ * @method static Query groupBy(array|string $columns) 对结果进行分组
  * @method static null|RunInfo getLastQuery() 获取最后一次查询
- * @method static ModelQuery having(string $column, string $operator, mixed $value, string $connector = 'AND') 添加 HAVING 子句到分组查询。
- * @method static ModelQuery orderBy(Raw|array|string $column, string $direction = 'asc') 对结果进行排序。
+ * @method static Query having(string $column, string $operator, mixed $value, string $connector = 'AND') 添加 HAVING 子句到分组查询。
+ * @method static Query orderBy(Raw|array|string $column, string $direction = 'asc') 对结果进行排序。
  * @method static Query page(int $page, int $pageSize) 分页查询
- * @method static ModelQuery limit(int $limit) 限制返回的结果数量。
- * @method static ModelQuery offset(int $offset) 设置结果的偏移量。
- * @method static ModelQuery union(Raw|string $query, string $type = 'UNION') 合并另一个查询结果。
- * @method static ModelQuery distinct(bool $flag = true) 设置查询结果是否返回唯一记录。
- * @method static ModelQuery force(string $index) 强制索引
- * @method static ModelQuery alias(string $alias) 表别名
- * @method static ModelQuery reset() 重置查询选项。
- * @method static ModelQuery columns(string $column) 选择要查询的列。
+ * @method static Query limit(int $limit) 限制返回的结果数量。
+ * @method static Query offset(int $offset) 设置结果的偏移量。
+ * @method static Query union(Raw|string $query, string $type = 'UNION') 合并另一个查询结果。
+ * @method static Query distinct(bool $flag = true) 设置查询结果是否返回唯一记录。
+ * @method static Query force(string $index) 强制索引
+ * @method static Query alias(string $alias) 表别名
+ * @method static Query reset() 重置查询选项。
+ * @method static Query columns(string $column) 选择要查询的列。
  * @method static string getPrimaryKey() 获取主键字段名
  * @method static string getTableName() 获取表名。
- * @method static ModelQuery with(array|string $relation) 关联查询。
- * @method static ModelQuery withoutColumns(string $column) 排除字段
- * @method static ModelQuery cache(string $key, int $expiry = 0, null|string $tag = null) 自动写入缓存
- * @method static ModelQuery lockForUpdate() 锁定记录以进行更新。
- * @method static ModelQuery sharedLock() 共享锁定记录。
- * @method static ModelQuery toRaw() 返回Raw对象，不执行查询
- * @method static ModelQuery replace(bool $flag = true) 强制写入
- * @method static ModelQuery orWhere(string $column, array|string|int|float $operator, array|string|int|float|null $value = null) OR 查询条件
- * @method static ModelQuery where(string $column, array|string|int|float $operator, array|string|int|float|null $value = null, string $connector = 'AND') 查询条件
- * @method static ModelQuery wheres(array $wheres) 用数组批量设置查询条件
- * @method static ModelQuery andWhere(string $column, array|string|int|float $operator, array|string|int|float|null $value = null) 查询条件（AND）
- * @method static ModelQuery whereIn(string $column, array $value, string $connector = 'AND') 查询条件（IN）
- * @method static ModelQuery whereNotIn(string $column, array $value, string $connector = 'AND') 查询条件（NOT IN）
- * @method static ModelQuery whereNull(string $column, string $connector = 'AND') 查询条件（IS NULL）
- * @method static ModelQuery whereNotNull(string $column, string $connector = 'AND') 查询条件（IS NOT NULL）
- * @method static ModelQuery whereNotBetween(string $column, array $value, string $connector = 'AND') 查询条件（NOT BETWEEN）
- * @method static ModelQuery whereBetween(string $column, array $value, string $connector = 'AND') 查询条件（BETWEEN）
- * @method static ModelQuery whereGroup(array $wheres, string $connector = 'AND') 查询条件组，支持嵌套
- * @method static ModelQuery whereExists(string $sql, array $bindings = []) 查询条件（EXISTS）
- * @method static ModelQuery whereRaw(string $sql, array $bindings = []) 原生 where 查询sql
- * @method static ModelQuery whereNotExists(string $sql, array $bindings = []) 查询条件（NOT EXISTS）
- * @method static ModelQuery LeftJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（LEFT）
- * @method static ModelQuery join(string $table, string $localKey, string $operator, string $foreignKey, string $type = 'INNER') 关联查询
- * @method static ModelQuery rightJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（RIGHT）
- * @method static ModelQuery fullJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（FULL）
+ * @method static Query with(array|string $relation) 关联查询。
+ * @method static Query withoutColumns(string $column) 排除字段
+ * @method static Query cache(string $key, int $expiry = 0, null|string $tag = null) 自动写入缓存
+ * @method static Query lockForUpdate() 锁定记录以进行更新。
+ * @method static Query sharedLock() 共享锁定记录。
+ * @method static Query toRaw() 返回Raw对象，不执行查询
+ * @method static Query replace(bool $flag = true) 强制写入
+ * @method static Query orWhere(string $column, array|string|int|float $operator, array|string|int|float|null $value = null) OR 查询条件
+ * @method static Query where(string $column, array|string|int|float $operator, array|string|int|float|null $value = null, string $connector = 'AND') 查询条件
+ * @method static Query wheres(array $wheres) 用数组批量设置查询条件
+ * @method static Query andWhere(string $column, array|string|int|float $operator, array|string|int|float|null $value = null) 查询条件（AND）
+ * @method static Query whereIn(string $column, array $value, string $connector = 'AND') 查询条件（IN）
+ * @method static Query whereNotIn(string $column, array $value, string $connector = 'AND') 查询条件（NOT IN）
+ * @method static Query whereNull(string $column, string $connector = 'AND') 查询条件（IS NULL）
+ * @method static Query whereNotNull(string $column, string $connector = 'AND') 查询条件（IS NOT NULL）
+ * @method static Query whereNotBetween(string $column, array $value, string $connector = 'AND') 查询条件（NOT BETWEEN）
+ * @method static Query whereBetween(string $column, array $value, string $connector = 'AND') 查询条件（BETWEEN）
+ * @method static Query whereGroup(array $wheres, string $connector = 'AND') 查询条件组，支持嵌套
+ * @method static Query whereExists(string $sql, array $bindings = []) 查询条件（EXISTS）
+ * @method static Query whereRaw(string $sql, array $bindings = []) 原生 where 查询sql
+ * @method static Query whereNotExists(string $sql, array $bindings = []) 查询条件（NOT EXISTS）
+ * @method static Query LeftJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（LEFT）
+ * @method static Query join(string $table, string $localKey, string $operator, string $foreignKey, string $type = 'INNER') 关联查询
+ * @method static Query rightJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（RIGHT）
+ * @method static Query fullJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（FULL）
  * @method static Raw|int insert(array $data) 插入数据
  * @method static Raw|string|int insertGetId(array $data) 插入数据，返回主键值
  * @method static Raw|int update(array $data) 更新记录
  * @method static Raw|int count(string $column = '*') 计算指定列不能为null的记录总数
- * @method static mixed value(string $column) 返回某个字段的值
+ * @method static mixed value(string $column) 返回某个字段的值，未查询到数据返回false
  * @method static Raw|string|int|float min(string $column) 获取最小值。
  * @method static Raw|string|int|float max(string $column) 获取最大值。
  * @method static Raw|int|float avg(string $column) 获取平均值。
@@ -82,13 +82,14 @@ use Viswoole\Database\Query\RunInfo;
  * @method static DataSet|Raw first(bool $allowEmpty = true) 查询单条记录
  * @method static Collection|Raw select(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static Collection|Raw get(bool $allowEmpty = true) 执行查询，并返回查询结果
+ * @method static array|Raw getArray() 执行查询，并以数组方式返回查询结果
  * @method static Generator cursor() 游标查询
  * @method static Generator chunk(int $size) 分段查询
  */
 abstract class Model
 {
-  /** @var ModelQuery 模型查询实例 */
-  public readonly ModelQuery $query;
+  /** @var Query 模型查询实例 */
+  public readonly Query $query;
   /** @var array 隐藏字段，不对外暴露 */
   protected array $hidden = [];
   /** @var bool 是否启用软删除 */
@@ -139,11 +140,11 @@ abstract class Model
    *
    * 如果需要重写构造器中的方法，可以重写该方法，并返回你自定义的构造器。
    *
-   * @return ModelQuery
+   * @return Query
    */
-  protected function createQuery(): ModelQuery
+  protected function createQuery(): Query
   {
-    return new ModelQuery($this);
+    return new Query($this);
   }
 
   /**
@@ -184,9 +185,9 @@ abstract class Model
    * self::select();
    * ```
    *
-   * @return ModelQuery
+   * @return Query
    */
-  public function query(): ModelQuery
+  public function query(): Query
   {
     return $this->query;
   }
@@ -221,72 +222,56 @@ abstract class Model
   /**
    * 1对1关联
    *
-   * @param string $relateModel 要关联的模型
-   * @param string $foreignKey 关联模型外键（为空时为当前模型表名+_id）
-   * @param string $localKey 当前模型主键（为空时为当前模型$pk属性）
+   * @param Model|string $relationModel 要关联的模型实例，或类名
+   * @param string|null $foreignKey 当前模型在关联模型中的关联外键（为空时为当前模型表名+当前模型主键）
+   * @param string|null $localKey 当前模型主键（为空时为当前模型$pk属性）
    * @return RelationQuery
    */
-  public function hasOne(
-    string $relateModel,
-    string $foreignKey = '',
-    string $localKey = '',
+  protected function hasOne(
+    Model|string $relationModel,
+    string       $foreignKey = null,
+    string       $localKey = null,
   ): RelationQuery
   {
-    if (empty($foreignKey)) $foreignKey = $this->table . '_id';
-    if (empty($localKey)) $localKey = $this->pk;
-    return new RelationQuery($relateModel, $foreignKey, $localKey);
+    return $this->_relation($relationModel, $foreignKey, $localKey, false);
   }
 
   /**
-   * 1对N关联
+   * 关联模型
    *
-   * @param string $relateModel 要关联的模型
-   * @param string $foreignKey 关联模型外键（为空时为当前模型表名+_id）
-   * @param string $localKey 当前模型主键（为空时为当前模型$pk属性）
+   * @param Model|string $relationModel
+   * @param string|null $foreignKey
+   * @param string|null $localKey
+   * @param bool $many
    * @return RelationQuery
    */
-  public function hasMany(
-    string $relateModel,
-    string $foreignKey = '',
-    string $localKey = '',
+  private function _relation(
+    Model|string $relationModel,
+    string       $foreignKey = null,
+    string       $localKey = null,
+    bool         $many = false
   ): RelationQuery
   {
-    if (empty($foreignKey)) $foreignKey = $this->table . '_id';
     if (empty($localKey)) $localKey = $this->pk;
-    return new RelationQuery($relateModel, $foreignKey, $localKey, null, true);
+    if (empty($foreignKey)) $foreignKey = $this->table . '_' . $localKey;
+    if (is_string($relationModel)) $relationModel = new $relationModel;
+    return new RelationQuery($relationModel, $foreignKey, $localKey, $many);
   }
 
   /**
-   * 多对多关联
+   * 1对多关联
    *
-   * 场景示例：
-   * ```
-   * // 假设我们有一个用户表和角色表，用户同时拥有多个角色，则可以使用中间表。
-   * // 配置中间表模型为UserRolesModel，关联模型为RolesModel，外键为role_id，主键为user_id。
-   * // 在UserModel定义如下方法
-   * public function roles(){
-   *   $this->belongsToMany(RolesModel::class,UserRolesModel::class,'role_id','user_id');
-   * }
-   * // 通过这样配置过后在查询时即可自动查询出用户所具有的角色
-   * $user = UserModel::with(['roles'])->find(1);
-   * dump($user->roles); // 这里会输出一个Collection对象,里面包含了该用户所拥有的所有角色
-   * ```
-   *
-   * @param string $relateModel 关联模型
-   * @param string $pivotModel 中间表模型
-   * @param string $foreignKey 关联模型表在pivot模型中的外键，为空时为关联模型表名+_id
-   * @param string $localKey 当前模型在pivot模型中的外键，为空时为当前模型表名+_id
+   * @param Model|string $relationModel 要关联的模型实例，，或类名
+   * @param string|null $foreignKey 当前模型在关联模型中的关联外键（为空时为当前模型表名+当前模型主键）
+   * @param string|null $localKey 当前模型主键（为空时为当前模型$pk属性）
    * @return RelationQuery
    */
-  public function belongsToMany(
-    string $relateModel,
-    string $pivotModel,
-    string $foreignKey = '',
-    string $localKey = '',
+  protected function hasMany(
+    Model|string $relationModel,
+    string       $foreignKey = null,
+    string       $localKey = null,
   ): RelationQuery
   {
-    if (empty($foreignKey)) $foreignKey = call_user_func("$relateModel::getTableName") . '_id';
-    if (empty($localKey)) $localKey = $this->table . '_id';
-    return new RelationQuery($relateModel, $foreignKey, $localKey, $pivotModel, true);
+    return $this->_relation($relationModel, $foreignKey, $localKey, true);
   }
 }

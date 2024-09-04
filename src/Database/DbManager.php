@@ -29,7 +29,7 @@ use Viswoole\Log\LogManager;
 /**
  * 数据库通道管理器
  *
- * @method Query table(string $table, string $pk = 'id') 选择要查询的表
+ * @method BaseQuery table(string $table, string $pk = 'id') 选择要查询的表
  * @method array query(string $sql, array $bindings = []) 原生查询 select
  * @method int|string execute(string $sql, array $bindings = []) 原生写入，包括 insert、update、delete
  * @method mixed pop(string $type) 获取可用的连接$type可选值为`read`|`write`

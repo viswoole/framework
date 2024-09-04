@@ -18,9 +18,9 @@ namespace Viswoole\Database\Facade;
 use Closure;
 use Override;
 use Viswoole\Core\Facade;
+use Viswoole\Database\BaseQuery;
 use Viswoole\Database\Channel;
 use Viswoole\Database\DbManager;
-use Viswoole\Database\Query;
 use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Raw;
 
@@ -34,7 +34,7 @@ use Viswoole\Database\Raw;
  * @method static void commit() 提交事务
  * @method static void rollBack() 回滚所有事务
  * @method static Raw raw(string $sql, array $bindings = []) 原生sql
- * @method static Query table(string $table, string $pk = 'id') 选择要查询的表
+ * @method static BaseQuery table(string $table, string $pk = 'id') 选择要查询的表
  * @method static array query(string $sql, array $bindings = []) 原生查询 select
  * @method static int|string execute(string $sql, array $bindings = []) 原生写入，包括 insert、update、delete
  * @method static mixed pop(string $type) 获取可用的连接$type可选值为`read`|`write`
