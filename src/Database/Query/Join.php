@@ -53,16 +53,16 @@ trait Join
    *
    * @param string $table 要关联的表
    * @param string $localKey 主键
-   * @param string $operator 关联条件运算符表达式
    * @param string $foreignKey 外键
+   * @param string $operator 关联条件运算符表达式，默认为等号
    * @param string $type ['INNER', 'LEFT', 'RIGHT', 'FULL']，不区分大小写
    * @return static
    */
   public function join(
     string $table,
     string $localKey,
-    string $operator,
     string $foreignKey,
+    string $operator = '=',
     string $type = 'INNER'
   ): static
   {
@@ -86,19 +86,19 @@ trait Join
    *
    * @param string $table 要关联的表
    * @param string $localKey 主键
-   * @param string $operator 关联条件运算符表达式
    * @param string $foreignKey 外键
+   * @param string $operator 关联条件运算符表达式，默认为等号
    * @return static
    * @see self::join()
    */
   public function rightJoin(
     string $table,
     string $localKey,
-    string $operator,
-    string $foreignKey
+    string $foreignKey,
+    string $operator = '='
   ): static
   {
-    return $this->join($table, $localKey, $operator, $foreignKey, 'RIGHT');
+    return $this->join($table, $localKey, $foreignKey, $operator, 'RIGHT');
   }
 
   /**
@@ -106,18 +106,18 @@ trait Join
    *
    * @param string $table 要关联的表
    * @param string $localKey 主键
-   * @param string $operator 关联条件运算符表达式
    * @param string $foreignKey 外键
+   * @param string $operator 关联条件运算符表达式，默认为等号
    * @return static
    * @see self::join()
    */
   public function fullJoin(
     string $table,
     string $localKey,
-    string $operator,
-    string $foreignKey
+    string $foreignKey,
+    string $operator = '='
   ): static
   {
-    return $this->join($table, $localKey, $operator, $foreignKey, 'FULL');
+    return $this->join($table, $localKey, $foreignKey, $operator, 'FULL');
   }
 }

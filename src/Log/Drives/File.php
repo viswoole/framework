@@ -188,7 +188,7 @@ class File extends Drive
     $logDir = rtrim($this->log_dir, '/');
     $logDir .= "/$date/$level";
     // 创建目录（如果不存在）
-    if (!is_dir($logDir)) mkdir($logDir, 0755, true);
+    if (!is_dir($logDir)) @mkdir($logDir, 0755, true);
     return $logDir;
   }
 }
