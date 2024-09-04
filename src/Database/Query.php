@@ -268,8 +268,8 @@ class Query
    */
   public function columns(string...$column): static
   {
-    $columns = [];
     if (!empty($column)) {
+      $columns = [];
       foreach ($column as $value) {
         if (str_contains($value, ' as ')) {
           $value = explode(' as ', $value);
@@ -281,8 +281,8 @@ class Query
           $columns[$value] = null;
         }
       }
+      $this->options->columns = array_merge($this->options->columns, $columns);
     }
-    $this->options->columns = array_merge($this->options->columns, $columns);
     return $this;
   }
 
