@@ -84,6 +84,9 @@ trait Where
       $value = $operator;
       $operator = is_array($operator) ? 'IN' : '=';
     }
+    if (is_array($value)) {
+      if (empty($value)) throw new InvalidArgumentException("$operator 条件值不能是空数组");
+    }
     $connector = strtoupper($connector);
     if (!in_array($connector, ['AND', 'OR'])) {
       throw new InvalidArgumentException('无效的条件连接符，仅只支持AND和OR');
@@ -150,6 +153,7 @@ trait Where
     string $connector = 'AND'
   ): static
   {
+    if (empty($value)) throw new InvalidArgumentException('IN条件值不能是空数组');
     return $this->where($column, 'IN', $value, $connector);
   }
 
@@ -168,6 +172,7 @@ trait Where
     string $connector = 'AND'
   ): static
   {
+    if (empty($value)) throw new InvalidArgumentException('NOT IN条件值不能是空数组');
     return $this->where($column, 'NOT IN', $value, $connector);
   }
 
@@ -218,6 +223,7 @@ trait Where
     string $connector = 'AND'
   ): static
   {
+    if (empty($value)) throw new InvalidArgumentException('NOT BETWEEN条件值不能是空数组');
     return $this->where($column, 'NOT BETWEEN', $value, $connector);
   }
 
@@ -236,6 +242,7 @@ trait Where
     string $connector = 'AND'
   ): static
   {
+    if (empty($value)) throw new InvalidArgumentException('BETWEEN条件值不能是空数组');
     return $this->where($column, 'BETWEEN', $value, $connector);
   }
 

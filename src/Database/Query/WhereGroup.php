@@ -59,13 +59,13 @@ class WhereGroup
     $newWheres = [];
     foreach ($wheres as $key => $item) {
       if (is_string($key)) {
-        $newWheres[] = [
+        $where = [
           'column' => $key,
           'operator' => is_array($item) ? 'IN' : '=',
           'value' => $item,
           'connector' => 'AND'
         ];
-      } else if (is_int($key)) {
+      } else {
         if (!is_array($item) || count($item) < 3) {
           throw new InvalidArgumentException("无效的查询条件 index：$key");
         }
@@ -73,15 +73,18 @@ class WhereGroup
         if (!in_array($operator, Query::OPERATORS)) {
           throw new InvalidArgumentException("无效的查询条件运算符 index：$key");
         }
-        $newWheres[] = [
+        $where = [
           'column' => $item[0],
           'operator' => $operator,
           'value' => $item[2],
           'connector' => strtoupper($item[3] ?? 'AND')
         ];
-      } else {
-        $newWheres[] = $item;
       }
+      if (is_array($where['value']) && empty($where['value'])) {
+        $operator = $where['operator'];
+        throw new InvalidArgumentException("$operator 条件值不能是空数组");
+      }
+      $newWheres[] = $where;
     }
     return $newWheres;
   }
