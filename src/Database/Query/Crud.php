@@ -20,6 +20,7 @@ use InvalidArgumentException;
 use PDO;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
+use Throwable;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
@@ -70,20 +71,24 @@ trait Crud
   {
     $this->options->type = $type;
     $raw = $this->channel->build($this->options);
-    $start = microtime(true);
-    if ($this->options->toRaw) {
-      $result = $raw;
-    } else {
-      // 查询方法
-      if ($type === 'select') {
-        $result = $this->runSelect($raw);
+    try {
+      $start = microtime(true);
+      if ($this->options->toRaw) {
+        $result = $raw;
       } else {
-        $result = $this->runWrite($raw, $type === 'insertGetId');
+        // 查询方法
+        if ($type === 'select') {
+          $result = $this->runSelect($raw);
+        } else {
+          $result = $this->runWrite($raw, $type === 'insertGetId');
+        }
       }
+      $this->setRunInfo($start, $raw);
+      $this->reset();
+      return $result;
+    } catch (Throwable $e) {
+      throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
     }
-    $this->setRunInfo($start, $raw);
-    $this->reset();
-    return $result;
   }
 
   /**
@@ -406,20 +411,24 @@ trait Crud
     $this->options->type = 'select';
     // 打包SQL
     $raw = $this->channel->build($this->options);
-    /**
-     * @var PDOStatement $statement
-     */
-    $statement = $this->channel->execute($raw);
-    // 保存执行信息
-    $this->setRunInfo($start, $raw);
-    // 重置查询参数
-    $this->reset();
-    // 返回生成器
-    while ($result = $statement->fetch(PDO::FETCH_ASSOC)) {
-      yield new DataSet($this->newQuery(), $result);
+    try {
+      /**
+       * @var PDOStatement $statement
+       */
+      $statement = $this->channel->execute($raw);
+      // 保存执行信息
+      $this->setRunInfo($start, $raw);
+      // 重置查询参数
+      $this->reset();
+      // 返回生成器
+      while ($result = $statement->fetch(PDO::FETCH_ASSOC)) {
+        yield new DataSet($this->newQuery(), $result);
+      }
+      // 关闭PDOStatement
+      $statement->closeCursor();
+    } catch (Throwable $e) {
+      throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
     }
-    // 关闭PDOStatement
-    $statement->closeCursor();
   }
 
   /**
@@ -443,16 +452,20 @@ trait Crud
       $start = microtime(true);
       // 替换 OFFSET 的值
       $raw->sql = preg_replace('/OFFSET\s+\d+/', "OFFSET $offset", $raw->sql);
-      /**
-       * @var PDOStatement $statement
-       */
-      $statement = $this->channel->execute($raw);
-      $results = $statement->fetchAll(PDO::FETCH_ASSOC);
-      $statement->closeCursor();
-      $this->setRunInfo($start, $raw);
-      if (empty($results)) break;
-      yield new Collection($this->newQuery(), $results);
-      $offset += $size;
+      try {
+        /**
+         * @var PDOStatement $statement
+         */
+        $statement = $this->channel->execute($raw);
+        $results = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $statement->closeCursor();
+        $this->setRunInfo($start, $raw);
+        if (empty($results)) break;
+        yield new Collection($this->newQuery(), $results);
+        $offset += $size;
+      } catch (Throwable $e) {
+        throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
+      }
     }
     $this->reset();
   }
