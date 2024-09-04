@@ -130,7 +130,7 @@ class Output
   {
     $name = strtoupper($name);
     if (array_key_exists($name, self::LABEL_COLOR)) {
-      self::echo($arguments[0] ?? '', $name, backtrace: $arguments[1] ?? 1);
+      self::echo($arguments[0] ?? '', $name, backtrace: $arguments[1] ?? 2);
     } else {
       throw new Exception("Call to undefined method $name");
     }
