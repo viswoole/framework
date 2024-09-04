@@ -216,9 +216,9 @@ class Validate
     if (interface_exists($class)) {
       if ($app->has($class)) return $app->make($class, is_array($value) ? $value : [$value]);
     } else {
-      App::factory()->make($class, is_array($value) ? $value : [$value]);
+      $app->make($class, is_array($value) ? $value : [$value]);
       // 如果验证通过，则将值注入,得到新实例
-      return App::factory()->make($class, is_array($value) ? $value : [$value]);
+      return $app->make($class, is_array($value) ? $value : [$value]);
     }
     throw new ValidateException(
       "must be an instance of $class" . ' , ' . gettype($value) . ' given'
