@@ -47,6 +47,7 @@ class Event
    */
   public function __construct(private readonly App $app)
   {
+    $app->bind(Event::class, $this);
     $this->initListen();
   }
 
@@ -56,7 +57,7 @@ class Event
    */
   private function initListen(): void
   {
-    $listen = $this->app->config->get('listens', []);
+    $listen = $this->app->get('config')->get('listens', []);
     foreach ($listen as $event => $handle) {
       if (!empty($handle)) {
         foreach ($handle as $item) {

@@ -42,22 +42,31 @@ class Config
    */
   protected array $config = [];
 
+  /**
+   * @param App $app
+   */
   public function __construct(App $app)
   {
+    $app->bind(Config::class, $this);
     $this->path = $app->getConfigPath() . DIRECTORY_SEPARATOR;
     $this->ext = '*';
     $this->matchCase = true;
-    $this->load();
+    $this->load($this->path);
+    $app->event->on('AppInit', function () {
+      // 监听AppInit事件，在App初始化完成后 加载懒加载文件
+      $this->load($this->path . 'lazy' . DIRECTORY_SEPARATOR);
+    });
   }
 
   /**
    * 加载配置文件
+   * @param string $path
    * @return void
    */
-  private function load(): void
+  private function load(string $path): void
   {
     // 配置文件
-    $defaultConfigFiles = glob($this->path . '*.' . $this->ext);
+    $defaultConfigFiles = glob($path . '*.' . $this->ext);
     //如果出错了 则赋值为空数组
     if ($defaultConfigFiles === false) $defaultConfigFiles = [];
     $this->config = $this->parse($defaultConfigFiles);
@@ -89,7 +98,6 @@ class Config
     }
 
     if (!$this->matchCase) $configs = $this->recursiveArrayKeyToLower($configs);
-    $this->config = $configs;
     return $configs;
   }
 

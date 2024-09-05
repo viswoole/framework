@@ -82,6 +82,7 @@ class App extends Container
     self::$instance = $this;
     $this->bind(App::class, $this);
     $this->initialize();
+    $this->event->emit('AppInit');
   }
 
   /**
@@ -224,5 +225,13 @@ class App extends Container
   public function isDebug(): bool
   {
     return (bool)$this->_config->get('config')['debug'];
+  }
+
+  /**
+   *
+   */
+  public function __destruct()
+  {
+    $this->event->emit('AppDestroy');
   }
 }
