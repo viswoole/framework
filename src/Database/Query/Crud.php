@@ -46,10 +46,10 @@ trait Crud
    *    'age'=>18
    * ];
    * // 写入单条记录示例
-   * $result = \Viswoole\Database\Db::table('user')->insert($userInfo);
+   * $result = $query->insert($userInfo);
    * print_r('写入数据结果：'.$result>0?true:false);
    * // 写入多条记录示例
-   * $result = \Viswoole\Database\Db::table('user')->insert([$userInfo,$userInfo])
+   * $result = $query->insert([$userInfo,$userInfo])
    * print_r("成功创建数据：$result 条");
    * ```
    *
@@ -69,10 +69,10 @@ trait Crud
    */
   protected function runCrud(string $type): Raw|string|array|int
   {
+    $start = microtime(true);
     $this->options->type = $type;
     $raw = $this->channel->build($this->options);
     try {
-      $start = microtime(true);
       if ($this->options->toRaw) {
         $result = $raw;
       } else {
@@ -84,10 +84,11 @@ trait Crud
         }
       }
       $this->setRunInfo($start, $raw);
-      $this->reset();
       return $result;
     } catch (Throwable $e) {
       throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
+    } finally {
+      $this->reset();
     }
   }
 
@@ -99,20 +100,27 @@ trait Crud
    */
   protected function runSelect(Raw $raw): array
   {
+    $cacheStore = null;
     if ($this->options->cache) {
-      $result = Cache::store($this->options->cache['store'])->get($this->options->cache['key']);
+      $cacheStore = Cache::store($this->options->cache['store']);
+      if ($cacheStore->has($this->options->cache['key'])) {
+        return $cacheStore->get($this->options->cache['key']);
+      }
     }
     if (!isset($result)) {
       /**
        * @var PDOStatement $statement
        */
       $statement = $this->channel->execute($raw->sql, $raw->bindings);
+      // 获取查询结果
       $result = $statement->fetchAll(PDO::FETCH_ASSOC);
       $statement->closeCursor();
-      if ($this->options->cache) {
-        $cache = Cache::store($this->options->cache['store']);
-        if ($this->options->cache['tag']) $cache = $cache->tag($this->options->cache['tag']);
-        $cache->set($this->options->cache['key'], $result, $this->options->cache['expire']);
+      if ($cacheStore) {
+        if ($this->options->cache['tag']) {
+          $cacheStore = $cacheStore->tag($this->options->cache['tag']);
+        }
+        // 写入缓存
+        $cacheStore->set($this->options->cache['key'], $result, $this->options->cache['expire']);
       }
     }
     return $result;
