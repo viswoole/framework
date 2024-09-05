@@ -32,6 +32,9 @@ class RouterManager
    */
   protected array $serverRouteCollector = [];
 
+  /**
+   * @param App $app
+   */
   public function __construct(protected readonly App $app)
   {
     // 因为在实例化期间存在从外部获取本来实例，所以需要在此绑定实例到容器中
@@ -79,7 +82,7 @@ class RouterManager
         // 如果不存在路由注解则跳过
         if (empty($classAttributes)) continue;
       }
-      /** @var $controller RouteController|AutoRouteController 控制器路由注解实例 */
+      /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
       // 如果指定了服务，且服务名称非当前正在运行的服务，则跳过解析
 //      if ($controller->server !== null && $controller->server !== SERVER_NAME) {
@@ -126,7 +129,7 @@ class RouterManager
           $group->addItem($routeItem);
         } elseif (isset($methodAttributes[0])) {
           // 处理设置了路由注解的方法
-          /** @var $methodAnnotationRoute RouteMapping 注解路由 */
+          /** @var RouteMapping $methodAnnotationRoute 注解路由 */
           $methodAnnotationRoute = $methodAttributes[0]->newInstance();
           // 设置描述
           if (!isset($methodAnnotationRoute->options['describe'])) {
