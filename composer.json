@@ -1,12 +1,13 @@
 {
   "name": "viswoole/framework",
-  "description": "这是viswoole的依赖库",
+  "description": "这是viswoole的核心依赖库",
   "keywords": [
     "framework",
     "viswoole"
   ],
   "minimum-stability": "dev",
   "license": "Apache-2.0",
+  "type": "library",
   "authors": [
     {
       "name": "zhuchonglin",
