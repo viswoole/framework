@@ -67,7 +67,7 @@ class RouterManager
     $rootPath = $this->app->getRootPath() . DIRECTORY_SEPARATOR;
     $directory = $rootPath . 'app/Controller';
     //列出指定路径中的文件和目录
-    $controllers = getAllPhpFiles($directory);
+    $controllers = $this->getAllPhpFiles($directory);
     foreach ($controllers as $controller) {
       [$fullClass, $className] = $this->getNamespace($controller, $rootPath);
       if (class_exists($fullClass)) {
@@ -145,6 +145,40 @@ class RouterManager
         }
       }
     }
+  }
+
+  /**
+   * 获取所有php文件
+   *
+   * @param string $dir
+   * @return array
+   */
+  private function getAllPhpFiles(string $dir): array
+  {
+    $phpFiles = [];
+    // 打开目录
+    if ($handle = opendir($dir)) {
+      $dir = rtrim($dir, DIRECTORY_SEPARATOR);
+      // 逐个检查目录中的条目
+      while (false !== ($entry = readdir($handle))) {
+        if ($entry != '.' && $entry != '..') {
+          $path = $dir . '/' . $entry;
+
+          // 如果是目录，递归调用该函数
+          if (is_dir($path)) {
+            $phpFiles = array_merge($phpFiles, $this->getAllPhpFiles($path));
+          } elseif (pathinfo($path, PATHINFO_EXTENSION) == 'php') {
+            // 如果是.php文件，添加到结果数组中
+            $phpFiles[] = $path;
+          }
+        }
+      }
+
+      // 关闭目录句柄
+      closedir($handle);
+    }
+
+    return $phpFiles;
   }
 
   /**
