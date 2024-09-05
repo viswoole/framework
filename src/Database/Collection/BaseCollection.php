@@ -38,12 +38,12 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   protected array $hidden = [];
 
   /**
-   * @param BaseQuery $query 查询对象
+   * @param BaseQuery|Query $query 查询对象
    * @param array $data 查询结果
    */
   public function __construct(
-    protected BaseQuery $query,
-    array               $data
+    protected BaseQuery|Query $query,
+    array                     $data
   )
   {
     // 同步隐藏字段

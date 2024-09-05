@@ -20,6 +20,7 @@ use Override;
 use RuntimeException;
 use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Model\Query;
 
 /**
  * 数据集合，可通过数组方式访问
@@ -32,7 +33,7 @@ class Collection extends BaseCollection
    * @param BaseQuery $query 查询对象
    * @param array $data 查询结果
    */
-  public function __construct(protected BaseQuery $query, array $data)
+  public function __construct(protected BaseQuery|Query $query, array $data)
   {
     /**
      * 遍历数据集，将每个元素转换为Row对象
