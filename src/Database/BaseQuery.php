@@ -349,7 +349,7 @@ class BaseQuery
    * 自动写入缓存
    *
    * @param string $key 缓存标识
-   * @param int $expiry 缓存有效时间 默认0 永久有效
+   * @param int $expire 缓存有效期
    * @param string|null $tag 缓存标签
    * @param string|null $store 缓存商店
    * @return static
