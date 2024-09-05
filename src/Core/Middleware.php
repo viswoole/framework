@@ -19,6 +19,9 @@ use Closure;
 use InvalidArgumentException;
 use Viswoole\Core\Contract\MiddlewareInterface;
 
+/**
+ * 中间件管理器
+ */
 class Middleware
 {
   /**
@@ -27,6 +30,9 @@ class Middleware
    */
   protected array $queue = [];
 
+  /**
+   * @param App $app
+   */
   public function __construct(private readonly App $app)
   {
     $this->app->bind(static::class, $this);
@@ -106,7 +112,7 @@ class Middleware
       array_reverse($middlewares),
       function (Closure $carry, $middleware) {
         return function () use ($middleware, $carry) {
-          return App::factory()->invoke($middleware, ['handler' => $carry]);
+          return $this->app->invoke($middleware, ['handler' => $carry]);
         };
       },
       $handler
