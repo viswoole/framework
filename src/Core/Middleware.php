@@ -36,12 +36,6 @@ class Middleware
   public function __construct(private readonly App $app)
   {
     $this->app->bind(static::class, $this);
-    $path = $this->app->getAppPath()
-      . DIRECTORY_SEPARATOR
-      . 'config'
-      . DIRECTORY_SEPARATOR
-      . 'middleware.php';
-    if (file_exists($path)) require_once $path;
   }
 
   /**
