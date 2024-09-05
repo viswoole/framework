@@ -14,6 +14,7 @@
 declare (strict_types=1);
 
 use Viswoole\Core\App;
+use Viswoole\Core\Config;
 use Viswoole\Core\Console\Output;
 use Viswoole\Core\Exception\NotFoundException;
 
@@ -63,7 +64,7 @@ if (!function_exists('app')) {
    * 获取服务或容器
    *
    * @param string|null $name 标识或接口,不传返回容器实例
-   * @return mixed
+   * @return mixed|App
    * @throws NotFoundException
    */
   function app(?string $name = null): mixed
@@ -90,10 +91,11 @@ if (!function_exists('env')) {
    * @param string|null $key 环境变量名（支持二级 .号分割）
    * @param mixed|null $default 默认值
    * @return mixed
+   * @see \Viswoole\Core\Env::get()
    */
   function env(?string $key, mixed $default = null): mixed
   {
-    return App::factory()->env->get($key, $default);
+    return App::factory()->get('env')->get($key, $default);
   }
 }
 if (!function_exists('app_debug')) {
@@ -112,12 +114,17 @@ if (!function_exists('config')) {
    * 获取配置
    *
    * @param string|null $name 配置名（支持二级 .号分割）
-   * @param mixed|null $default 默认值
+   * @param mixed $default 默认值
    * @return mixed
+   * @see Config::get()
    */
   function config(string $name = null, mixed $default = null): mixed
   {
-    return App::factory()->config->get($name, $default);
+    /**
+     * @var Config $config
+     */
+    $config = App::factory()->get('config');
+    return $config->get($name, $default);
   }
 }
 if (!function_exists('dump')) {
@@ -159,40 +166,5 @@ if (!function_exists('echo_log')) {
   ): void
   {
     Output::echo($message, $label, $color, $backtrace === 0 ? 0 : 2);
-  }
-}
-if (!function_exists('getAllPhpFiles')) {
-  /**
-   * 获取目录下所有PHP文件(包括子目录)
-   * @param string $dir
-   * @return array
-   */
-  function getAllPhpFiles(string $dir): array
-  {
-    $phpFiles = [];
-
-    // 打开目录
-    if ($handle = opendir($dir)) {
-      $dir = rtrim($dir, DIRECTORY_SEPARATOR);
-      // 逐个检查目录中的条目
-      while (false !== ($entry = readdir($handle))) {
-        if ($entry != '.' && $entry != '..') {
-          $path = $dir . '/' . $entry;
-
-          // 如果是目录，递归调用该函数
-          if (is_dir($path)) {
-            $phpFiles = array_merge($phpFiles, getAllPhpFiles($path));
-          } elseif (pathinfo($path, PATHINFO_EXTENSION) == 'php') {
-            // 如果是.php文件，添加到结果数组中
-            $phpFiles[] = $path;
-          }
-        }
-      }
-
-      // 关闭目录句柄
-      closedir($handle);
-    }
-
-    return $phpFiles;
   }
 }
