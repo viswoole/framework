@@ -265,7 +265,7 @@ class Collection extends BaseCollection
       if (!is_array($value)) {
         throw new InvalidArgumentException('Value must be an array or Row object.');
       }
-      parent::append(new DataSet($this->query, $value));
+      parent::append(new DataSet($this->query->newQuery(), $value));
     }
   }
 
@@ -336,7 +336,7 @@ class Collection extends BaseCollection
   {
     $pk = $this->query->getPrimaryKey();
     $pkList = $this->getPks($pk);
-    $result = $this->query->whereIn($pk, $pkList)->update($data);
+    $result = $this->query->strict(false)->whereIn($pk, $pkList)->update($data);
     if ($result) {
       // 更新每一行数据
       $this->each(function (DataSet $row) use ($data) {
@@ -419,5 +419,23 @@ class Collection extends BaseCollection
       $chunk = $this->cloneSelf($chunk);
     });
     return $chunks;
+  }
+
+  /**
+   * 通过数组方式添加记录
+   *
+   * @param mixed $key
+   * @param mixed $value
+   * @return void
+   */
+  public function offsetSet(mixed $key, mixed $value): void
+  {
+    if (!$value instanceof DataSet && !is_array($value)) {
+      throw new InvalidArgumentException('往集合中添加的记录必须是DataSet对象或数组');
+    }
+    if (is_array($value)) {
+      $value = new DataSet($this->query->newQuery(), $value);
+    }
+    parent::offsetSet($key, $value);
   }
 }

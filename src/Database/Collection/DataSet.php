@@ -79,13 +79,11 @@ class DataSet extends BaseCollection
   }
 
   /**
-   * 保存数据
+   * 保存数据到数据库
    *
-   * 会在同一事务中自动更新关联数据
-   *
-   * @return int 保存成功返回1，失败返回0，数据没有任何修改也会返回0
+   * @return bool 保存成功返回true，失败返回false，无数据更新也会返回false
    */
-  public function save(): int
+  public function save(): bool
   {
     $pk = $this->query->getPrimaryKey();
     if (isset($this[$pk])) {
@@ -101,10 +99,10 @@ class DataSet extends BaseCollection
       if (empty($change)) {
         $changeCount = 0;
       } else {
-        $changeCount = $this->query->where($pk, $this[$pk])->update($change);
+        $changeCount = $this->query->strict(false)->where($pk, $this[$pk])->update($change);
       }
       $this->change = [];
-      return $changeCount;
+      return $changeCount === 1;
     } else {
       throw new RuntimeException("保存数据失败，缺少主键字段($pk)");
     }
