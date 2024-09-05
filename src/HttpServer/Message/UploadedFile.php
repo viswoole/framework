@@ -102,7 +102,7 @@ class UploadedFile
     }
     $dir = dirname($targetPath);
 
-    if (false === is_dir($dir) && false === mkdir($dir, 0777, true)) {
+    if (false === is_dir($dir) && false === mkdir($dir, 0755, true)) {
       throw new RuntimeException(
         sprintf(
           'Uploaded file could not be moved to %s because it is not possible to create that directory',
