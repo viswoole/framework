@@ -30,7 +30,7 @@ class Collection extends BaseCollection
   /**
    * 数据集列表
    *
-   * @param BaseQuery $query 查询对象
+   * @param BaseQuery|Query $query 查询对象
    * @param array $data 查询结果
    */
   public function __construct(protected BaseQuery|Query $query, array $data)
@@ -113,7 +113,10 @@ class Collection extends BaseCollection
   /**
    * 获取所有数据
    *
+   * 与getArrayCopy方法一致
+   *
    * @return DataSet[]
+   * @see static::getArrayCopy()
    */
   public function all(): array
   {

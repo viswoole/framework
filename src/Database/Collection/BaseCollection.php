@@ -171,8 +171,8 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   /**
    * 该方法用于获取当前集合的数组（深度）拷贝，并返回一个新的数组。
    *
-   * 如果Collection对象调用该方法，则返回的是一个包含所有行的数组。行元素依然是Row对象，
-   * 如果你需要将Row也转换为数组，请使用toArray()方法。
+   * 如果Collection对象调用该方法，则返回的是一个包含所有行的数组。行元素依然是DataSet对象，
+   * 如果你需要将每一行数据都转换为数组，请使用toArray()方法。
    *
    * @return array
    */
