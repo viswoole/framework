@@ -412,6 +412,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 反射调用
    *
+   * @access public
    * @param callable|string|array $callable
    * @param array $params
    * @return mixed
@@ -493,6 +494,17 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
+   * 获取绑定关系
+   *
+   * @access public
+   * @return string[]
+   */
+  public function getBindings(): array
+  {
+    return $this->bindings;
+  }
+
+  /**
    * @inheritDoc
    * @throws NotFoundException
    */
@@ -558,6 +570,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     return count($this->bindings);
   }
 
+  /**
+   * @param $name
+   * @return void
+   */
   public function __unset($name)
   {
     $this->remove($name);
