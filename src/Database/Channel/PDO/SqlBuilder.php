@@ -106,24 +106,26 @@ class SqlBuilder
     $keys = Arr::isIndexArray($this->options->data)
       ? array_keys(reset($this->options->data))
       : array_keys($this->options->data);
-
+    if (!$this->options->strict) {
+      $tableColumns = $this->getTableColumns();
+      $keys = array_filter($keys, function ($key) use ($tableColumns) {
+        return in_array($key, $tableColumns);
+      });
+    }
     // 要写入的列
     $quotedKeys = array_map([$this, 'quote'], $keys);
     $columns = implode(', ', $quotedKeys);
     // 如果是索引数组，说明是批量写入
     if (Arr::isIndexArray($this->options->data)) {
       $rows = [];
-      foreach ($this->options->data as $record) {
-        if (array_keys($record) !== $keys) {
-          throw new DbException('批量写入数据时，所有写入数据的字段必须一致');
-        }
-        $values = $this->parseDataToValues($record);
+      foreach ($this->options->data as $item) {
+        $values = $this->parseDataToValues($keys, $item);
         $rows[] = '(' . implode(', ', $values) . ')';
       }
       $sql .= "$table ($columns) VALUES " . implode(', ', $rows);
     } else {
       // 单条记录写入
-      $values = $this->parseDataToValues($this->options->data);
+      $values = $this->parseDataToValues($keys, $this->options->data);
       $values = implode(', ', $values);
       $sql .= "$table ($columns) VALUES ($values)";
     }
@@ -147,15 +149,48 @@ class SqlBuilder
   }
 
   /**
-   * 解析数据为values
+   * 获取表字段列表
    *
-   * @param $row
    * @return array
    */
-  private function parseDataToValues($row): array
+  protected function getTableColumns(): array
+  {
+    $table = $this->options->table;
+    if (isset(self::$tableColumns[$table])) return self::$tableColumns[$table];
+    $sql = match ($this->channel->type->value) {
+      'sqlite' => "PRAGMA table_info($table)",
+      'pgsql' => "SELECT column_name FROM information_schema.columns WHERE table_name = '$table'",
+      'oci' => "SELECT column_name FROM USER_TAB_COLUMNS WHERE table_name = '$table'",
+      'sqlsrv' => "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '$table'",
+      default => "DESCRIBE `$table`"
+    };
+    $conn = $this->channel->pop('read');
+    $statement = $conn->query($sql);
+    $this->channel->put($conn);
+    if (!$statement) throw new DbException('获取数据表结构失败', 500, $sql);
+    if ($this->channel->type === DriverType::SQLite) {
+      $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
+      $fields = array_column($fields, 'name');
+    } else {
+      $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
+    }
+    if (!$fields) throw new DbException('获取数据表结构失败', 500, $sql);
+    self::$tableColumns[$table] = $fields;
+    return $fields;
+  }
+
+  /**
+   * 解析数据为values
+   *
+   * @param array $keys
+   * @param array $row
+   * @return array
+   */
+  private function parseDataToValues(array $keys, array $row): array
   {
     $values = [];
-    foreach ($row as $value) {
+    foreach ($keys as $key) {
+      $value = $row[$key] ?? null;
       if ($value instanceof Raw) {
         $this->params = array_merge($this->params, $value->bindings);
         $values[] = $value->sql;
@@ -202,6 +237,8 @@ class SqlBuilder
     $data = $this->options->data;
     $sql = [];
     foreach ($data as $key => $value) {
+      // 如果表不存在该字段，则跳过
+      if (!$this->options->strict && !in_array($key, $this->getTableColumns())) continue;
       $column = $this->quote($key);
       if ($value instanceof Raw) {
         $this->params = array_merge($this->params, $value->bindings);
@@ -427,37 +464,6 @@ class SqlBuilder
       }
     }
     return implode(', ', $parsedFields);
-  }
-
-  /**
-   * 获取表字段列表
-   *
-   * @return array
-   */
-  protected function getTableColumns(): array
-  {
-    $table = $this->options->table;
-    if (isset(self::$tableColumns[$table])) return self::$tableColumns[$table];
-    $sql = match ($this->channel->type->value) {
-      'sqlite' => "PRAGMA table_info($table)",
-      'pgsql' => "SELECT column_name FROM information_schema.columns WHERE table_name = '$table'",
-      'oci' => "SELECT column_name FROM USER_TAB_COLUMNS WHERE table_name = '$table'",
-      'sqlsrv' => "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '$table'",
-      default => "DESCRIBE `$table`"
-    };
-    $conn = $this->channel->pop('read');
-    $statement = $conn->query($sql);
-    $this->channel->put($conn);
-    if (!$statement) throw new DbException('获取数据表结构失败', 500, $sql);
-    if ($this->channel->type === DriverType::SQLite) {
-      $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
-      $fields = array_column($fields, 'name');
-    } else {
-      $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
-    }
-    if (!$fields) throw new DbException('获取数据表结构失败', 500, $sql);
-    self::$tableColumns[$table] = $fields;
-    return $fields;
   }
 
   /**

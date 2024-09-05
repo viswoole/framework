@@ -64,6 +64,21 @@ class BaseQuery
   }
 
   /**
+   * 严格检测字段
+   *
+   * 默认为true，写入不存在的字段时会抛出异常
+   * 如果设置为false，则会自动忽略不存在的字段。
+   *
+   * @param bool $flag 是否启用严格模式，默认=true
+   * @return static
+   */
+  public function strict(bool $flag = true): static
+  {
+    $this->options->strict = $flag;
+    return $this;
+  }
+
+  /**
    * 对结果进行分组
    *
    * @access public

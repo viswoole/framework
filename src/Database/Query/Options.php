@@ -116,6 +116,11 @@ class Options implements ArrayAccess
   public array $withoutColumns = [];
 
   /**
+   * @var bool 严格检测即将要写入的字段列是否存在
+   */
+  public bool $strict = true;
+
+  /**
    * @param string $table 表名
    */
   public function __construct(string $table, string $pk)

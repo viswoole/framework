@@ -84,7 +84,7 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Collection|Raw get(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static array|Raw getArray() 执行查询，并以数组方式返回查询结果
  * @method static Generator cursor() 游标查询
- * @method static Generator chunk(int $size) 分段查询
+ * @method static Query strict(bool $flag = true) 如果关闭严格模式，则会忽略写入不存在的字段。
  */
 abstract class Model
 {
@@ -156,7 +156,7 @@ abstract class Model
    */
   public static function __callStatic(string $name, array $arguments)
   {
-    return call_user_func_array([new static(), $name], $arguments);
+    return call_user_func_array([(new static())->query, $name], $arguments);
   }
 
   /**
