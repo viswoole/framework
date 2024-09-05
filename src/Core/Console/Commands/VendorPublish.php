@@ -29,7 +29,7 @@ use Viswoole\Core\Facade\App;
  */
 #[AsCommand(
   name       : 'vendor:publish',
-  description: 'Automatically scans the configurations provided in the dependency package and clones the configuration files to the config/autoload directory at the root of the project.',
+  description: 'Automatically scans the files or folders provided in the dependency package and clones them to the root of the project, keeping the directory hierarchy intact.',
   hidden     : false
 )]
 class VendorPublish extends Command
@@ -55,47 +55,33 @@ class VendorPublish extends Command
   #[Override] protected function execute(InputInterface $input, OutputInterface $output): int
   {
     $force = $input->getOption('force');
-    $vendorDir = App::getVendorPath();
-    $configDir = App::getConfigPath();
-    $installedPath = App::getVendorPath() . '/composer/installed.json';
+    $vendorPath = App::getVendorPath();
+    $rootPath = App::getRootPath();
+    $installedFilePath = App::getVendorPath() . '/composer/installed.json';
     $io = new SymfonyStyle($input, $output);
-    if (is_file($installedPath)) {
-      $packages = json_decode(file_get_contents($installedPath), true);
+    if (is_file($installedFilePath)) {
+      $packages = json_decode(file_get_contents($installedFilePath), true);
       // Compatibility with Composer 2.0
       if (isset($packages['packages'])) $packages = $packages['packages'];
-
       $configs = [];
       $vendorCount = 0;
+      $count = 0;
       foreach ($packages as $package) {
         if (!empty($package['extra']['viswoole']['configs'])) {
           $vendorCount++;
-          $packageConfigs = (array)$package['extra']['viswoole']['configs'];
-          foreach ($packageConfigs as &$path) {
-            $path = $vendorDir . '/' . $package['name']
-              . (str_starts_with($path, '/') ? $path : '/' . $path);
+          $extraConfigs = (array)$package['extra']['viswoole']['configs'];
+          foreach ($extraConfigs as $path) {
+            $path = str_starts_with(
+              $path, DIRECTORY_SEPARATOR
+            ) ? $path : DIRECTORY_SEPARATOR . $path;
+            $packagePath = $vendorPath . '/' . $package['name'];
+            $files = $this->getAllFiles($vendorPath . '/' . $package['name'] . $path);
+            $count += $this->copy($rootPath, $packagePath, $files, $force);
           }
-          $configs = array_merge($configs, $packageConfigs);
-        }
-      }
-      $configFiles = [];
-      foreach ($configs as $config) {
-        if (is_dir($config)) {
-          $files = $this->getAllFiles($config);
-          $configFiles = array_merge($configFiles, $files);
-        } elseif (is_file($config)) {
-          $configFiles[] = $config;
-        }
-      }
-      $count = 0;
-      foreach ($configFiles as $file) {
-        $destinationDir = $configDir . '/' . basename($file);
-        if ($force || !file_exists($destinationDir)) {
-          $count++;
-          copy($file, $configDir . '/' . basename($file));
         }
       }
       $io->success(
-        "已完成{$vendorCount}个依赖包发布，共计发布 $count 个配置文件至{$configDir}目录下"
+        "已完成{$vendorCount}个依赖包发布，共计发布 $count 个文件。"
       );
     }
     return Command::SUCCESS;
@@ -130,5 +116,33 @@ class VendorPublish extends Command
       closedir($handle);
     }
     return $files;
+  }
+
+  /**
+   * 把依赖包中的配置文件或其他模板文件复制到根目录下对应目录
+   *
+   * @param string $rootPath
+   * @param string $packagePath
+   * @param array $files
+   * @param bool $force
+   * @return int
+   */
+  private function copy(string $rootPath, string $packagePath, array $files, bool $force): int
+  {
+    $count = 0;
+    foreach ($files as $file) {
+      $destinationPath = str_replace($packagePath, $rootPath, $file);
+      // 获取目标目录
+      $destinationDirName = dirname($destinationPath);
+      // 检查目标目录是否存在，如果不存在则创建
+      if (!is_dir($destinationDirName)) {
+        mkdir($destinationDirName, 0755, true); // 递归创建目录
+      }
+      if ($force || !file_exists($destinationPath)) {
+        copy($file, $destinationPath);
+        $count++;
+      }
+    }
+    return $count;
   }
 }
