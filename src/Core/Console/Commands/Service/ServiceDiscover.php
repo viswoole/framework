@@ -21,6 +21,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Viswoole\Core\Console\Commands\Discover;
 
 /**
  * 发现服务
@@ -32,40 +33,19 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ServiceDiscover extends Command
 {
+  use Discover;
+
   /**
    * @inheritDoc
    */
   #[Override] protected function execute(InputInterface $input, OutputInterface $output): int
   {
-    $path = getRootPath() . '/vendor/composer/installed.json';
     $io = new SymfonyStyle($input, $output);
-    if (is_file($path)) {
-      $packages = json_decode(file_get_contents($path), true);
-      // Compatibility with Composer 2.0
-      if (isset($packages['packages'])) $packages = $packages['packages'];
-      $services = [];
-      foreach ($packages as $package) {
-        if (!empty($package['extra']['viswoole']['services'])) {
-          $services = array_merge($services, (array)$package['extra']['viswoole']['services']);
-        }
-      }
-      $header = '// 此文件为由service:discover命令处理程序自动生成的服务注册文件:' . date(
-          'Y-m-d H:i:s'
-        ) . PHP_EOL
-        . 'declare (strict_types=1);' . PHP_EOL . PHP_EOL;
-
-      $content = 'return [' . PHP_EOL;
-      foreach ($services as $service) {
-        $service = str_replace("'", '"', var_export($service, true));
-        $content .= "  $service," . PHP_EOL;
-      }
-      $content = rtrim($content, ',' . PHP_EOL) . PHP_EOL . '];';
-      $content = '<?php' . PHP_EOL . $header . $content;
-      $enterPath = getRootPath() . '/vendor/services.php';
-      file_put_contents($enterPath, $content);
-      $serviceCount = count($services);
-      $io->success("已生成服务注册文件 $enterPath 共计发现 $serviceCount 个服务");
-    }
+    $enterPath = getRootPath() . '/vendor/services.php';
+    $serviceCount = $this->discover(
+      'services', '// 此文件为是service:discover处理脚本自动生成的服务注册文件:', $enterPath
+    );
+    $io->success("已生成服务注册文件 $enterPath 共计发现 $serviceCount 个服务");
     return Command::SUCCESS;
   }
 }

@@ -32,38 +32,19 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class CommandDiscover extends Command
 {
+  use Discover;
+
+  /**
+   * @inheritDoc
+   */
   #[Override] protected function execute(InputInterface $input, OutputInterface $output): int
   {
-    $path = getRootPath() . '/vendor/composer/installed.json';
     $io = new SymfonyStyle($input, $output);
-    if (is_file($path)) {
-      $packages = json_decode(file_get_contents($path), true);
-      // Compatibility with Composer 2.0
-      if (isset($packages['packages'])) $packages = $packages['packages'];
-
-      $services = [];
-      foreach ($packages as $package) {
-        if (!empty($package['extra']['viswoole']['commands'])) {
-          $services = array_merge($services, (array)$package['extra']['viswoole']['commands']);
-        }
-      }
-
-      $header = '// 此文件为由command:discover命令处理程序自动生成的服务注册文件:' . date(
-          'Y-m-d H:i:s'
-        ) . PHP_EOL
-        . 'declare (strict_types=1);' . PHP_EOL . PHP_EOL;
-      $content = 'return [' . PHP_EOL;
-      foreach ($services as $command) {
-        $command = str_replace("'", '"', var_export($command, true));
-        $content .= "  $command," . PHP_EOL;
-      }
-      $content = rtrim($content, ',' . PHP_EOL) . PHP_EOL . '];';
-      $content = '<?php' . PHP_EOL . $header . $content;
-      $enterPath = getRootPath() . '/vendor/commands.php';
-      file_put_contents($enterPath, $content);
-      $commandCount = count($services);
-      $io->success("已生成命令注册文件 $enterPath 共计发现 $commandCount 个命令");
-    }
+    $enterPath = getRootPath() . '/vendor/commands.php';
+    $commandCount = $this->discover(
+      'commands', '// 此文件为是command:discover处理脚本自动生成的注册文件:', $enterPath
+    );
+    $io->success("已生成命令注册文件 $enterPath 共计发现 $commandCount 个命令");
     return Command::SUCCESS;
   }
 }

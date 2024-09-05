@@ -63,7 +63,6 @@ class VendorPublish extends Command
       $packages = json_decode(file_get_contents($installedFilePath), true);
       // Compatibility with Composer 2.0
       if (isset($packages['packages'])) $packages = $packages['packages'];
-      $configs = [];
       $vendorCount = 0;
       $count = 0;
       foreach ($packages as $package) {
@@ -81,7 +80,7 @@ class VendorPublish extends Command
         }
       }
       $io->success(
-        "已完成{$vendorCount}个依赖包发布，共计发布 $count 个文件。"
+        "共计发现{$vendorCount}个依赖包，共计发布 $count 个文件。"
       );
     }
     return Command::SUCCESS;
