@@ -143,6 +143,11 @@ class Server
    */
   private SwooleServer $server;
 
+  /**
+   * @param string $server_name 服务名称
+   * @param Event $event 事件管理器实例
+   * @throws ServerNotFoundException
+   */
   public function __construct(string $server_name, protected Event $event)
   {
     $server_name = strtolower($server_name);
@@ -273,6 +278,11 @@ class Server
     if (!$result) throw new ServerException("{$serverName}服务启动失败");
   }
 
+  /**
+   * @param string $name
+   * @param array $arguments
+   * @return mixed
+   */
   public function __call(string $name, array $arguments)
   {
     return call_user_func_array([$this->getServer(), $name], $arguments);
