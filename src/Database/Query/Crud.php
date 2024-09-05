@@ -101,7 +101,8 @@ trait Crud
   {
     if ($this->options->cache) {
       $result = Cache::store($this->options->cache['store'])->get($this->options->cache['key']);
-    } else {
+    }
+    if (!isset($result)) {
       /**
        * @var PDOStatement $statement
        */

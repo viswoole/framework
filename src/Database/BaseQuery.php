@@ -356,12 +356,12 @@ class BaseQuery
    */
   public function cache(
     string $key,
-    int    $expiry = 0,
+    int    $expire = 0,
     string $tag = null,
     string $store = null
   ): static
   {
-    $this->options->cache = compact('key', 'expiry', 'tag', 'store');
+    $this->options->cache = compact('key', 'expire', 'tag', 'store');
     return $this;
   }
 

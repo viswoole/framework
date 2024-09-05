@@ -38,7 +38,7 @@ class Options implements ArrayAccess
    */
   public string $alias = '';
   /**
-   * @var false|array{key:string,store:string|null,tag:string|null,expiry:int} 是否读取缓存
+   * @var false|array{key:string,store:string|null,tag:string|null,expire:int} 是否读取缓存
    */
   public false|array $cache = false;
   /**
