@@ -153,7 +153,7 @@ if (!function_exists('echo_log')) {
    */
   function echo_log(
     string|int $message,
-    string     $label = 'INFO',
+    string     $label = 'SUCCESS',
     ?string    $color = null,
     int        $backtrace = 1
   ): void
