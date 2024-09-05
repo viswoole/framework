@@ -16,7 +16,6 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use Override;
-use Viswoole\Core\Server;
 use Viswoole\Core\Service\Provider;
 
 /**
@@ -30,7 +29,7 @@ class RouterService extends Provider
   #[Override] public function boot(): void
   {
     // 监听服务启动之前
-    $this->app->event->on('ServerCreate', function (Server $server) {
+    $this->app->event->on('ServerCreate', function () {
       $this->app->make('router');
     });
   }
