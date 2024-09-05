@@ -324,6 +324,7 @@ class BaseQuery
   /**
    * 获取当前查询的表名
    *
+   * @access public
    * @return string
    */
   public function getTableName(): string
@@ -350,11 +351,17 @@ class BaseQuery
    * @param string $key 缓存标识
    * @param int $expiry 缓存有效时间 默认0 永久有效
    * @param string|null $tag 缓存标签
+   * @param string|null $store 缓存商店
    * @return static
    */
-  public function cache(string $key, int $expiry = 0, string $tag = null): static
+  public function cache(
+    string $key,
+    int    $expiry = 0,
+    string $tag = null,
+    string $store = null
+  ): static
   {
-    $this->options->cache = compact('key', 'expiry', 'tag');
+    $this->options->cache = compact('key', 'expiry', 'tag', 'store');
     return $this;
   }
 
