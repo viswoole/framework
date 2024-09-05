@@ -7,12 +7,12 @@
 declare (strict_types=1);
 
 return [
-  // 应用初始化
+  // 应用初始化完成
   'AppInit' => [],
-  // 应用销毁
-  'AppDestroyed' => [],
-  // SWOOLE服务创建，通常应该在此时做一些依赖于服务配置的事情，例如在此时系统会初始化对应服务的路由器。
+  // 应用销毁即将销毁
+  'AppDestroy' => [],
+  // SWOOLE服务创建
   'ServerCreate' => [],
-  // SWOOLE服务启动。
+  // SWOOLE服务启动
   'ServerStart' => []
 ];
