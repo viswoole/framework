@@ -24,6 +24,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Viswoole\Core\Facade\App;
 
+/**
+ * 自动发布依赖包配置文件
+ */
 #[AsCommand(
   name       : 'vendor:publish',
   description: 'Automatically scans the configurations provided in the dependency package and clones the configuration files to the config/autoload directory at the root of the project.',
@@ -31,6 +34,11 @@ use Viswoole\Core\Facade\App;
 )]
 class VendorPublish extends Command
 {
+  /**
+   * @inheritDoc
+   *
+   * @return void
+   */
   #[Override] protected function configure(): void
   {
     $this->addOption(
@@ -41,6 +49,9 @@ class VendorPublish extends Command
     );
   }
 
+  /**
+   * @inheritDoc
+   */
   #[Override] protected function execute(InputInterface $input, OutputInterface $output): int
   {
     $force = $input->getOption('force');
@@ -59,9 +70,9 @@ class VendorPublish extends Command
         if (!empty($package['extra']['viswoole']['configs'])) {
           $vendorCount++;
           $packageConfigs = (array)$package['extra']['viswoole']['configs'];
-          foreach ($packageConfigs as &$c) {
-            $c = $vendorDir . '/' . $package['name']
-              . (str_starts_with($c, '/') ? $c : '/' . $c);
+          foreach ($packageConfigs as &$path) {
+            $path = $vendorDir . '/' . $package['name']
+              . (str_starts_with($path, '/') ? $path : '/' . $path);
           }
           $configs = array_merge($configs, $packageConfigs);
         }
@@ -99,7 +110,6 @@ class VendorPublish extends Command
   private function getAllFiles(string $dir): array
   {
     $files = [];
-
     // 打开目录
     if ($handle = opendir($dir)) {
       $dir = rtrim($dir, DIRECTORY_SEPARATOR);
