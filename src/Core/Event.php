@@ -42,6 +42,9 @@ class Event
    */
   protected array $listens = [];
 
+  /**
+   * @param App $app
+   */
   public function __construct(private readonly App $app)
   {
     $this->initListen();
