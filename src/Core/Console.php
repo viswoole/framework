@@ -19,11 +19,12 @@ use RuntimeException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Viswoole\Core\Console\Commands\CommandDiscover;
+use Viswoole\Core\Console\Commands\Optimize\Facade;
 use Viswoole\Core\Console\Commands\Server\ServerClose;
 use Viswoole\Core\Console\Commands\Server\ServerReload;
 use Viswoole\Core\Console\Commands\Server\ServerStart;
-use Viswoole\Core\Console\Commands\ServiceDiscover;
-use Viswoole\Core\Console\Commands\VendorPublish;
+use Viswoole\Core\Console\Commands\Service\ServiceDiscover;
+use Viswoole\Core\Console\Commands\Vendor\VendorPublish;
 
 /**
  * 控制台命令行处理程序
@@ -31,7 +32,7 @@ use Viswoole\Core\Console\Commands\VendorPublish;
 class Console extends Application
 {
   protected array $defaultCommands = [
-    \Viswoole\Core\Console\Commands\Optimize\Facade::class,
+    Facade::class,
     ServerStart::class,
     ServerClose::class,
     ServerReload::class,
@@ -40,6 +41,11 @@ class Console extends Application
     VendorPublish::class
   ];
 
+  /**
+   * @param App $app
+   * @param string $name
+   * @param string $version
+   */
   public function __construct(
     private readonly App $app,
     string               $name = 'viswoole',

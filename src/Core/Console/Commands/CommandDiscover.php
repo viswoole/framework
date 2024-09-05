@@ -48,11 +48,10 @@ class CommandDiscover extends Command
         }
       }
 
-      $header = '// 此文件为由service:discover命令处理程序自动生成的服务注册文件:' . date(
+      $header = '// 此文件为由command:discover命令处理程序自动生成的服务注册文件:' . date(
           'Y-m-d H:i:s'
         ) . PHP_EOL
         . 'declare (strict_types=1);' . PHP_EOL . PHP_EOL;
-
       $content = 'return [' . PHP_EOL;
       foreach ($services as $command) {
         $command = str_replace("'", '"', var_export($command, true));

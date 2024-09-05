@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Core\Console\Commands;
+namespace Viswoole\Core\Console\Commands\Service;
 
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -32,6 +32,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 )]
 class ServiceDiscover extends Command
 {
+  /**
+   * @inheritDoc
+   */
   #[Override] protected function execute(InputInterface $input, OutputInterface $output): int
   {
     $path = getRootPath() . '/vendor/composer/installed.json';
@@ -40,14 +43,12 @@ class ServiceDiscover extends Command
       $packages = json_decode(file_get_contents($path), true);
       // Compatibility with Composer 2.0
       if (isset($packages['packages'])) $packages = $packages['packages'];
-
       $services = [];
       foreach ($packages as $package) {
         if (!empty($package['extra']['viswoole']['services'])) {
           $services = array_merge($services, (array)$package['extra']['viswoole']['services']);
         }
       }
-
       $header = '// 此文件为由service:discover命令处理程序自动生成的服务注册文件:' . date(
           'Y-m-d H:i:s'
         ) . PHP_EOL
