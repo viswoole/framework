@@ -49,6 +49,9 @@ class File implements ArrayAccess, IteratorAggregate, Countable
    */
   public array $list;
 
+  /**
+   * @param RequestInterface $request
+   */
   public function __construct(RequestInterface $request)
   {
     $this->list = $request->files() ?? [];
@@ -102,6 +105,11 @@ class File implements ArrayAccess, IteratorAggregate, Countable
     return count($this->list);
   }
 
+  /**
+   * @param string $name
+   * @param array $arguments
+   * @return mixed
+   */
   public function __call(string $name, array $arguments)
   {
     if ($this->isEmpty()) throw new BadMethodCallException('File is empty');
