@@ -254,10 +254,13 @@ class Collection extends BaseCollection
   }
 
   /**
+   * 追加一行数据到集合中
+   *
    * @param mixed $value
+   * @param bool $autoWrite 如果传入的是数组，且该参数值为true，则自动写入数据库
    * @return void
    */
-  public function append(mixed $value): void
+  public function append(mixed $value, bool $autoWrite = false): void
   {
     if ($value instanceof DataSet) {
       parent::append($value);
@@ -265,7 +268,12 @@ class Collection extends BaseCollection
       if (!is_array($value)) {
         throw new InvalidArgumentException('Value must be an array or Row object.');
       }
-      parent::append(new DataSet($this->query->newQuery(), $value));
+      $query = $this->query->newQuery();
+      if ($autoWrite) {
+        $id = $query->strict(false)->insertGetId($value);
+        $value[$this->query->getPrimaryKey()] = $id;
+      }
+      parent::append(new DataSet($query, $value));
     }
   }
 
