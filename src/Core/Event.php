@@ -70,9 +70,31 @@ class Event
   /**
    * 注册事件监听
    *
-   * @param string $event 事件名称
+   * 示例：
+   * ```
+   * use \Viswoole\Core\Facade\Event;
+   * // 模拟监听用户登录事件
+   * Event::on('userLogin', function(array $data){
+   *    dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
+   * })
+   * // 触发用户登录事件
+   * Event::emit('userLogin', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
+   *
+   * // 监听器类
+   * class UserEvents{
+   *   public function login(array $data){
+   *      dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
+   *   }
+   * }
+   * // $handle传入监听器类，批量注册
+   * Event::on('user', UserEvents::class);
+   * // 触发监听器中的login方法
+   * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']])
+   * ```
+   *
+   * @param string $event 事件名称，不区分大小写
    * @param callable|string $handle 处理方法或类
-   * @param int $limit 监听次数0为不限制
+   * @param int $limit 监听次数，0为不限制。
    * @return bool
    */
   public function on(string $event, callable|string $handle, int $limit = 0): bool
@@ -118,7 +140,14 @@ class Event
   /**
    * 触发事件
    *
-   * @access public
+   * 示例：
+   * ```
+   * use \Viswoole\Core\Facade\Event;
+   * // 触发事件
+   * Event::emit('userLogin', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
+   * // 如果注册的监听器是一个类，则需要用"事件名称.方法名"触发
+   * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
+   * ```
    * @param string $event 事件名称
    * @param array $arguments 需要额外传递的参数
    * @return void
@@ -144,7 +173,7 @@ class Event
    * 关闭监听
    *
    * @param string $event 事件名称,不区分大小写
-   * @param callable|string|null $handle 处理函数或方法,不传则关闭所有监听
+   * @param callable|string|null $handle 处理函数或方法,不传则关闭该事件所有监听
    * @return void
    */
   public function off(string $event, callable|string $handle = null): void
