@@ -163,9 +163,9 @@ class PDOChannel extends Channel
    * @inheritDoc
    */
   public function execute(
-    string|Raw $sql,
-    array      $bindings = [],
-    bool       $getId = false
+    string|Raw   $sql,
+    array        $bindings = [],
+    false|string $getId = false
   ): PDOStatementProxy|PDOStatement|int|string
   {
     $manager = ConnectManager::factory();
@@ -180,10 +180,14 @@ class PDOChannel extends Channel
     try {
       $stmt = $connect->prepare($sql);
       $stmt->execute($bindings);
-      if ($getId) {
-        if (str_starts_with($sql, 'INSERT') || str_starts_with($sql, 'REPLACE')) {
-          return $connect->lastInsertId();
-        }
+      if (
+        !empty($getId)
+        && (
+          str_starts_with($sql, 'INSERT')
+          || str_starts_with($sql, 'REPLACE')
+        )
+      ) {
+        return $connect->lastInsertId($getId);
       }
       // 归还连接
       $manager->put($this, $connect);
