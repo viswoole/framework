@@ -80,7 +80,7 @@ trait Crud
         if ($type === 'select') {
           $result = $this->runSelect($raw);
         } else {
-          $result = $this->runWrite($raw, $type === 'insertGetId');
+          $result = $this->runWrite($raw, $type === 'insertGetId' ? $this->options->pk : false);
         }
       }
       $this->setRunInfo($start, $raw);
@@ -157,20 +157,19 @@ trait Crud
 
   /**
    * @param Raw $raw
-   * @param bool $getId
-   * @return int|string
+   * @param false|string $getId
+   * @return string|int
    */
-  protected function runWrite(Raw $raw, bool $getId): string|int
+  protected function runWrite(Raw $raw, false|string $getId): string|int
   {
-    /**
-     * @var PDOStatement|string $result
-     */
     $statement = $this->channel->execute(
       $raw->sql, $raw->bindings, $getId
     );
     if ($statement instanceof PDOStatementProxy || $statement instanceof PDOStatement) {
       $result = $statement->rowCount();
       $statement->closeCursor();
+    } else {
+      $result = $statement;
     }
     // 删除缓存
     if ($this->options->cache) {
