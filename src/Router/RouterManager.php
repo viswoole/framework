@@ -227,7 +227,7 @@ class RouterManager
    */
   public function collector(string $serverName = null): RouteCollector
   {
-    if (is_null($serverName)) $serverName = SERVER_NAME;
+    if (empty($serverName)) $serverName = SERVER_NAME;
     if (isset($this->serverRouteCollector[$serverName])) return $this->serverRouteCollector[$serverName];
     return $this->serverRouteCollector[$serverName] = new RouteCollector($this->app);
   }
