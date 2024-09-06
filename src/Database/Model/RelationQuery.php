@@ -90,7 +90,14 @@ class RelationQuery
     // 遍历数据，将关联数据填充到主数据中
     array_walk($data, function (&$row) use ($keyMapData, $name) {
       $key = $row[$this->localKey];
-      $row[$name] = $keyMapData[$key];
+      if (!array_key_exists($key, $keyMapData)) {
+        $value = $this->many ?
+          new Collection($this->relationModel->query->newQuery(), [])
+          : new DataSet($this->relationModel->query->newQuery(), []);
+      } else {
+        $value = $keyMapData[$key];
+      }
+      $row[$name] = $value;
     });
     // 返回主数据
     return $data;
