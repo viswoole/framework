@@ -38,6 +38,8 @@ class RouterManager
   public function __construct(protected readonly App $app)
   {
     $this->app->bind(self::class, $this);
+    // 触发路由初始化事件，其他模块可以监听该事件注册路由
+    $this->app->event->emit('RouteInit');
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
     $this->parseRoute();
@@ -83,8 +85,6 @@ class RouterManager
       }
       /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
-      // 如果指定了服务，且服务名称非当前正在运行的服务，则跳过解析
-//      if ($controller->server !== null && $controller->server !== SERVER_NAME) continue;
       // 判断是否设置了描述
       if (!isset($controller->options['describe'])) {
         $controller->options['describe'] = $this->getDocComment($refClass);
