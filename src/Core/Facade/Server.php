@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Facade;
 
 use Closure;
+use Override;
 use Socket;
 use Swoole\Process;
 use Swoole\Server\Port;
@@ -82,7 +83,7 @@ class Server extends Facade
   /**
    * @inheritDoc
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return \Viswoole\Core\Server::class;
   }

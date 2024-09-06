@@ -58,6 +58,9 @@ class DbManager
   /**
    * @param Config $config 配置管理器
    * @param LogManager $logManager 日志管理器
+   * @throws DbException
+   * @throws DbException
+   * @throws DbException
    */
   public function __construct(Config $config, protected LogManager $logManager)
   {

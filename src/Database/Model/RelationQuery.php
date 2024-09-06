@@ -17,6 +17,7 @@ namespace Viswoole\Database\Model;
 
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model;
 
 /**
@@ -50,6 +51,7 @@ class RelationQuery
    * @param array $data 数据
    * @param string $name 关联名称
    * @return array
+   * @throws DbException
    */
   public function query(array $data, string $name): array
   {

@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * filter_var过滤器验证
@@ -57,7 +58,7 @@ class Filter extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     $valid = filter_var($value, $this->filter, $this->options);
     if (!$valid) $this->error(self::FILTER_VALIDATE[$this->filter] ?? '验证失败');

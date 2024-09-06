@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * 验证数值是否不在某个区间
@@ -26,7 +27,7 @@ class NotBetween extends Between
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): int|float
+  #[Override] public function validate(mixed $value): int|float
   {
     if (!is_numeric($value)) $this->error('必须为数值类型');
     $value = is_float($this->start) ? floatval($value) : intval($value);

@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Facade;
 
 use Closure;
+use Override;
 use Viswoole\Core\Facade;
 
 /**
@@ -48,7 +49,7 @@ class App extends Facade
   /**
    * @inheritDoc
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return \Viswoole\Core\App::class;
   }

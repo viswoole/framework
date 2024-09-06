@@ -14,6 +14,9 @@
 declare (strict_types=1);
 
 namespace Viswoole\Core\Service;
+
+use Override;
+
 /**
  * 中间件服务
  */
@@ -25,7 +28,7 @@ class Middleware extends Provider
    *
    * @return void
    */
-  #[\Override] public function boot(): void
+  #[Override] public function boot(): void
   {
     new \Viswoole\Core\Middleware($this->app);
   }
@@ -35,7 +38,7 @@ class Middleware extends Provider
    *
    * @return void
    */
-  #[\Override] public function register(): void
+  #[Override] public function register(): void
   {
     $this->app->bind('middleware', \Viswoole\Core\Middleware::class);
   }

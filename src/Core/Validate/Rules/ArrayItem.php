@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 use Viswoole\Core\Exception\ValidateException;
 use Viswoole\Core\Validate;
 use Viswoole\Core\Validate\Type;
@@ -41,7 +42,7 @@ class ArrayItem extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): array
+  #[Override] public function validate(mixed $value): array
   {
     if (!is_array($value)) $this->error('必须为数组');
     $array = [];

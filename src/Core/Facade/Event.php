@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Facade;
 
+use Override;
 use Viswoole\Core\Facade;
 
 /**
@@ -31,7 +32,7 @@ class Event extends Facade
   /**
    * @inheritDoc
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return \Viswoole\Core\Event::class;
   }

@@ -233,7 +233,7 @@ abstract class Model
     string       $localKey = null,
   ): RelationQuery
   {
-    return $this->_relation($relationModel, $foreignKey, $localKey, false);
+    return $this->_relation($relationModel, $foreignKey, $localKey);
   }
 
   /**

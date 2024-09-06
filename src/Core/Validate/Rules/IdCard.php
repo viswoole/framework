@@ -23,10 +23,13 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class IdCard extends Regex
 {
+  /**
+   * @param string $message 校验失败信息
+   */
   public function __construct(string $message = '必须是有效的身份证号码')
   {
     parent::__construct(
-      "/(^[1-9]\d{5}(18|19|([23]\d))\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}[0-9Xx]$)|(^[1-9]\d{5}\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}$)/",
+      '/(^[1-9]\d{5}(18|19|([23]\d))\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}[0-9Xx]$)|(^[1-9]\d{5}\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}$)/',
       $message
     );
   }

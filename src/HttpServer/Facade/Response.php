@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Facade;
 
 use JsonSerializable;
+use Override;
 use Viswoole\Core\Facade;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
@@ -54,7 +55,7 @@ class Response extends Facade
   /**
    * @inheritDoc
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return \Viswoole\HttpServer\Response::class;
   }

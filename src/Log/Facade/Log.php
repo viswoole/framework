@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Log\Facade;
 
+use Override;
 use Stringable;
 use Viswoole\Core\Facade;
 use Viswoole\Log\Contract\DriveInterface;
@@ -45,7 +46,7 @@ class Log extends Facade
   /**
    * @inheritDoc
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return LogManager::class;
   }

@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\Facade;
 
+use Override;
 use Viswoole\Core\Facade;
 use Viswoole\Router\RouteCollector;
 use Viswoole\Router\RouterManager;
@@ -32,7 +33,7 @@ class Router extends Facade
   /**
    * @inheritDoc
    */
-  #[\Override] protected static function getMappingClass(): string
+  #[Override] protected static function getMappingClass(): string
   {
     return RouterManager::class;
   }

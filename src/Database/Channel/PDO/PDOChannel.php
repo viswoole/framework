@@ -152,6 +152,7 @@ class PDOChannel extends Channel
    *
    * @param Options $options
    * @return Raw
+   * @throws DbException
    */
   #[Override] public function build(Options $options): Raw
   {

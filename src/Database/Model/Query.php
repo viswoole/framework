@@ -119,6 +119,10 @@ class Query extends BaseQuery
    *
    * @param bool $real 是否为硬删除，仅开启软删除功能时有效
    * @return int|Raw
+   * @throws DbException
+   * @throws DbException
+   * @throws DbException
+   * @throws DbException
    */
   #[Override] public function delete(bool $real = false): int|Raw
   {
@@ -154,6 +158,8 @@ class Query extends BaseQuery
    * @param int|string|array|null $id 要恢复记录的主键值，如果为空则必须指定where条件
    * @return int|Raw 如果未启用软删除功能，返回0，否则返回更新记录数
    * @throws RuntimeException
+   * @throws DbException
+   * @throws DbException
    */
   public function restore(int|string|array|null $id = null): int|Raw
   {

@@ -54,7 +54,6 @@ trait Crud
    *
    * @param array<string,mixed>|array<int,array<string,mixed>> $data 要插入的数据
    * @return int|Raw 返回插入的记录数
-   * @throws DbException
    */
   public function insert(array $data): int|Raw
   {
@@ -194,7 +193,6 @@ trait Crud
    * 删除记录
    *
    * @return int|Raw
-   * @throws DbException
    */
   public function delete(): int|Raw
   {
@@ -232,7 +230,6 @@ trait Crud
    * 执行查询，并以数组返回查询结果。
    *
    * @return array|Raw
-   * @throws DbException
    */
   public function getArray(): array|Raw
   {
@@ -244,7 +241,6 @@ trait Crud
    *
    * @param array $data
    * @return string|int|Raw 写入成功返回主键值
-   * @throws DbException
    */
   public function insertGetId(array $data): string|int|Raw
   {
@@ -260,7 +256,6 @@ trait Crud
    *
    * @param array<string,mixed|Raw> $data 键值对数组，键为列名，值为要更新的值
    * @return int|Raw 返回更新的记录数
-   * @throws DbException
    */
   public function update(array $data): int|Raw
   {
@@ -287,7 +282,6 @@ trait Crud
    * @param string $type
    * @param string $column
    * @return mixed|Raw
-   * @throws DbException
    */
   private function aggregateQueries(string $type, string $column): mixed
   {
@@ -305,7 +299,6 @@ trait Crud
    *
    * @param string $column
    * @return mixed|false 如果查询结果为空，则返回false。
-   * @throws DbException
    */
   public function value(string $column): mixed
   {

@@ -17,6 +17,9 @@ namespace Viswoole\Core\Service;
 
 use Viswoole\Core\App;
 
+/**
+ * 服务提供者抽象类
+ */
 abstract class Provider
 {
   /**
@@ -24,6 +27,9 @@ abstract class Provider
    */
   public array $bindings = [];
 
+  /**
+   * @param App $app
+   */
   public function __construct(protected App $app)
   {
   }

@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * 正则表达式校验
@@ -38,7 +39,7 @@ class Regex extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     if (!is_string($value) || !preg_match($this->pattern, $value)) {
       $this->error("必须为匹配 $this->pattern 规则的字符串");

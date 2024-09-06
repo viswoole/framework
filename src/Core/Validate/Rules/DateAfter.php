@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * 日期验证，验证日期必须大于datetime
@@ -47,7 +48,7 @@ class DateAfter extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     if (!is_string($value)) $this->error('必须为有效的日期字符串');
     if (strtotime($value) <= strtotime($this->datetime)) {

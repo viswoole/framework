@@ -16,6 +16,9 @@ declare (strict_types=1);
 namespace Viswoole\Cache;
 
 
+/**
+ * Redis缓存配置
+ */
 readonly class RedisConfig
 {
 

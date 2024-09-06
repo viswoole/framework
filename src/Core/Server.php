@@ -156,7 +156,6 @@ class Server
      */
     define('SERVER_NAME', $server_name);
     $this->serverName = $server_name;
-    /** @noinspection PhpUnhandledExceptionInspection */
     $this->getConfig();
     $this->createSwooleServer();
     $this->event->emit('ServerCreate', [$this]);
@@ -177,12 +176,12 @@ class Server
     $config = config("server.servers.$this->serverName");
     if (empty($config)) {
       throw new ServerNotFoundException(
-        "{$this->serverName}服务未定义，请检查" . BASE_PATH . "/config/server.php配置文件。"
+        "{$this->serverName}服务未定义，请检查" . BASE_PATH . '/config/server.php配置文件。'
       );
     }
     if (!($config['type'] ?? '' instanceof SwooleServer)) {
       throw new ServerNotFoundException(
-        "{$this->serverName}服务type属性配置错误，请检查" . BASE_PATH . "/config/server.php配置文件。"
+        "{$this->serverName}服务type属性配置错误，请检查" . BASE_PATH . '/config/server.php配置文件。'
       );
     }
     // 判断异常处理方法

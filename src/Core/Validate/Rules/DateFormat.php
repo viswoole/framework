@@ -17,6 +17,7 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use DateTime;
+use Override;
 
 /**
  * 验证日期格式
@@ -39,7 +40,7 @@ class DateFormat extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     if (!is_string($value)) $this->error('必须为有效的日期字符串');
     $date = DateTime::createFromFormat($this->format, $value);

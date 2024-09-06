@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * 长度验证，仅对基本类型为 string、array生效。
@@ -23,6 +24,11 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Length extends RuleAbstract
 {
+  /**
+   * @param int $min 最小长度
+   * @param int|null $max 最大长度，为null则不限制
+   * @param string $message
+   */
   public function __construct(
     public int  $min,
     public ?int $max = null,
@@ -35,7 +41,7 @@ class Length extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     if (is_string($value)) {
       $len = mb_strlen(trim($value));

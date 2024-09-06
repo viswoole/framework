@@ -18,6 +18,7 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use Override;
 use RuntimeException;
+use Viswoole\Database\Exception\DbException;
 
 /**
  * 数据行，键为字段名，值为字段值，支持快捷更新
@@ -40,6 +41,8 @@ class DataSet extends BaseCollection
    * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
    * @return int 成功返回1，失败返回0
    * @throws RuntimeException 如果缺少主键字段
+   * @throws DbException
+   * @throws DbException
    */
   #[Override] public function delete(bool $real = false): int
   {
@@ -82,6 +85,9 @@ class DataSet extends BaseCollection
    * 保存数据到数据库
    *
    * @return bool 保存成功返回true，失败返回false，无数据更新也会返回false
+   * @throws DbException
+   * @throws DbException
+   * @throws DbException
    */
   public function save(): bool
   {

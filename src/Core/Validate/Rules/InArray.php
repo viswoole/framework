@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * 范围验证器
@@ -40,7 +41,7 @@ class InArray extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     $valid = in_array($value, $this->haystack, $this->strict);
     if (!$valid) $this->error('必须是' . implode('、', $this->haystack) . '之一');

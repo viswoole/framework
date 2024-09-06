@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Log;
 
+use Override;
 use Stringable;
 use Viswoole\Log\Contract\CollectorInterface;
 
@@ -27,7 +28,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function error(Stringable|string $message, array $context = []): void
+  #[Override] public function error(Stringable|string $message, array $context = []): void
   {
     $this->mixed('error', $message, $context);
   }
@@ -35,7 +36,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function warning(Stringable|string $message, array $context = []): void
+  #[Override] public function warning(Stringable|string $message, array $context = []): void
   {
     $this->mixed('warning', $message, $context);
   }
@@ -43,7 +44,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function info(Stringable|string $message, array $context = []): void
+  #[Override] public function info(Stringable|string $message, array $context = []): void
   {
     $this->mixed('info', $message, $context);
   }
@@ -51,7 +52,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function debug(Stringable|string $message, array $context = []): void
+  #[Override] public function debug(Stringable|string $message, array $context = []): void
   {
     $this->mixed('debug', $message, $context);
   }
@@ -59,7 +60,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function sql(Stringable|string $message, array $context = []): void
+  #[Override] public function sql(Stringable|string $message, array $context = []): void
   {
     $this->mixed('sql', $message, $context);
   }
@@ -67,7 +68,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function task(Stringable|string $message, array $context = []): void
+  #[Override] public function task(Stringable|string $message, array $context = []): void
   {
     $this->mixed('task', $message, $context);
   }
@@ -75,7 +76,7 @@ abstract class Collector implements CollectorInterface
   /**
    * @inheritDoc
    */
-  #[\Override] public function alert(Stringable|string $message, array $context = []): void
+  #[Override] public function alert(Stringable|string $message, array $context = []): void
   {
     $this->mixed('alert', $message, $context);
   }

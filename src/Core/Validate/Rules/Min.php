@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
+use Override;
 
 /**
  * 验证数值小于或等于$min
@@ -38,7 +39,7 @@ class Min extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): int|float
+  #[Override] public function validate(mixed $value): int|float
   {
     if (!is_numeric($value)) $this->error('必须为数值类型');
     $value = is_float($this->min) ? floatval($value) : intval($value);

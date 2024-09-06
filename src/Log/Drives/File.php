@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Log\Drives;
 
+use Override;
 use Swoole\Timer;
 use Viswoole\Core\Coroutine;
 use Viswoole\Log\Drive;
@@ -134,7 +135,7 @@ class File extends Drive
    * @param array<int,array{timestamp:int,level:string,message:string,context:array,source:string}> $logRecords 需要写入日志的记录
    * @return void
    */
-  #[\Override] public function save(array $logRecords): void
+  #[Override] public function save(array $logRecords): void
   {
     $oldestLogFile = [];
     foreach ($logRecords as $logRecord) {

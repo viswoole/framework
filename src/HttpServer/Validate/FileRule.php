@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Validate;
 
 use Attribute;
+use Override;
 use Viswoole\Core\App;
 use Viswoole\Core\Validate\Rules\RuleAbstract;
 use Viswoole\HttpServer\AutoInject\File;
@@ -47,7 +48,7 @@ class FileRule extends RuleAbstract
   /**
    * @inheritDoc
    */
-  #[\Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     $upload = Request::files();
     if (!isset($upload[$this->name])) {

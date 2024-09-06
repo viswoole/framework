@@ -20,6 +20,7 @@ use Override;
 use RuntimeException;
 use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model\Query;
 
 /**
@@ -259,6 +260,9 @@ class Collection extends BaseCollection
    * @param mixed $value
    * @param bool $autoWrite 如果传入的是数组，且该参数值为true，则自动写入数据库
    * @return void
+   * @throws DbException
+   * @throws DbException
+   * @throws DbException
    */
   public function append(mixed $value, bool $autoWrite = false): void
   {
@@ -285,6 +289,8 @@ class Collection extends BaseCollection
    * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
    * @return int 成功返回删除的记录数，失败返回0。
    * @throws RuntimeException 如果缺少主键字段
+   * @throws DbException
+   * @throws DbException
    */
   #[Override] public function delete(bool $real = false): int
   {
@@ -339,6 +345,9 @@ class Collection extends BaseCollection
    *
    * @param array $data
    * @return int 返回更新的记录数。
+   * @throws DbException
+   * @throws DbException
+   * @throws DbException
    */
   public function update(array $data): int
   {
