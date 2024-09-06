@@ -65,11 +65,12 @@ class Config
    */
   private function load(string $path): void
   {
+    echo_log('加载配置文件：' . $path);
     // 配置文件
     $defaultConfigFiles = glob($path . '*.' . $this->ext);
     //如果出错了 则赋值为空数组
     if ($defaultConfigFiles === false) $defaultConfigFiles = [];
-    $this->config = $this->parse($defaultConfigFiles);
+    $this->config = array_merge($this->config, $this->parse($defaultConfigFiles));
   }
 
   /**
