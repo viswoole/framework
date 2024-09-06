@@ -310,11 +310,20 @@ abstract class RouteConfig implements ArrayAccess
   }
 
   /**
-   * 获取api文档
+   * 获取api结构
    *
-   * @return array|null
+   * @return array{
+   *    paths: string[],
+   *    describe: string,
+   *    method:string[],
+   *    params:array<int,array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool,variadic:bool}>,
+   *    suffix:string[],
+   *    domain:string[],
+   *    pattern:array<string,string>,
+   *    children:array,
+   *  }|null 如果返回null则是隐藏
    */
-  public function getApiDoc(): ?array
+  public function getShape(): ?array
   {
     if ($this->options['hidden']) return null;
     $docShape = [
@@ -340,8 +349,11 @@ abstract class RouteConfig implements ArrayAccess
     });
     if ($this instanceof RouteGroup) {
       $children = [];
+      /**
+       * @var RouteConfig $item
+       */
       foreach ($this->items as $item) {
-        $item = $item->getApiDoc();
+        $item = $item->getShape();
         if (is_array($item)) {
           $children[] = $item;
         }

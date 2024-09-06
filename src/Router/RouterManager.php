@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
+use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
 use Viswoole\Core\App;
@@ -242,5 +243,30 @@ class RouterManager
       $collector->parseRoute();
     }
     $this->app->event->emit('RouteLoaded');
+  }
+
+  /**
+   * 获取api结构
+   *
+   * @access public
+   * @param string|null $serverName 服务名称，如果为空则获取全部
+   * @return array 如果$serverName为空，返回值数组的键是服务名称，值是路由结构数组，否则返回路由结构数组
+   * @see RouteController::getShape() 具体数组结构
+   */
+  public function getApiShape(?string $serverName = null): array
+  {
+    if (empty($this->serverRouteCollector)) return [];
+    $apiShape = [];
+    if (empty($serverName)) {
+      foreach ($this->serverRouteCollector as $serverName => $collector) {
+        $apiShape[$serverName] = $collector->getApiShape();
+      }
+    } else {
+      if (!isset($this->serverRouteCollector[$serverName])) throw new InvalidArgumentException(
+        "not found $serverName route collector"
+      );
+      $apiShape = $this->serverRouteCollector[$serverName]->getApiShape();
+    }
+    return $apiShape;
   }
 }

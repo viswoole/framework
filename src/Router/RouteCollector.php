@@ -310,7 +310,7 @@ class RouteCollector
   {
     foreach ($this->routes as $item) {
       $item->register($this);
-      $doc = $item->getApiDoc();
+      $doc = $item->getShape();
       if ($doc) $this->apiDoc[] = $doc;
     }
   }
@@ -330,7 +330,7 @@ class RouteCollector
    *   children:array,
    * }>
    */
-  public function getApiDoc(): array
+  public function getApiShape(): array
   {
     if (!isset($this->apiDoc)) throw new RuntimeException('请等待路由解析完毕');
     return $this->apiDoc;
