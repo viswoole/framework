@@ -100,13 +100,16 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
    */
   private function removeHiddenKeys(&$data, array $hidden, string $parentKey = ''): void
   {
-    foreach ($data as $key => &$value) {
-      $currentKey = $parentKey ? $parentKey . '.' . $key : $key;
-      // 检查当前键是否在需要隐藏的列表中
-      if (in_array($currentKey, $hidden)) {
-        unset($data[$key]); // 删除该键
-      } elseif (is_array($value)) { // 如果值还是数组，则递归处理
-        $this->removeHiddenKeys($value, $hidden, $currentKey);
+    if (!is_numeric(implode('', array_keys($data)))) {
+      foreach ($data as $key => &$value) {
+        if (is_int($key)) continue;
+        $currentKey = $parentKey ? $parentKey . '.' . $key : $key;
+        // 检查当前键是否在需要隐藏的列表中
+        if (in_array($currentKey, $hidden)) {
+          unset($data[$key]); // 删除该键
+        } elseif (is_array($value)) { // 如果值还是数组，则递归处理
+          $this->removeHiddenKeys($value, $hidden, $currentKey);
+        }
       }
     }
   }
