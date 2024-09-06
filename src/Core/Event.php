@@ -128,13 +128,15 @@ class Event
     $event = strtolower($event);
     $listens = $this->listens[$event] ?? [];
     foreach ($listens as $index => $listen) {
-      if ($listen['limit'] === 0 || $listen['limit'] < $listen['count']) {
-        $this->app->invoke($listen['handle'], $arguments);
-        $this->listens[$event][$index]['count'] += 1;
-        if ($this->listens[$event][$index]['count'] >= $listen['limit']) {
-          $this->off($event, $listen['handle']);
+      go(function () use ($listen, $arguments, $event, $index) {
+        if ($listen['limit'] === 0 || $listen['limit'] < $listen['count']) {
+          $this->app->invoke($listen['handle'], $arguments);
+          $this->listens[$event][$index]['count'] += 1;
+          if ($this->listens[$event][$index]['count'] >= $listen['limit']) {
+            $this->off($event, $listen['handle']);
+          }
         }
-      }
+      });
     }
   }
 
