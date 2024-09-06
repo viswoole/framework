@@ -37,7 +37,6 @@ class RouterManager
    */
   public function __construct(protected readonly App $app)
   {
-    // 因为在实例化期间存在从外部获取本来实例，所以需要在此绑定实例到容器中
     $this->app->bind(self::class, $this);
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
@@ -66,7 +65,7 @@ class RouterManager
   {
     $rootPath = $this->app->getRootPath() . DIRECTORY_SEPARATOR;
     $directory = $rootPath . 'app/Controller';
-    //列出指定路径中的文件和目录
+    // 列出指定路径中的文件和目录
     $controllers = $this->getAllPhpFiles($directory);
     foreach ($controllers as $controller) {
       [$fullClass, $className] = $this->getNamespace($controller, $rootPath);
@@ -85,9 +84,7 @@ class RouterManager
       /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
       // 如果指定了服务，且服务名称非当前正在运行的服务，则跳过解析
-//      if ($controller->server !== null && $controller->server !== SERVER_NAME) {
-//        continue;
-//      }
+//      if ($controller->server !== null && $controller->server !== SERVER_NAME) continue;
       // 判断是否设置了描述
       if (!isset($controller->options['describe'])) {
         $controller->options['describe'] = $this->getDocComment($refClass);

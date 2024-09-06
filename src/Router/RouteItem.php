@@ -19,6 +19,9 @@ namespace Viswoole\Router;
  */
 class RouteItem extends RouteConfig
 {
+  /**
+   * @inheritDoc
+   */
   public function register(RouteCollector $collector): void
   {
     $collector->registerRouteItem($this);
