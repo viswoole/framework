@@ -35,7 +35,10 @@ use Viswoole\Router\Facade\Router;
  */
 class Route
 {
-  protected static ?string $currentServer = null;
+  /**
+   * @var string|null 当前正在注册路由的服务名称
+   */
+  private static ?string $currentServer = null;
 
   /**
    * 静态调用转发
