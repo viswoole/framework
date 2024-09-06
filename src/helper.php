@@ -93,7 +93,7 @@ if (!function_exists('env')) {
    * @return mixed
    * @see \Viswoole\Core\Env::get()
    */
-  function env(?string $key, mixed $default = null): mixed
+  function env(?string $key = null, mixed $default = null): mixed
   {
     return App::factory()->get('env')->get($key, $default);
   }
