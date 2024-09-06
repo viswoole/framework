@@ -15,11 +15,5 @@ return [
   // 默认的路由变量正则表达式
   'default_pattern_regex' => '[\w\.]+',
   // 要加载的路线配置文件
-  'route_config_files' => [
-    BASE_PATH . '/app/config/route.php'
-  ],
-  // 是否缓存路由线路
-  'cache_route_config' => true,
-  // 路由线路缓存存放目录
-  'cache_route_dir' => BASE_PATH . '/runtime/route',
+  'route_config_files' => []
 ];

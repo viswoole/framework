@@ -55,6 +55,9 @@ class RouteCollector
    */
   protected array $apiDoc;
 
+  /**
+   * @param App $app
+   */
   public function __construct(private readonly App $app)
   {
   }
@@ -316,7 +319,7 @@ class RouteCollector
    * 获取api文档
    *
    * @access public
-   * @return array{
+   * @return array<int,array{
    *   paths: string[],
    *   describe: string,
    *   method:string[],
@@ -325,7 +328,7 @@ class RouteCollector
    *   domain:string[],
    *   pattern:array<string,string>,
    *   children:array,
-   * }
+   * }>
    */
   public function getApiDoc(): array
   {
