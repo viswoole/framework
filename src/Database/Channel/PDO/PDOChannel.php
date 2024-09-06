@@ -189,13 +189,17 @@ class PDOChannel extends Channel
       ) {
         return $connect->lastInsertId($getId);
       }
-      // 归还连接
-      $manager->put($this, $connect);
     } catch (PDOException $e) {
+      // 抛出异常
+      throw new DbException(
+        $e->getMessage(),
+        $e->errorInfo[1],
+        Raw::merge($sql, $bindings),
+        $e
+      );
+    } finally {
       // 归还连接
       $manager->put($this, $connect);
-      // 抛出异常
-      throw new DbException($e->getMessage(), Raw::merge($sql, $bindings), previous: $e);
     }
     return $stmt;
   }

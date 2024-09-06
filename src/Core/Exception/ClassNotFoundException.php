@@ -15,6 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Exception;
 
+/**
+ * 找不到类异常
+ */
 class ClassNotFoundException extends NotFoundException
 {
 

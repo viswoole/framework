@@ -18,6 +18,9 @@ namespace Viswoole\Log;
 use Stringable;
 use Viswoole\Log\Contract\CollectorInterface;
 
+/**
+ * 日志收集器抽象类
+ */
 abstract class Collector implements CollectorInterface
 {
 

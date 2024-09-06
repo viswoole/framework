@@ -23,6 +23,9 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Chinese extends Regex
 {
+  /**
+   * @param string $message 校验失败信息
+   */
   public function __construct(string $message = '必须由汉字组成')
   {
     parent::__construct('/^[\x{4e00}-\x{9fa5}]+$/u', $message);

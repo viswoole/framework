@@ -21,6 +21,9 @@ use Viswoole\Core\Coroutine;
 use Viswoole\Core\Coroutine\Context;
 use Viswoole\Log\Contract\DriveInterface;
 
+/**
+ * 日志驱动抽象类
+ */
 abstract class Drive extends Collector implements DriveInterface
 {
   /**

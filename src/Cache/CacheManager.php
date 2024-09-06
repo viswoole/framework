@@ -37,6 +37,9 @@ class CacheManager
    */
   protected array $stores;
 
+  /**
+   * @param Config $config
+   */
   public function __construct(protected Config $config)
   {
     $stores = $config->get('cache.stores', []);

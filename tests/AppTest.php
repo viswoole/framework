@@ -25,7 +25,7 @@ class AppTest extends TestCase
 
   public function testGet()
   {
-    /** @var $config Config */
+    /** @var Config $config */
     $config = $this->app->get('config');
     self::assertInstanceOf(Config::class, $config);
   }

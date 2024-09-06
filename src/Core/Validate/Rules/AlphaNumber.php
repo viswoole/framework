@@ -23,6 +23,9 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class AlphaNumber extends Regex
 {
+  /**
+   * @param string $message 校验失败信息
+   */
   public function __construct(string $message = '只能由字母或数字组成')
   {
     parent::__construct('/^[A-Za-z0-9]+$/', $message);

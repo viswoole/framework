@@ -18,6 +18,9 @@ namespace Viswoole\Cache\Contract;
 use Closure;
 use DateTime;
 
+/**
+ * 缓存驱动接口
+ */
 interface CacheDriverInterface
 {
   /**

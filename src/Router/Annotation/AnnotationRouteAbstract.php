@@ -16,6 +16,9 @@ declare (strict_types=1);
 namespace Viswoole\Router\Annotation;
 
 
+/**
+ * 注解路由抽象类
+ */
 abstract class AnnotationRouteAbstract
 {
   /**

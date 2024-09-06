@@ -356,7 +356,7 @@ class RouteCollector
     if (!$this->app->config->get('router.case_sensitive', false)) $path = strtolower($path);
     $ext = $PathAndExt[1] ?? '';
     $pattern = [];
-    /** @var $route RouteConfig 路由 */
+    /** @var RouteConfig $route 路由 */
     $route = null;
     //判断是否存在静态路由
     if (isset($this->staticRoute[$path])) {

@@ -15,13 +15,13 @@ declare (strict_types=1);
 
 namespace Viswoole\Database\Exception;
 
-use RuntimeException;
+use Exception;
 use Throwable;
 
 /**
  * 数据库异常
  */
-class DbException extends RuntimeException
+class DbException extends Exception
 {
   protected ?string $sql;
 
@@ -39,13 +39,13 @@ class DbException extends RuntimeException
   )
   {
     $this->sql = $sql;
-    $this->code = $code;
-    parent::__construct($message, 0, $previous);
+    parent::__construct($message, (int)$code, $previous);
   }
 
   /**
    * 获取出错的sql语句
    *
+   * @access public
    * @return string|null
    */
   public function getSql(): ?string

@@ -17,8 +17,15 @@ namespace Viswoole\Cache\Contract;
 
 use DateTime;
 
+/**
+ * 缓存标签接口
+ */
 interface CacheTagInterface
 {
+  /**
+   * @param string|array $tags
+   * @param CacheDriverInterface $driver
+   */
   public function __construct(string|array $tags, CacheDriverInterface $driver);
 
   /**

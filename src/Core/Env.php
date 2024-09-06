@@ -38,6 +38,9 @@ class Env implements ArrayAccess
     'on' => true,
   ];
 
+  /**
+   * @param App $app
+   */
   public function __construct(App $app)
   {
     $this->data = $_ENV;
@@ -88,6 +91,9 @@ class Env implements ArrayAccess
     }
   }
 
+  /**
+   * @inheritDoc
+   */
   #[Override] public function offsetExists(mixed $offset): bool
   {
     return $this->__isset($offset);
@@ -164,11 +170,17 @@ class Env implements ArrayAccess
     return $result;
   }
 
+  /**
+   * @inheritDoc
+   */
   #[Override] public function offsetGet(mixed $offset): mixed
   {
     return $this->get($offset);
   }
 
+  /**
+   * @inheritDoc
+   */
   #[Override] public function offsetSet(mixed $offset, mixed $value): void
   {
     $this->set($offset, $value);

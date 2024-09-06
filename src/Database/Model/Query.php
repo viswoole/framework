@@ -356,6 +356,7 @@ class Query extends BaseQuery
    * @param array $data
    * @param array $columns 只允许写入的列
    * @return DataSet
+   * @throws DbException
    */
   public function create(array $data, array $columns = []): DataSet
   {
@@ -365,9 +366,7 @@ class Query extends BaseQuery
     // 拿到只写入的列
     $filteredData = empty($columns) ? $data : array_intersect_key($data, array_flip($columns));
     // 写入数据并获取主键
-    $id = $this->insertGetId($filteredData);
-    if (!$id) throw new DbException('Model::create() 创建数据失败');
-    $data[$this->pk] = $id;
+    $data[$this->pk] = $this->insertGetId($filteredData);
     return new DataSet($this->newQuery(), $data);
   }
 

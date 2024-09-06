@@ -25,6 +25,11 @@ abstract class Facade
    */
   protected static bool $alwaysNewInstance = false;
 
+  /**
+   * @param $method
+   * @param $params
+   * @return mixed
+   */
   public static function __callStatic($method, $params)
   {
     return call_user_func_array([static::createFacade(), $method], $params);

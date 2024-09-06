@@ -20,7 +20,6 @@ use InvalidArgumentException;
 use PDO;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
-use Throwable;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Collection;
@@ -55,6 +54,7 @@ trait Crud
    *
    * @param array<string,mixed>|array<int,array<string,mixed>> $data 要插入的数据
    * @return int|Raw 返回插入的记录数
+   * @throws DbException
    */
   public function insert(array $data): int|Raw
   {
@@ -85,8 +85,6 @@ trait Crud
       }
       $this->setRunInfo($start, $raw);
       return $result;
-    } catch (Throwable $e) {
-      throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
     } finally {
       $this->reset();
     }
@@ -97,6 +95,7 @@ trait Crud
    *
    * @param Raw $raw
    * @return array
+   * @throws DbException
    */
   protected function runSelect(Raw $raw): array
   {
@@ -131,6 +130,10 @@ trait Crud
    *
    * 该方法和select方法相同
    *
+   * @param bool $allowEmpty
+   * @return Collection|Raw
+   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
+   * @throws DbException 数据库抛出的异常
    * @see self::select()
    */
   public function get(bool $allowEmpty = true): Collection|Raw
@@ -144,6 +147,7 @@ trait Crud
    * @param bool $allowEmpty 是否允许为空。
    * @return Collection|Raw
    * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
+   * @throws DbException
    */
   public function select(bool $allowEmpty = true): Collection|Raw
   {
@@ -159,6 +163,7 @@ trait Crud
    * @param Raw $raw
    * @param false|string $getId
    * @return string|int
+   * @throws DbException
    */
   protected function runWrite(Raw $raw, false|string $getId): string|int
   {
@@ -189,6 +194,7 @@ trait Crud
    * 删除记录
    *
    * @return int|Raw
+   * @throws DbException
    */
   public function delete(): int|Raw
   {
@@ -226,6 +232,7 @@ trait Crud
    * 执行查询，并以数组返回查询结果。
    *
    * @return array|Raw
+   * @throws DbException
    */
   public function getArray(): array|Raw
   {
@@ -237,6 +244,7 @@ trait Crud
    *
    * @param array $data
    * @return string|int|Raw 写入成功返回主键值
+   * @throws DbException
    */
   public function insertGetId(array $data): string|int|Raw
   {
@@ -252,6 +260,7 @@ trait Crud
    *
    * @param array<string,mixed|Raw> $data 键值对数组，键为列名，值为要更新的值
    * @return int|Raw 返回更新的记录数
+   * @throws DbException
    */
   public function update(array $data): int|Raw
   {
@@ -265,6 +274,7 @@ trait Crud
    *
    * @param string $column 列名。
    * @return int|Raw
+   * @throws DbException
    */
   public function count(string $column = '*'): int|Raw
   {
@@ -277,6 +287,7 @@ trait Crud
    * @param string $type
    * @param string $column
    * @return mixed|Raw
+   * @throws DbException
    */
   private function aggregateQueries(string $type, string $column): mixed
   {
@@ -294,6 +305,7 @@ trait Crud
    *
    * @param string $column
    * @return mixed|false 如果查询结果为空，则返回false。
+   * @throws DbException
    */
   public function value(string $column): mixed
   {
@@ -313,6 +325,7 @@ trait Crud
    *
    * @param string $column 列名。
    * @return string|int|float|Raw 最小值。
+   * @throws DbException
    */
   public function min(string $column): string|int|float|Raw
   {
@@ -324,6 +337,7 @@ trait Crud
    *
    * @param string $column 列名。
    * @return string|int|float|Raw 最大值。
+   * @throws DbException
    */
   public function max(string $column): string|int|float|Raw
   {
@@ -335,6 +349,7 @@ trait Crud
    *
    * @param string $column 列名。
    * @return float|int|Raw 平均值。
+   * @throws DbException
    */
   public function avg(string $column): float|int|Raw
   {
@@ -346,6 +361,7 @@ trait Crud
    *
    * @param string $column 列名。
    * @return float|int|Raw 总和。
+   * @throws DbException
    */
   public function sum(string $column): float|int|Raw
   {
@@ -357,6 +373,8 @@ trait Crud
    *
    * @param bool $allowEmpty
    * @return DataSet|Raw
+   * @throws DataNotFoundException
+   * @throws DbException
    */
   public function first(bool $allowEmpty = true): DataSet|Raw
   {
@@ -387,6 +405,7 @@ trait Crud
    * @param bool $allowEmpty 是否允许为空
    * @return DataSet|Raw
    * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
+   * @throws DbException
    */
   public function find(int|string $value = null, bool $allowEmpty = true): DataSet|Raw
   {
@@ -419,24 +438,20 @@ trait Crud
     $this->options->type = 'select';
     // 打包SQL
     $raw = $this->channel->build($this->options);
-    try {
-      /**
-       * @var PDOStatement $statement
-       */
-      $statement = $this->channel->execute($raw);
-      // 保存执行信息
-      $this->setRunInfo($start, $raw);
-      // 重置查询参数
-      $this->reset();
-      // 返回生成器
-      while ($result = $statement->fetch(PDO::FETCH_ASSOC)) {
-        yield new DataSet($this->newQuery(), $result);
-      }
-      // 关闭PDOStatement
-      $statement->closeCursor();
-    } catch (Throwable $e) {
-      throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
+    /**
+     * @var PDOStatement $statement
+     */
+    $statement = $this->channel->execute($raw);
+    // 保存执行信息
+    $this->setRunInfo($start, $raw);
+    // 重置查询参数
+    $this->reset();
+    // 返回生成器
+    while ($result = $statement->fetch(PDO::FETCH_ASSOC)) {
+      yield new DataSet($this->newQuery(), $result);
     }
+    // 关闭PDOStatement
+    $statement->closeCursor();
   }
 
   /**
@@ -444,6 +459,7 @@ trait Crud
    *
    * @param int $size 每次读取的数量
    * @return Generator 返回生成器
+   * @throws DbException
    */
   public function chunk(int $size): Generator
   {
@@ -460,20 +476,16 @@ trait Crud
       $start = microtime(true);
       // 替换 OFFSET 的值
       $raw->sql = preg_replace('/OFFSET\s+\d+/', "OFFSET $offset", $raw->sql);
-      try {
-        /**
-         * @var PDOStatement $statement
-         */
-        $statement = $this->channel->execute($raw);
-        $results = $statement->fetchAll(PDO::FETCH_ASSOC);
-        $statement->closeCursor();
-        $this->setRunInfo($start, $raw);
-        if (empty($results)) break;
-        yield new Collection($this->newQuery(), $results);
-        $offset += $size;
-      } catch (Throwable $e) {
-        throw new DbException($e->getMessage(), $e->getCode(), $raw->toString(), $e);
-      }
+      /**
+       * @var PDOStatement $statement
+       */
+      $statement = $this->channel->execute($raw);
+      $results = $statement->fetchAll(PDO::FETCH_ASSOC);
+      $statement->closeCursor();
+      $this->setRunInfo($start, $raw);
+      if (empty($results)) break;
+      yield new Collection($this->newQuery(), $results);
+      $offset += $size;
     }
     $this->reset();
   }

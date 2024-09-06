@@ -24,6 +24,9 @@ use Viswoole\Core\Exception\ServerNotFoundException;
 use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
+/**
+ * HTTP服务事件处理
+ */
 class EventHandle
 {
   /**
@@ -43,11 +46,11 @@ class EventHandle
     $app = App::factory();
     try {
       /**
-       * @var $psr7Request RequestInterface
+       * @var RequestInterface $psr7Request
        */
       $psr7Request = $app->make(RequestInterface::class, [$request]);
       /**
-       * @var $psr7Response ResponseInterface
+       * @var ResponseInterface $psr7Response
        */
       $psr7Response = $app->make(ResponseInterface::class, [$response]);
       $params = $psr7Request->params();

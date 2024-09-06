@@ -17,6 +17,9 @@ namespace Viswoole\Cache\Exception;
 
 use RuntimeException;
 
+/**
+ * 缓存异常
+ */
 class CacheErrorException extends RuntimeException
 {
 

@@ -16,6 +16,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Database\Channel\PDO;
 
+use InvalidArgumentException;
 use PDO;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Exception\DbException;
@@ -72,6 +73,7 @@ class SqlBuilder
    * 生成基本sql语句
    *
    * @return Raw
+   * @throws DbException
    */
   public function build(): Raw
   {
@@ -80,7 +82,7 @@ class SqlBuilder
       'update' => $this->buildUpdate(),
       'delete' => $this->buildDelete(),
       'select' => $this->buildSelect(),
-      default => throw new DbException('不支持的查询类型'),
+      default => throw new InvalidArgumentException('不受支持的CRUD操作类型'),
     };
     // 锁
     $sql .= $this->parseLockForUpdate();
@@ -93,6 +95,7 @@ class SqlBuilder
    * 写入数据
    *
    * @return string
+   * @throws DbException
    */
   public function buildInsert(): string
   {
@@ -152,6 +155,7 @@ class SqlBuilder
    * 获取表字段列表
    *
    * @return array
+   * @throws DbException
    */
   protected function getTableColumns(): array
   {
@@ -167,14 +171,18 @@ class SqlBuilder
     $conn = $this->channel->pop('read');
     $statement = $conn->query($sql);
     $this->channel->put($conn);
-    if (!$statement) throw new DbException('获取数据表结构失败', 500, $sql);
+    if (!$statement) throw new DbException(
+      $statement->errorInfo()[2], $statement->errorInfo()[1], $sql
+    );
     if ($this->channel->type === DriverType::SQLite) {
       $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
       $fields = array_column($fields, 'name');
     } else {
       $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
     }
-    if (!$fields) throw new DbException('获取数据表结构失败', 500, $sql);
+    if (!$fields) throw new DbException(
+      $statement->errorInfo()[2], $statement->errorInfo()[1], $sql
+    );
     self::$tableColumns[$table] = $fields;
     return $fields;
   }
@@ -206,6 +214,7 @@ class SqlBuilder
    * 打包更新语句
    *
    * @return string
+   * @throws DbException
    */
   public function buildUpdate(): string
   {
@@ -231,6 +240,7 @@ class SqlBuilder
    * 解析更新数据
    *
    * @return string
+   * @throws DbException
    */
   protected function parseUpdateData(): string
   {
@@ -258,7 +268,9 @@ class SqlBuilder
         ];
       } else {
         $pk = $this->quote($this->options->pk);
-        throw new DbException("更新数据时，必须指定where条件,或在更新数据中包含{$pk}主键值");
+        throw new InvalidArgumentException(
+          "更新数据时，必须指定where条件,或在更新数据中包含{$pk}主键值"
+        );
       }
     }
     return implode(', ', $sql);
@@ -308,9 +320,8 @@ class SqlBuilder
         } elseif ($operator === '!=' || $operator === '<>') {
           $where = "$connector $column IS NOT NULL";
         } else {
-          throw new DbException(
-            '当查询条件值为null时，有效的运算符为=,!=,<>,IS NULL,IS NOT NULL',
-            sql: "... $connector $column $operator null"
+          throw new InvalidArgumentException(
+            '当where条件值为null时，有效的运算符为=,!=,<>,IS NULL,IS NOT NULL'
           );
         }
         return $where;
@@ -391,6 +402,7 @@ class SqlBuilder
    * 构建Select语句
    *
    * @return string
+   * @throws DbException
    */
   public function buildSelect(): string
   {
@@ -432,6 +444,7 @@ class SqlBuilder
    * 解析选择的列
    *
    * @return string
+   * @throws DbException
    */
   protected function parseColumns(): string
   {

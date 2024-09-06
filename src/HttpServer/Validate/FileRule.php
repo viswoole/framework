@@ -55,7 +55,7 @@ class FileRule extends RuleAbstract
     }
     $file = $upload[$this->name] ?? [];
     /**
-     * @var $item UploadedFile
+     * @var UploadedFile $item
      */
     foreach ($file as $item) {
       if ($this->fileMime !== '*' && $item->getClientMediaType() !== $this->fileMime) {

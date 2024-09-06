@@ -15,6 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Exception;
 
+/**
+ * 通道不存在时抛出的异常
+ */
 class ChannelNotFoundException extends ConnectionPoolException
 {
 
