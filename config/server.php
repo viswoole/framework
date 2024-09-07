@@ -85,7 +85,7 @@ return [
       $serverName = SERVER_NAME;
       Output::echo("$serverName 服务启动 进程PID:" . $server->master_pid, 'NOTICE', backtrace: 0);
     },
-    Constant::EVENT_SHUTDOWN => function (SwooleServer $server): void {
+    Constant::EVENT_SHUTDOWN => function (): void {
       $serverName = SERVER_NAME;
       Output::echo("$serverName 服务已经安全关闭", 'NOTICE', backtrace: 0);
     }
