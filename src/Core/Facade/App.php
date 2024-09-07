@@ -41,6 +41,7 @@ use Viswoole\Core\Facade;
  * @method static void removeHook(string $abstract, ?Closure $callback = null) 删除解析钩子
  * @method static void bind(string $abstract, object|string|null $concrete = null) 绑定接口
  * @method static void remove(string $abstract) 删除容器中的服务实例
+ * @method static string getVersion() 获取当前版本号
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facade\\App
  */
