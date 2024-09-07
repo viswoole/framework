@@ -5,8 +5,10 @@
     "framework",
     "viswoole"
   ],
-  "minimum-stability": "dev",
-  "license": "Apache-2.0",
+  "homepage": "https://viswoole.com",
+  "minimum-stability": "stable",
+  "prefer-stable": true,
+  "license": "MIT",
   "type": "library",
   "authors": [
     {
