@@ -43,16 +43,12 @@ class Console extends Application
 
   /**
    * @param App $app
-   * @param string $name
-   * @param string $version
    */
   public function __construct(
     private readonly App $app,
-    string               $name = 'viswoole',
-    string               $version = '1.0.0',
   )
   {
-    parent::__construct($name, $version);
+    parent::__construct('viswoole', $this->app->getVersion());
     $this->loadCommand();
   }
 
