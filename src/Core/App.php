@@ -46,6 +46,7 @@ use Viswoole\Router\RouterService;
  */
 class App extends Container
 {
+  public const string VERSION = '1.0.0';
   protected static self $instance;
   /**
    * @var array<string,string> 接口标识映射
@@ -182,6 +183,16 @@ class App extends Container
   {
     if (!isset(self::$instance)) new static();
     return self::$instance;
+  }
+
+  /**
+   * 获取当前版本号
+   *
+   * @return string
+   */
+  public function getVersion(): string
+  {
+    return self::VERSION;
   }
 
   /**
