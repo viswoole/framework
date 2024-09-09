@@ -34,11 +34,12 @@ interface CacheTagInterface
    * @access public
    * @param string $key 缓存名称
    * @param mixed $value 存储数据
-   * @param DateTime|int $expire 有效时间（秒）
+   * @param DateTime|int|null $expire 有效时间（秒）
    * @param bool $NX 仅在缓存不存在时设置
    * @return bool
    */
-  public function set(string $key, mixed $value, DateTime|int $expire = -1, bool $NX = false): bool;
+  public function set(string $key, mixed $value, DateTime|int $expire = null, bool $NX = false
+  ): bool;
 
   /**
    * 清除标签缓存
