@@ -56,10 +56,8 @@ class Tag implements CacheTagInterface
       $names = $this->driver->getArray($tag);
       // 清除标签下的缓存
       $this->driver->delete($names);
-
       // 清除标签
       $this->driver->delete($tag);
-
       // 从标签库库中删除标签
       $this->driver->sRemoveArray($this->driver->getTagStoreName(), $tag);
     }

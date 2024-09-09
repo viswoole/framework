@@ -183,7 +183,10 @@ class Redis extends Driver
    * @throws RedisException
    */
   #[Override] public function lock(
-    string    $scene, int $expire = 10, bool $autoUnlock = false, int $retry = 5,
+    string    $scene,
+    int       $expire = 10,
+    bool      $autoUnlock = false,
+    int       $retry = 5,
     float|int $sleep = 0.2
   ): string
   {
