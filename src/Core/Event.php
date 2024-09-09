@@ -15,8 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use InvalidArgumentException;
 use ReflectionClass;
-use RuntimeException;
+use ReflectionException;
 
 /**
  * 事件管理器
@@ -100,9 +101,8 @@ class Event
   public function on(string $event, callable|string $handle, int $limit = 0): bool
   {
     $event = strtolower($event);
-    if (is_string($handle)) {
-      if (class_exists($handle)) {
-        // 创建 ReflectionClass 对象
+    if (!is_callable($handle)) {
+      try {
         $refClass = new ReflectionClass($handle);
         // 获取类的方法
         $methods = $refClass->getMethods();
@@ -124,8 +124,9 @@ class Event
             ];
           }
         }
-      } else {
-        throw new RuntimeException("{$event}事件监听的处理类{$handle}未定义");
+      } catch (ReflectionException $e) {
+        $message = $e->getMessage();
+        throw new InvalidArgumentException("Invalid handle: $handle , $message");
       }
     } else {
       $this->listens[$event][] = [
