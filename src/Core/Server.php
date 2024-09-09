@@ -113,8 +113,6 @@ class Server
     Constant::OPTION_DAEMONIZE => false,
     // 进程守护运行默认输出日志路径
     Constant::OPTION_LOG_FILE => BASE_PATH . '/runtime/swoole.log',
-    // 工作进程数量
-    Constant::OPTION_WORKER_NUM => 2,
     // 最大请求数 0为不限制
     Constant::OPTION_MAX_REQUEST => 100000,
     // 客户端连接的缓存区长度
@@ -191,8 +189,10 @@ class Server
     $config['construct'] = array_merge(
       self::DEFAULT_CONSTRUCT_ARGUMENTS, $config['construct'] ?? []
     );
+    // 全局配置
+    $globalOptions = config('server.options', self::DEFAULT_GLOBAL_OPTION);
     // 合并配置
-    $config['options'] = array_merge(self::DEFAULT_GLOBAL_OPTION, $config['options'] ?? []);
+    $config['options'] = array_merge($globalOptions, $config['options'] ?? []);
     // HOOK事件监听
     $config['events'] = EventHandler::hook(array_merge($defaultEvents, $config['events'] ?? []));
     // 任务回调协程化
