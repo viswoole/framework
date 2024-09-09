@@ -196,6 +196,7 @@ class App extends Container
   /**
    * 获取程序正常运行了多少秒
    *
+   * @access public
    * @return int 返回秒数
    */
   public function getUptime(): int
@@ -206,6 +207,7 @@ class App extends Container
   /**
    * 获取程序开始运行时间
    *
+   * @access public
    * @return int 返回时间戳
    */
   public function getStartRunTime(): int
