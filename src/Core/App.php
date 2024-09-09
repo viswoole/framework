@@ -47,6 +47,9 @@ use Viswoole\Router\RouterService;
 class App extends Container
 {
   public const string VERSION = '1.0.0';
+  /**
+   * @var App 当前APP应用容器实例
+   */
   protected static self $instance;
   /**
    * @var array<string,string> 接口标识映射
@@ -74,9 +77,14 @@ class App extends Container
    * @var Table 全局配置
    */
   protected Table $_config;
+  /**
+   * @var int 开始运行时间
+   */
+  private int $startRunTime;
 
   protected function __construct()
   {
+    $this->startRunTime = time();
     $this->_config = new Table(1);
     $this->_config->column('debug', Table::TYPE_INT, 4);
     $this->_config->create();
@@ -183,6 +191,26 @@ class App extends Container
   {
     if (!isset(self::$instance)) new static();
     return self::$instance;
+  }
+
+  /**
+   * 获取程序正常运行了多少秒
+   *
+   * @return int 返回秒数
+   */
+  public function getUptime(): int
+  {
+    return time() - $this->startRunTime;
+  }
+
+  /**
+   * 获取程序开始运行时间
+   *
+   * @return int 返回时间戳
+   */
+  public function getStartRunTime(): int
+  {
+    return $this->startRunTime;
   }
 
   /**

@@ -42,6 +42,8 @@ use Viswoole\Core\Facade;
  * @method static void bind(string $abstract, object|string|null $concrete = null) 绑定接口
  * @method static void remove(string $abstract) 删除容器中的服务实例
  * @method static string getVersion() 获取当前版本号
+ * @method static int getUptime() 获取应用运行时间
+ * @method static int getStartRunTime() 获取程序开始运行时间
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facade\\App
  */
