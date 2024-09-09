@@ -90,8 +90,8 @@ class File extends Driver
   {
     $filename = $this->filename($key);
     if (!is_file($filename)) return null;
-
-    $fileContent = file_get_contents($filename);
+    $fileContent = @file_get_contents($filename);
+    if ($fileContent === false) return null;
     if (preg_match(self::EXPIRE_PATTERN, $fileContent, $matches)) {
       $fileExpireTime = (int)$matches[1] - time();
       if ($fileExpireTime < 0) {
