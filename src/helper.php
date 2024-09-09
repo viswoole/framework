@@ -13,6 +13,7 @@
 
 declare (strict_types=1);
 
+use Viswoole\Cache\CacheManager;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Console\Output;
@@ -166,5 +167,19 @@ if (!function_exists('echo_log')) {
   ): void
   {
     Output::echo($message, $label, $color, $backtrace === 0 ? 0 : 2);
+  }
+}
+if (!function_exists('cache')) {
+  /**
+   * 缓存助手函数
+   *
+   * @param string|null $key 缓存标识
+   * @param mixed|null $value 缓存不存在时返回的默认值
+   * @return mixed|CacheManager 如果缓存标识为null，则返回CacheManager实例
+   */
+  function cache(?string $key = null, mixed $value = null): mixed
+  {
+    if (is_null($key)) return App::factory()->cache;
+    return App::factory()->cache->get($key, $value);
   }
 }
