@@ -5,8 +5,7 @@
 
 declare (strict_types=1);
 
-use Viswoole\Cache\Driver\File;
-use Viswoole\Cache\Driver\Redis;
+use Viswoole\Cache\Facade\Cache;
 
 return [
   // 默认通道
@@ -15,8 +14,10 @@ return [
   'stores' => [
     // 驱动类需继承Viswoole\Cache\Driver，
     // 或实现Viswoole\Cache\Contract\CacheDriverInterface接口。
-    // 通道支持给定驱动类完全限定名称、驱动实例、数组形式配置['diver'=>diver::class,'options'=>object|array]，options接受传递给驱动类的构造参数。
-    'file' => File::class,
-    'redis' => new Redis(env('REDIS_HOST', '127.0.0.1'))
+    // 内置了两种缓存驱动：File、Redis
+    // 数组形式配置 'name'=>['diver'=>diver::class,'options'=>object|array]
+    // 字符串形式配置 'name' => diver::class
+    // 实例形式配置 'name' => new Redis(env('REDIS_HOST', '127.0.0.1'))
+    'file' => Cache::FILE_DRIVER
   ]
 ];
