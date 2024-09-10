@@ -175,8 +175,9 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $instance = is_string($concrete)
       ? $this->invokeClass($concrete, $params)
       : $this->invokeFunction($concrete, $params);
-    // 如果类没有设置allowNewInstance属性，则缓存单实例
-    if (!isset($instance->allowNewInstance)) {
+    $allowNewInstance = $instance->allowNewInstance ?? null;
+    // 如果类没有设置allowNewInstance属性，或设置为false则缓存单实例
+    if (!$allowNewInstance) {
       $this->setSingleInstance($abstract, $instance);
     }
     return $instance;
