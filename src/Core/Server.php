@@ -26,7 +26,7 @@ use Swoole\Server\Port;
 use Viswoole\Core\Exception\Handle;
 use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Exception\ServerNotFoundException;
-use Viswoole\Core\Server\EventHandler;
+use Viswoole\Core\Server\ServerEventHook;
 
 /**
  * Swoole服务代理类
@@ -169,8 +169,6 @@ class Server
   public function getConfig(): array
   {
     if (isset($this->config)) return $this->config;
-    // 默认的全局event
-    $defaultEvents = config('server.events', []);
     $config = config("server.servers.$this->serverName");
     if (empty($config)) {
       throw new ServerNotFoundException(
@@ -193,8 +191,12 @@ class Server
     $globalOptions = config('server.options', self::DEFAULT_GLOBAL_OPTION);
     // 合并配置
     $config['options'] = array_merge($globalOptions, $config['options'] ?? []);
+    // 添加事件
+    ServerEventHook::addEvents(
+      array_merge(config('server.events', []), $config['events'] ?? [])
+    );
     // HOOK事件监听
-    $config['events'] = EventHandler::hook(array_merge($defaultEvents, $config['events'] ?? []));
+    $config['events'] = ServerEventHook::getEventHooks();
     // 任务回调协程化
     $config['options'][Constant::OPTION_TASK_ENABLE_COROUTINE] = true;
     // 判断PID存储路径是否设置
