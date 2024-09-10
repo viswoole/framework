@@ -74,9 +74,9 @@ class App extends Container
     DbService::class
   ];
   /**
-   * @var Table 全局配置
+   * @var Table 共享内存表
    */
-  protected Table $_config;
+  private Table $_config;
   /**
    * @var int 开始运行时间
    */
