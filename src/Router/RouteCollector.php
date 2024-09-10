@@ -18,7 +18,8 @@ namespace Viswoole\Router;
 use BadMethodCallException;
 use Closure;
 use RuntimeException;
-use Viswoole\Core\App;
+use Viswoole\Core\Config;
+use Viswoole\Core\Middleware;
 use Viswoole\Router\Exception\RouteNotFoundException;
 
 /**
@@ -56,9 +57,12 @@ class RouteCollector
   protected array $apiDoc;
 
   /**
-   * @param App $app
+   * @param Config $config
+   * @param Middleware $middleware
    */
-  public function __construct(private readonly App $app)
+  public function __construct(private readonly Config     $config,
+                              private readonly Middleware $middleware
+  )
   {
   }
 
@@ -356,7 +360,7 @@ class RouteCollector
     $PathAndExt = explode('.', $path);
     $path = $PathAndExt[0] ?? '/';
     $path = $path === '/' ? '/' : rtrim($path, '/');
-    if (!$this->app->config->get('router.case_sensitive', false)) $path = strtolower($path);
+    if (!$this->config->get('router.case_sensitive', false)) $path = strtolower($path);
     $ext = $PathAndExt[1] ?? '';
     $pattern = [];
     /** @var RouteConfig $route 路由 */
@@ -396,8 +400,8 @@ class RouteCollector
       $this->checkOption($route, 'suffix', $ext);
       // 合并参数
       if (!empty($pattern)) $params = array_merge($params, $pattern);
-      return $this->app->middleware->process(function () use ($route, $params) {
-        return $this->app->invoke($route['handler'], $params);
+      return $this->middleware->process(function () use ($route, $params) {
+        return invoke($route['handler'], $params);
       }, $route['middleware']);
     } catch (RouteNotFoundException $e) {
       // 匹配miss路由

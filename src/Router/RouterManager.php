@@ -18,7 +18,7 @@ namespace Viswoole\Router;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
-use Viswoole\Core\App;
+use Viswoole\Core\Event;
 use Viswoole\Router\Annotation\AutoRouteController;
 use Viswoole\Router\Annotation\RouteController;
 use Viswoole\Router\Annotation\RouteMapping;
@@ -34,13 +34,12 @@ class RouterManager
   protected array $serverRouteCollector = [];
 
   /**
-   * @param App $app
+   * @param Event $event
    */
-  public function __construct(protected readonly App $app)
+  public function __construct(private readonly Event $event)
   {
-    $this->app->bind(self::class, $this);
     // 触发路由初始化事件，其他模块可以监听该事件注册路由
-    $this->app->event->emit('RouteInit');
+    $event->emit('RouteInit');
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
     $this->parseRoute();
@@ -66,7 +65,7 @@ class RouterManager
    */
   private function loadAnnotationRoute(): void
   {
-    $rootPath = $this->app->getRootPath() . DIRECTORY_SEPARATOR;
+    $rootPath = getRootPath() . DIRECTORY_SEPARATOR;
     $directory = $rootPath . 'app/Controller';
     // 列出指定路径中的文件和目录
     $controllers = $this->getAllPhpFiles($directory);
@@ -230,7 +229,7 @@ class RouterManager
   {
     if (empty($serverName)) $serverName = SERVER_NAME;
     if (isset($this->serverRouteCollector[$serverName])) return $this->serverRouteCollector[$serverName];
-    return $this->serverRouteCollector[$serverName] = new RouteCollector($this->app);
+    return $this->serverRouteCollector[$serverName] = invoke(RouteCollector::class);
   }
 
   /**
@@ -242,7 +241,7 @@ class RouterManager
     foreach ($this->serverRouteCollector as $collector) {
       $collector->parseRoute();
     }
-    $this->app->event->emit('RouteLoaded');
+    $this->event->emit('RouteLoaded');
   }
 
   /**
