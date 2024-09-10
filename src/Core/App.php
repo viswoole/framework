@@ -105,10 +105,7 @@ class App extends Container
     $this->setDebug($this->config->get('app.debug', false));
     // 系统默认时区
     date_default_timezone_set(
-      $this->config->get(
-        'app.default_timezone',
-        'Asia/Shanghai'
-      )
+      $this->config->get('app.default_timezone', 'Asia/Shanghai')
     );
     // 注册服务
     $this->loadService();
