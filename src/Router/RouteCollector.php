@@ -60,8 +60,9 @@ class RouteCollector
    * @param Config $config
    * @param Middleware $middleware
    */
-  public function __construct(private readonly Config     $config,
-                              private readonly Middleware $middleware
+  public function __construct(
+    private readonly Config     $config,
+    private readonly Middleware $middleware
   )
   {
   }

@@ -18,6 +18,7 @@ namespace Viswoole\Router;
 use InvalidArgumentException;
 use ReflectionClass;
 use ReflectionMethod;
+use Viswoole\Core\App;
 use Viswoole\Core\Event;
 use Viswoole\Router\Annotation\AutoRouteController;
 use Viswoole\Router\Annotation\RouteController;
@@ -38,6 +39,7 @@ class RouterManager
    */
   public function __construct(private readonly Event $event)
   {
+    App::factory()->bind(self::class, $this);
     // 触发路由初始化事件，其他模块可以监听该事件注册路由
     $event->emit('RouteInit');
     $this->loadConfigRoute();
