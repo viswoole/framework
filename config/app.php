@@ -13,7 +13,7 @@ return [
   // 是否开启调试模式
   'debug' => env('app_debug', true),
   // 服务提供者注册
-  'providers' => [
+  'services' => [
     // swoole异步任务管理服务 如果不使用可以删除
     TaskService::class
   ],
