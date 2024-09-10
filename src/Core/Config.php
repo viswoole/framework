@@ -43,19 +43,18 @@ class Config
   protected array $config = [];
 
   /**
-   * @param App $app
+   * @param Event $event 事件管理器
    */
-  public function __construct(App $app)
+  public function __construct(Event $event)
   {
-    $app->bind(Config::class, $this);
-    $this->path = $app->getConfigPath() . DIRECTORY_SEPARATOR;
+    $this->path = getConfigPath() . DIRECTORY_SEPARATOR;
     $this->ext = '*';
     $this->matchCase = true;
     $this->load($this->path);
-    $app->event->on('AppInit', function () {
-      // 监听AppInit事件，在App初始化完成后 加载懒加载文件
+    $event->on('AppInitialized', function () {
+      // 监听AppInitialized事件，在App初始化完成后 加载懒加载文件
       $this->load($this->path . 'lazy' . DIRECTORY_SEPARATOR);
-    });
+    }, 1);
   }
 
   /**
