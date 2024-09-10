@@ -22,7 +22,7 @@ use Viswoole\Core\Facade;
  * Event事件管理器
  *
  * @method static void on(string $event, callable|string $handle, int $limit = 0) 监听事件
- * @method static void emit(string $event, array $data = []) 触发事件
+ * @method static void emit(string $event, array $arguments = []) 触发事件
  * @method static void off(string $event, callable|string $handle = null) 清除事件，不传handle则清除所有
  * @method static void offAll() 清除所有事件
  */
