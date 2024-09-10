@@ -31,14 +31,6 @@ class Middleware
   protected array $queue = [];
 
   /**
-   * @param App $app
-   */
-  public function __construct(private readonly App $app)
-  {
-    $this->app->bind(static::class, $this);
-  }
-
-  /**
    * 注册一个中间件
    *
    * Example usage:
@@ -62,7 +54,7 @@ class Middleware
   ): void
   {
     // 如果设置了服务器名称，并且当前服务器不是指定的服务器，则不注册该中间件
-    if ($server && $server !== $this->app->server->getName()) return;
+    if ($server && $server !== SERVER_NAME) return;
     $this->queue[] = $this->checkMiddleware($handler);
   }
 
@@ -106,11 +98,11 @@ class Middleware
       array_reverse($middlewares),
       function (Closure $carry, $middleware) {
         return function () use ($middleware, $carry) {
-          return $this->app->invoke($middleware, ['handler' => $carry]);
+          return invoke($middleware, ['handler' => $carry]);
         };
       },
       $handler
     );
-    return $this->app->invoke($pipeline);
+    return invoke($pipeline);
   }
 }
