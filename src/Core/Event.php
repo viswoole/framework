@@ -41,102 +41,8 @@ class Event
    * ```
    * @var array 监听器
    */
-  protected array $listens = [];
-
-  /**
-   * @param App $app
-   */
-  public function __construct(private readonly App $app)
-  {
-    $app->bind(Event::class, $this);
-    $this->initListen();
-  }
-
-  /**
-   * 初始化监听器
-   * @return void
-   */
-  private function initListen(): void
-  {
-    $listen = $this->app->get('config')->get('listens', []);
-    foreach ($listen as $event => $handle) {
-      if (!empty($handle)) {
-        foreach ($handle as $item) {
-          $this->on($event, $item);
-        }
-      }
-    }
-  }
-
-  /**
-   * 注册事件监听
-   *
-   * 示例：
-   * ```
-   * use \Viswoole\Core\Facade\Event;
-   * // 模拟监听用户登录事件
-   * Event::on('userLogin', function(array $data){
-   *    dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
-   * })
-   * // 触发用户登录事件
-   * Event::emit('userLogin', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
-   *
-   * // 监听器类
-   * class UserEvents{
-   *   public function login(array $data){
-   *      dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
-   *   }
-   * }
-   * // $handle传入监听器类，批量注册
-   * Event::on('user', UserEvents::class);
-   * // 触发监听器中的login方法
-   * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']])
-   * ```
-   *
-   * @param string $event 事件名称，不区分大小写
-   * @param callable|string $handle 处理方法或类
-   * @param int $limit 监听次数，0为不限制。
-   * @return bool
-   */
-  public function on(string $event, callable|string $handle, int $limit = 0): bool
-  {
-    $event = strtolower($event);
-    if (!is_callable($handle)) {
-      try {
-        $refClass = new ReflectionClass($handle);
-        // 获取类的方法
-        $methods = $refClass->getMethods();
-        foreach ($methods as $method) {
-          if ($method->isPublic()) {
-            if ($method->isStatic()) {
-              $handle = $refClass->getName() . '::' . $method->getName();
-            } else {
-              $handle = [
-                $handle,
-                $method->getName()
-              ];
-            }
-            $methodName = strtolower($method->getName());
-            $this->listens[$event . '.' . $methodName][] = [
-              'limit' => $limit,
-              'count' => 0,
-              'handle' => $handle
-            ];
-          }
-        }
-      } catch (ReflectionException $e) {
-        $message = $e->getMessage();
-        throw new InvalidArgumentException("Invalid handle: $handle , $message");
-      }
-    } else {
-      $this->listens[$event][] = [
-        'limit' => $limit,
-        'count' => 0,
-        'handle' => $handle
-      ];
-    }
-    return true;
-  }
+  private array $listens = [];
+  private array $events = [];
 
   /**
    * 触发事件
@@ -155,14 +61,35 @@ class Event
    */
   public function emit(string $event, array $arguments = []): void
   {
-    $event = strtolower($event);
-    $listens = $this->listens[$event] ?? [];
-    foreach ($listens as $index => $listen) {
-      if ($listen['limit'] === 0 || $listen['limit'] < $listen['count']) {
-        $this->app->invoke($listen['handle'], $arguments);
-        $this->listens[$event][$index]['count'] += 1;
-        if ($this->listens[$event][$index]['count'] >= $listen['limit']) {
-          $this->off($event, $listen['handle']);
+    $event = strtolower(trim($event));
+    if (str_contains($event, '.')) {
+      [$event, $id] = explode($event, '.', 2);
+      $this->callHandle($event, $id, $arguments);
+    } else {
+      $listens = $this->listens[$event] ?? [];
+      foreach (array_keys($listens) as $id) {
+        $this->callHandle($event, $id, $arguments);
+      }
+    }
+  }
+
+  /**
+   * 调用监听器
+   *
+   * @param string $event
+   * @param string $id
+   * @param array $arguments
+   * @return void
+   */
+  private function callHandle(string $event, string $id, array $arguments): void
+  {
+    if (isset($this->listens[$event][$id])) {
+      $listen = $this->listens[$event][$id];
+      if ($listen['limit'] === 0 || $listen['count'] < $listen['limit']) {
+        invoke($listen['handle'], $arguments);
+        $this->listens[$event][$id]['count'] += 1;
+        if ($this->listens[$event][$id]['count'] >= $listen['limit'] && $listen['limit'] !== 0) {
+          $this->off($event, $id);
         }
       }
     }
@@ -172,19 +99,116 @@ class Event
    * 关闭监听
    *
    * @param string $event 事件名称,不区分大小写
-   * @param callable|string|null $handle 处理函数或方法,不传则关闭该事件所有监听
+   * @param string|null $id 监听器id，如果为null，则关闭该事件的所有监听器
    * @return void
    */
-  public function off(string $event, callable|string $handle = null): void
+  public function off(string $event, string $id = null): void
   {
-    $event = strtolower($event);
-    if (isset($this->listens[$event])) {
-      if (is_null($handle)) {
-        unset($this->listens[$event]);
-      } else {
-        $index = array_search($handle, $this->listens[$event]);
-        if ($index !== false) unset($this->listens[$event][$index]);
+    if (str_contains($event, '.')) {
+      [$event, $id] = explode($event, '.', 2);
+      $this->off($event, $id);
+    } else {
+      $event = strtolower($event);
+      if (isset($this->listens[$event])) {
+        if (is_null($id)) {
+          unset($this->listens[$event]);
+        } else {
+          unset($this->listens[$event][$id]);
+        }
       }
+    }
+  }
+
+  /**
+   * 获取已监听的事件
+   *
+   * @return array
+   */
+  public function getEvents(): array
+  {
+    return $this->events;
+  }
+
+  /**
+   * 注册事件监听
+   *
+   * 示例：
+   * ```
+   * use \Viswoole\Core\Facade\Event;
+   * // 模拟监听用户登录事件
+   * $id = Event::on('userLogin', function(array $data){
+   *    dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
+   * })
+   * // 触发用户登录事件
+   * Event::emit('userLogin', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
+   * // 清除监听器
+   * Event::off('userLogin',$id);
+   *
+   * // 监听器类
+   * class UserEvents{
+   *   public static function login(array $data){
+   *      dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
+   *   }
+   * }
+   * // $handle传入监听器类，批量注册
+   * Event::on('user', UserEvents::class);
+   * // 触发监听器中的login方法
+   * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']])
+   * // 关闭监听器
+   * Event::off('user.login');
+   * ```
+   *
+   * @param string $event 事件名称（名称中不能包含`.`），不区分大小写
+   * @param callable|string $handle 处理方法或类
+   * @param int $limit 监听次数，0为不限制。
+   * @return string|array 返回注入的事件id
+   */
+  public function on(string $event, callable|string $handle, int $limit = 0): string|array
+  {
+    if (str_contains($event, '.')) {
+      throw new InvalidArgumentException('Event name cannot contain "."');
+    }
+    $event = strtolower(trim($event));
+    if (!is_callable($handle)) {
+      try {
+        $eventList = [];
+        $refClass = new ReflectionClass($handle);
+        // 获取类的方法
+        $methods = $refClass->getMethods();
+        foreach ($methods as $method) {
+          if ($method->isPublic()) {
+            if ($method->isStatic()) {
+              $handle = $refClass->getName() . '::' . $method->getName();
+            } else {
+              $handle = [
+                $handle,
+                $method->getName()
+              ];
+            }
+            $methodName = strtolower($method->getName());
+            $eventList[] = $methodName;
+            $this->events[] = $event . '.' . $methodName;
+            $this->listens[$event][$methodName] = [
+              'limit' => $limit,
+              'count' => 0,
+              'handle' => $handle
+            ];
+          }
+        }
+        return $eventList;
+      } catch (ReflectionException $e) {
+        $message = $e->getMessage();
+        throw new InvalidArgumentException("Invalid handle: $handle , $message");
+      }
+    } else {
+      $id = md5(uniqid($event . '_' . microtime(true), true));
+      $this->events[] = $event;
+      $this->listens[$event][$id] = [
+        'limit' => $limit,
+        'count' => 0,
+        'handle' => $handle
+      ];
+      return $id;
     }
   }
 
