@@ -38,11 +38,11 @@ return [
         Constant::OPTION_UPLOAD_MAX_FILESIZE => 5 * 1024,
         // 启用HTTP2协议解析
         Constant::OPTION_OPEN_HTTP2_PROTOCOL => true,
-        // 任务进程数量 最大值不得超过 swoole_cpu_num() * 1000  0代表不开启
-        Constant::OPTION_TASK_WORKER_NUM => 0,
         // 如果需要ssl访问则需要配置 Constant::OPTION_SSL_CERT_FILE 和 Constant::OPTION_SSL_KEY_FILE
         // 进程守护运行
         Constant::OPTION_DAEMONIZE => false,
+        // 任务进程数量 最大值不得超过 swoole_cpu_num() * 1000  0代表不开启
+        Constant::OPTION_TASK_WORKER_NUM => swoole_cpu_num(),
         // 任务协程
         Constant::OPTION_TASK_ENABLE_COROUTINE => true
       ],
