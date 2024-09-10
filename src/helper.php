@@ -183,3 +183,16 @@ if (!function_exists('cache')) {
     return App::factory()->cache->get($key, $value);
   }
 }
+if (!function_exists('invoke')) {
+  /**
+   * 调用函数或方法，依赖注入
+   *
+   * @param array|callable|string $callable
+   * @param array $params
+   * @return mixed
+   */
+  function invoke(array|callable|string $callable, array $params = []): bool
+  {
+    return App::factory()->invoke($callable, $params);
+  }
+}
