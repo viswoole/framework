@@ -22,6 +22,7 @@ use Viswoole\Core\Exception\NotFoundException;
 if (!function_exists('getRootPath')) {
   /**
    * 获取项目根目录,结尾不带/
+   *
    * @return string
    */
   function getRootPath(): string
@@ -32,6 +33,7 @@ if (!function_exists('getRootPath')) {
 if (!function_exists('getVendorPath')) {
   /**
    * 获取依赖仓库路径,结尾不带/
+   *
    * @return string
    */
   function getVendorPath(): string
@@ -51,13 +53,24 @@ if (!function_exists('getConfigPath')) {
 }
 if (!function_exists('getAppPath')) {
   /**
-   * 获取服务或容器
+   * 获取app目录
    *
    * @return string
    */
   function getAppPath(): string
   {
     return App::factory()->getAppPath();
+  }
+}
+if (!function_exists('getEnvPath')) {
+  /**
+   * 获取环境变量文件路径
+   *
+   * @return string
+   */
+  function getEnvPath(): string
+  {
+    return App::factory()->getEnvPath();
   }
 }
 if (!function_exists('app')) {
