@@ -191,7 +191,7 @@ if (!function_exists('invoke')) {
    * @param array $params
    * @return mixed
    */
-  function invoke(array|callable|string $callable, array $params = []): bool
+  function invoke(array|callable|string $callable, array $params = []): mixed
   {
     return App::factory()->invoke($callable, $params);
   }
