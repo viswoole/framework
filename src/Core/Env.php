@@ -39,12 +39,12 @@ class Env implements ArrayAccess
   ];
 
   /**
-   * @param App $app
+   * 构造函数
    */
-  public function __construct(App $app)
+  public function __construct()
   {
     $this->data = $_ENV;
-    $this->load($app->getEnvPath());
+    $this->load(getEnvPath());
   }
 
   /**
