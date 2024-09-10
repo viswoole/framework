@@ -99,7 +99,7 @@ class Response implements ResponseInterface
   {
     $result = $this->swooleResponse->header($key, $value, $format);
     if (!$result) {
-      throw new InvalidArgumentException('设置响应头失败，请检查key和value是否符合HTTP约定');
+      throw new InvalidArgumentException('设置响应头失败，响应对象已结束或已分离');
     }
     return $this;
   }
