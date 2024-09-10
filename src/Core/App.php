@@ -90,7 +90,6 @@ class App extends Container
     $this->_config->create();
     self::$instance = $this;
     $this->bind(App::class, $this);
-    $this->event->emit('AppInit');
     $this->initialize();
     $this->event->emit('AppInitialized');
   }
