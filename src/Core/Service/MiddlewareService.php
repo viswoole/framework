@@ -20,7 +20,7 @@ use Override;
 /**
  * 中间件服务
  */
-class Middleware extends Provider
+class MiddlewareService extends Provider
 {
 
   /**

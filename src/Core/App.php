@@ -18,7 +18,7 @@ namespace Viswoole\Core;
 use Swoole\Table;
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\CacheService;
-use Viswoole\Core\Service\Middleware as MiddlewareService;
+use Viswoole\Core\Service\MiddlewareService;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Database\DbService;
 use Viswoole\HttpServer\Contract\RequestInterface;
