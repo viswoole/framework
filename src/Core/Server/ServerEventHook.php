@@ -79,10 +79,7 @@ class ServerEventHook
     $handlers = self::$handles[$event] ?? null;
     if (!is_null($handlers)) {
       foreach ($handlers as $handler) {
-        // 利用协程进行并发处理
-        go(function () use ($handler, $args) {
-          call_user_func_array($handler, $args);
-        });
+        call_user_func_array($handler, $args);
       }
     }
   }
