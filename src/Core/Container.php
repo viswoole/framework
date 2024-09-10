@@ -201,6 +201,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param array $params
    * @return object
    * @throws NotFoundException
+   * @noinspection PhpDocMissingThrowsInspection
    */
   public function invokeClass(string $class, array $params = []): object
   {
@@ -425,7 +426,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param callable|string|array $callable
    * @param array $params
    * @return mixed
-   * @throws NotFoundException|TypeError
+   * @throws NotFoundException|ValidateException
    */
   public function invoke(callable|string|array $callable, array $params = []): mixed
   {
