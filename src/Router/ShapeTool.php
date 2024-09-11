@@ -48,14 +48,14 @@ final class ShapeTool
   public static function getPropertyShape(
     object|string $objectOrClass,
     string        $property_name,
-    bool          $cache = true
+    bool          $cache = false
   ): array
   {
     if ($cache) {
       $onlyKey = __METHOD__
-        . '_' . (is_object($objectOrClass) ? get_class(
-          $objectOrClass
-        ) : $objectOrClass) . '_' . $property_name;
+        . '_'
+        . (is_object($objectOrClass) ? get_class($objectOrClass) : $objectOrClass)
+        . '_' . $property_name;
       $shape = self::getCache($onlyKey);
       if ($shape) return $shape;
     }
@@ -189,20 +189,20 @@ final class ShapeTool
    */
   public static function getParamTypeShape(
     Closure|array|string $callable,
-    bool                 $cache = true
+    bool                 $cache = false
   ): array
   {
     if ($cache) {
       $onlyKey = __METHOD__ . '_';
       if (is_array($callable)) {
-        $onlyKey .= (is_object($callable[0]) ? get_class(
-            $callable[0]
-          ) : $callable[0]) . '::' . $callable[1];
-        $shape = self::getCache($onlyKey);
+        $onlyKey .= (is_object($callable[0]) ? get_class($callable[0]) : $callable[0]);
+        $onlyKey .= '::' . $callable[1];
       } elseif (is_string($callable)) {
         $onlyKey .= $callable;
-        $shape = self::getCache($onlyKey);
+      } else {
+        $onlyKey .= spl_object_hash($callable);
       }
+      $shape = self::getCache($onlyKey);
       if (isset($shape)) return $shape;
     }
     try {
@@ -262,7 +262,7 @@ final class ShapeTool
   public static function getClassPropertyShape(
     object|string $objectOrClass,
     int           $filter = ReflectionProperty::IS_PUBLIC,
-    bool          $cache = true
+    bool          $cache = false
   ): array
   {
     $class = is_object($objectOrClass) ? get_class($objectOrClass) : $objectOrClass;
