@@ -13,30 +13,27 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\HttpServer\Validate;
+namespace Viswoole\HttpServer\AutoInject;
 
 use Attribute;
 use Override;
-use Viswoole\Core\Exception\ValidateException;
 use Viswoole\Core\Validate\Rules\RuleAbstract;
-use Viswoole\HttpServer\AutoInject\Header;
 use Viswoole\HttpServer\Facade\Request;
+use Viswoole\HttpServer\Request\Header;
 
 /**
- * Http 请求头验证
+ * 自动注入请求标头
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class HeaderRule extends RuleAbstract
+class InjectHeader extends RuleAbstract
 {
   /**
-   * @param string $name 标头
-   * @param bool $require 是否必须
+   * @param string $key 标头，为空则为参数名
    * @param string $message
    */
   public function __construct(
-    public readonly string $name,
-    public readonly bool   $require = true,
-    string                 $message = ''
+    private string $key = '',
+    string         $message = ''
   )
   {
     parent::__construct($message);
@@ -46,20 +43,19 @@ class HeaderRule extends RuleAbstract
    * 验证数据
    *
    * @param mixed $value
+   * @param string $key 参数名
    * @return mixed 返回校验后的数据
-   * @throws ValidateException 验证失败请抛出异常或调用$this->error()
    */
-  #[Override] public function validate(mixed $value): mixed
+  #[Override] public function validate(mixed $value, string $key = ''): mixed
   {
-    $headerValue = Request::getHeader($this->name);
-    if (empty($headerValue) && $this->require) {
-      $this->error("Http header $this->name is required");
-    } elseif ($value instanceof Header) {
-      $value->name = $this->name;
-      $value->value = $headerValue;
-    } else {
-      $value = $headerValue;
+    $this->key = empty($this->key) ? $key : $this->key;
+    $headerValue = Request::getHeader($this->key);
+    if (empty($headerValue)) {
+      if (is_null($value)) return null;
+      $this->error("必须具有 $this->key 请求标头");
     }
+    if (!$value instanceof Header) $value = new Header();
+    $value->inject($this->key, $headerValue);
     return $value;
   }
 }
