@@ -73,15 +73,17 @@ class Request implements RequestInterface
       // 将解析后的数据设置到 $request->post
       $swooleRequest->post = $postData;
     }
-    if (!empty($swooleRequest->files)) $swooleRequest->files = $this->parseFiles(
-      $swooleRequest->files
-    );
+    if (!empty($swooleRequest->files)) {
+      $swooleRequest->files = $this->parseFiles(
+        $swooleRequest->files
+      );
+    }
   }
 
   /**
    * 解析上传文件为UploadedFile实例
    * @param array $files
-   * @return array<string, UploadedFile[]>
+   * @return array<string,UploadedFile|UploadedFile[]>
    */
   protected function parseFiles(array $files): array
   {
@@ -91,7 +93,7 @@ class Request implements RequestInterface
         $file = $this->parseFiles($file);
         $uploadedFiles[$name] = $file;
       } else {
-        $uploadedFiles[$name] = [new UploadedFile(...$file)];
+        $uploadedFiles[$name] = new UploadedFile(...$file);
       }
     }
     return $uploadedFiles;
@@ -254,10 +256,10 @@ class Request implements RequestInterface
   /**
    * 获取上传的文件
    *
-   * @param string|null $key 可选文件名称
-   * @return UploadedFile[]|null|array<string, UploadedFile[]>
+   * @param string|null $key 可选的文件名称（post上传的name属性），不传获取所有文件关联数组
+   * @return UploadedFile[]|null|array<string, UploadedFile[]|UploadedFile>|UploadedFile 没有文件则返回null
    */
-  #[Override] public function files(?string $key = null): array|null
+  #[Override] public function files(?string $key = null): array|UploadedFile|null
   {
     return is_null($key) ? $this->swooleRequest->files : $this->swooleRequest->files[$key] ?? null;
   }
