@@ -59,6 +59,9 @@ class Request implements RequestInterface
    */
   protected array $filter = ['htmlspecialchars' => ['flags' => ENT_QUOTES | ENT_SUBSTITUTE]];
 
+  /**
+   * @param swooleRequest $swooleRequest
+   */
   public function __construct(public readonly swooleRequest $swooleRequest)
   {
     $contentType = $swooleRequest->header['content-type'] ?? null;

@@ -17,6 +17,9 @@ namespace Viswoole\HttpServer\AutoInject;
 
 use Viswoole\HttpServer\Facade\Request;
 
+/**
+ * 自动注入请求标头
+ */
 class Header
 {
   /**
@@ -28,6 +31,11 @@ class Header
    */
   public string $value;
 
+  /**
+   * 转换为字符串
+   *
+   * @return string
+   */
   public function __toString(): string
   {
     return $this->value ?? var_export($this->all(), true);

@@ -29,7 +29,7 @@ use Viswoole\HttpServer\Message\UploadedFile;
  * 用于自动注入上传的文件，如果需注入指定name的文件，
  * 则需配合\Viswoole\HttpServer\Validate\FileRule使用。
  *
- * 可以通过__call魔术方法直接调用UploadFile对象的方法，只适用于上传的文件只有一个时。
+ * 实现了__call魔术方法，可直接调用UploadFile对象的方法，只适用于上传的文件只有一个时。
  * @method FileStream getStream() 获取流
  * @method void moveTo(string $targetPath) 移动文件到指定目录
  * @method bool isMoved() 判断文件是否已移动
