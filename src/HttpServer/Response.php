@@ -337,6 +337,9 @@ class Response implements ResponseInterface
     ?string $fileMimeType = null
   ): bool
   {
+    if (!file_exists($filePath)) {
+      throw new InvalidArgumentException("没有找到要发送的文件：{$filePath}，请检查路径是否正确。");
+    }
     if (empty($fileMimeType)) {
       $finfo = finfo_open(FILEINFO_MIME_TYPE);
       $fileMimeType = finfo_file($finfo, $filePath);
