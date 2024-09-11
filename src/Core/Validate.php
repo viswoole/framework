@@ -36,12 +36,13 @@ class Validate
    *
    * @param ReflectionAttribute[]|RuleAbstract[] $rules 扩展验证规则
    * @param mixed $value 验证值
+   * @param mixed ...$args 额外需要传递给验证器的参数（依赖注入时会传入属性或参数名称，供validate使用）
    * @return mixed
-   * @throws ValidateException
    */
   public static function checkRules(
     array|ReflectionAttribute|RuleAbstract $rules,
-    mixed                                  $value
+    mixed                                  $value,
+    mixed                                  ...$args
   ): mixed
   {
     if (!is_array($rules)) $rules = [$rules];
@@ -52,7 +53,7 @@ class Validate
       }
       // 判断是否为扩展规则
       if ($instance instanceof RuleAbstract) {
-        $value = $instance->validate($value);
+        $value = call_user_func_array([$instance, 'validate'], [$value, ...$args]);
       }
     }
     return $value;
