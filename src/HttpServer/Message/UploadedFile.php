@@ -95,14 +95,13 @@ class UploadedFile
   {
     $this->validateActive();
 
-    if (false === $this->isStringNotEmpty($targetPath)) {
+    if (empty($targetPath)) {
       throw new InvalidArgumentException(
         'Invalid path provided for move operation; must be a non-empty string'
       );
     }
     $dir = dirname($targetPath);
-
-    if (false === is_dir($dir) && false === mkdir($dir, 0755, true)) {
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
       throw new RuntimeException(
         sprintf(
           'Uploaded file could not be moved to %s because it is not possible to create that directory',
@@ -153,11 +152,6 @@ class UploadedFile
   public function isMoved(): bool
   {
     return $this->moved;
-  }
-
-  private function isStringNotEmpty($param): bool
-  {
-    return is_string($param) && false === empty($param);
   }
 
   /**
