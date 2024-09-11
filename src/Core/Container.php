@@ -328,7 +328,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     try {
       // 验证扩展规则
       if (!empty($attributes) && !is_null($value)) {
-        $value = Validate::checkRules($attributes, $value);
+        $value = Validate::checkRules($attributes, $value, $name);
       }
     } catch (ValidateException $e) {
       $this->handleParamsError($index, $name, $e);
