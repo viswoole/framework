@@ -52,7 +52,7 @@ class Validate
       }
       // 判断是否为扩展规则
       if ($instance instanceof RuleAbstract) {
-        $instance->validate($value);
+        $value = $instance->validate($value);
       }
     }
     return $value;
