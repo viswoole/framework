@@ -19,6 +19,9 @@ use JsonSerializable;
 use RuntimeException;
 use Swoole\Http\Response as swooleResponse;
 
+/**
+ * 响应接口
+ */
 interface ResponseInterface
 {
   /**
@@ -174,18 +177,6 @@ interface ResponseInterface
   public function json(array|JsonSerializable $data): ResponseInterface;
 
   /**
-   * sendfile别名方法
-   *
-   * @see static::sendfile()
-   */
-  public function file(
-    string  $filePath,
-    int     $offset = 0,
-    int     $length = 0,
-    ?string $fileMimeType = null
-  ): bool;
-
-  /**
    * 检索所有消息头的值。
    *
    * 该方法返回所有标头和值的字符串，这些值使用逗号拼接在一起。
@@ -260,7 +251,7 @@ interface ResponseInterface
   /**
    * 分离响应对象。
    * 使用此方法后，$response 对象销毁时不会自动 end。
-   * 与 Http\Response::create 和 Server->send 配合使用。
+   * 与 Response::create 和 Server::send 配合使用。
    *
    * @access public
    * @return ResponseInterface
