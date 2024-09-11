@@ -37,7 +37,6 @@ use Viswoole\HttpServer\Contract\ResponseInterface;
  * @method static ResponseInterface json(JsonSerializable|array $data) 将数据以json格式设置为响应内容
  * @method static ResponseInterface setContentType(string $contentType, string $charset = 'utf-8') 设置响应内容类型
  * @method static ResponseInterface setContent(string $content) 设置响应内容
- * @method static bool file(string $filePath, int $offset = 0, int $length = 0, ?string $fileMimeType = null) 发送文件
  * @method static bool sendfile(string $filePath, int $offset = 0, int $length = 0, ?string $fileMimeType = null) 发送文件
  * @method static array getHeader() 获取响应头
  * @method static ResponseInterface echo (bool $echo = true) 设置是否输出至控制台
