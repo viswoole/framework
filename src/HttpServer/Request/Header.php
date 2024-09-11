@@ -13,23 +13,25 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\HttpServer\AutoInject;
-
-use Viswoole\HttpServer\Facade\Request;
+namespace Viswoole\HttpServer\Request;
 
 /**
- * 自动注入请求标头
+ * 注入请求标头
+ *
+ * 必须配合\Viswoole\HttpServer\AutoInject\InjectHeader注解使用。
+ *
+ * 实现了__toString()方法，可以直接转换为字符串。
  */
 class Header
 {
   /**
    * @var string 标头
    */
-  public string $name;
+  private string $key;
   /**
    * @var string 标头值
    */
-  public string $value;
+  private string $value;
 
   /**
    * 转换为字符串
@@ -38,16 +40,40 @@ class Header
    */
   public function __toString(): string
   {
-    return $this->value ?? var_export($this->all(), true);
+    return $this->value;
   }
 
   /**
-   * 获取当前请求所有标头
+   * 获取标头
    *
-   * @return array
+   * @access public
+   * @return string
    */
-  public function all(): array
+  public function getKey(): string
   {
-    return Request::getHeader(default: []);
+    return $this->key;
+  }
+
+  /**
+   * 获取标头值
+   *
+   * @return string
+   */
+  public function value(): string
+  {
+    return $this->value;
+  }
+
+  /**
+   * 注入标头和值
+   *
+   * @param string $key
+   * @param string $value
+   * @return void
+   */
+  public function inject(string $key, string $value): void
+  {
+    $this->key = $key;
+    $this->value = $value;
   }
 }
