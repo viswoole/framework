@@ -117,6 +117,11 @@ class Response implements ResponseInterface
     return new static($result);
   }
 
+  /**
+   * @param string $name
+   * @param array $arguments
+   * @return mixed
+   */
   public function __call(string $name, array $arguments)
   {
     if (method_exists($this->swooleResponse, $name)) {
@@ -313,7 +318,10 @@ class Response implements ResponseInterface
    * @inheritDoc
    */
   #[Override] public function file(
-    string $filePath, int $offset = 0, int $length = 0, ?string $fileMimeType = null
+    string  $filePath,
+    int     $offset = 0,
+    int     $length = 0,
+    ?string $fileMimeType = null
   ): bool
   {
     return $this->sendfile($filePath, $offset, $length, $fileMimeType);
