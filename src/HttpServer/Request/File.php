@@ -43,6 +43,10 @@ class File implements ArrayAccess, IteratorAggregate, Countable
    * @var UploadedFile[] 文件对象|列表
    */
   private array $file;
+  /**
+   * @var string form-data参数名
+   */
+  private string $key;
 
   /**
    * 判断是否上传了多个文件
@@ -78,15 +82,28 @@ class File implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
+   * 获取上传文件参数名
+   *
+   * @access public
+   * @return string
+   */
+  public function getKey(): string
+  {
+    return $this->key;
+  }
+
+  /**
    * 注入上传文件
    *
    * 该方法由 \Viswoole\HttpServer\AutoInject\InjectFile 调用，无需手动注入。
    *
+   * @param string $key
    * @param UploadedFile[] $file
    * @return void
    */
-  public function inject(array $file): void
+  public function inject(string $key, array $file): void
   {
+    $this->key = $key;
     $this->file = $file;
   }
 
