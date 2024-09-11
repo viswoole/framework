@@ -95,7 +95,6 @@ class Request implements RequestInterface
         $uploadedFiles[$name] = [new UploadedFile(...$file)];
       }
     }
-    var_dump($uploadedFiles);
     return $uploadedFiles;
   }
 
