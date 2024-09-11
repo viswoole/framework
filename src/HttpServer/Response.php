@@ -317,19 +317,6 @@ class Response implements ResponseInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function file(
-    string  $filePath,
-    int     $offset = 0,
-    int     $length = 0,
-    ?string $fileMimeType = null
-  ): bool
-  {
-    return $this->sendfile($filePath, $offset, $length, $fileMimeType);
-  }
-
-  /**
-   * @inheritDoc
-   */
   #[Override] public function sendfile(
     string  $filePath,
     int     $offset = 0,
