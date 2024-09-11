@@ -90,12 +90,12 @@ class Request implements RequestInterface
     $uploadedFiles = [];
     foreach ($files as $name => $file) {
       if (is_numeric(implode('', array_keys($file)))) {
-        $file = $this->parseFiles($file);
-        $uploadedFiles[$name] = $file;
+        $uploadedFiles[$name] = array_map(fn(array $info) => new UploadedFile(...$info), $file);
       } else {
-        $uploadedFiles[$name] = new UploadedFile(...$file);
+        $uploadedFiles[$name] = [new UploadedFile(...$file)];
       }
     }
+    var_dump($uploadedFiles);
     return $uploadedFiles;
   }
 
@@ -541,6 +541,13 @@ class Request implements RequestInterface
     }
   }
 
+  /**
+   * 转发调用到 Swoole\Http\Request 对象
+   *
+   * @param string $name
+   * @param array $arguments
+   * @return mixed
+   */
   public function __call(string $name, array $arguments)
   {
     if (method_exists($this->swooleRequest, $name)) {
@@ -576,6 +583,8 @@ class Request implements RequestInterface
   }
 
   /**
+   * 获取Swoole\Http\Request 对象
+   *
    * @return swooleRequest
    */
   #[Override] public function getSwooleRequest(): swooleRequest
