@@ -22,15 +22,15 @@ use Viswoole\Router\Facade\Router;
 /**
  * 路由定义类
  *
- * @method static RouteItem get(string|array $paths, string|array|Closure $handler) 定义GET方式访问
- * @method static RouteItem post(string|array $rule, string|array|Closure $handler) 定义POST方式访问
- * @method static RouteItem put(string|array $rule, string|array|Closure $handler) 定义PUT方式访问
- * @method static RouteItem delete(string|array $rule, string|array|Closure $handler) 定义DELETE方式访问
- * @method static RouteItem patch(string|array $rule, string|array|Closure $handler) 定义PATCH方式访问
- * @method static RouteItem head(string|array $rule, string|array|Closure $handler) 定义HEAD方式访问
- * @method static RouteItem any(string|array $rule, string|array|Closure $handler) 定义任意方式访问
- * @method static RouteItem add(string|array $rule, string|array|Closure $handler, string|array $method = null) 添加路由
- * @method static RouteGroup group(string|array|Closure $name, ?Closure $closure = null) 定义分组路由
+ * @method static RouteItem get(string|array $paths, string|array|callable|Closure $handler) 定义GET方式访问
+ * @method static RouteItem post(string|array $rule, string|array|callable|Closure $handler) 定义POST方式访问
+ * @method static RouteItem put(string|array $rule, string|array|callable|Closure $handler) 定义PUT方式访问
+ * @method static RouteItem delete(string|array $rule, string|array|callable|Closure $handler) 定义DELETE方式访问
+ * @method static RouteItem patch(string|array $rule, string|array|callable|Closure $handler) 定义PATCH方式访问
+ * @method static RouteItem head(string|array $rule, string|array|callable|Closure $handler) 定义HEAD方式访问
+ * @method static RouteItem any(string|array $rule, string|array|callable|Closure $handler) 定义任意方式访问
+ * @method static RouteItem add(string|array $rule, string|array|callable|Closure $handler, string|array $method = null) 添加一个自定义路由
+ * @method static RouteGroup group(string|array|callable|Closure $name, ?Closure $closure = null) 定义分组路由
  * @method static void miss(Closure $handler, string|array $method = '*') 定义miss路由
  */
 class Route
