@@ -458,21 +458,31 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * 调用反射执行方法，支持依赖注入。
    *
    * @access public
-   * @param array|string $method 方法[object|class,method]|class::method
+   * @param array|callable $method 方法[object|class,method]|class::method
    * @param array $params 参数
    * @return mixed
-   * @throws NotFoundException
    */
-  public function invokeMethod(array|string $method, array $params = []): mixed
+  public function invokeMethod(array|callable $method, array $params = []): mixed
   {
+    if ($method instanceof Closure) return $this->invokeFunction($method);
     try {
+      $instance = null;
       if (is_array($method)) {
-        // 创建实例
-        $instance = is_object($method[0]) ? $method[0] : $this->invokeClass($method[0]);
-        $reflect = new ReflectionMethod($instance, $method[1]);
-        $namespaceName = get_class($instance) . '::' . $method[1];
+        $class = $method[0];
+        if (is_object($method[0])) {
+          // 调用对象方法
+          $class = get_class($method[0]);
+          $reflect = new ReflectionMethod($method[0], $method[1]);
+        } elseif (is_callable($method)) {
+          // 类静态方法调用
+          $reflect = new ReflectionMethod($method[0], $method[1]);
+        } else {
+          // 兼容静态方式 调用类动态方法
+          $instance = $this->invokeClass($method[0]);
+          $reflect = new ReflectionMethod($instance, $method[1]);
+        }
+        $namespaceName = $class . '::' . $method[1];
       } else {
-        $instance = null;
         $reflect = new ReflectionMethod($method);
         $namespaceName = $method;
       }
