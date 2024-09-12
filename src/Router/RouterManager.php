@@ -131,7 +131,7 @@ class RouterManager
           /** @var RouteMapping $methodAnnotationRoute 注解路由 */
           $methodAnnotationRoute = $methodAttributes[0]->newInstance();
           // 设置描述
-          if (!isset($methodAnnotationRoute->options['describe'])) {
+          if (!isset($methodAnnotationRoute->describe)) {
             $methodAnnotationRoute->options['describe'] = $this->getDocComment($method);
           }
           $path = $methodAnnotationRoute->paths ?: $method->getName();
