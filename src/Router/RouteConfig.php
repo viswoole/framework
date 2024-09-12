@@ -200,6 +200,7 @@ abstract class RouteConfig implements ArrayAccess
    */
   public function sort(int $sort): static
   {
+    $this->options['sort'] = $sort;
     return $this;
   }
 
@@ -362,7 +363,9 @@ abstract class RouteConfig implements ArrayAccess
       // 变量正则表达式
       'pattern' => $this->options['pattern'],
       // 子路由
-      'children' => []
+      'children' => [],
+      // 路由排序
+      'sort' => $this->options['sort']
     ];
     $docShape['params'] = array_filter($docShape['params'], function ($param) {
       return !$param['depend'];
