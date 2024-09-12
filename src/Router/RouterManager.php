@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use InvalidArgumentException;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
 use Viswoole\Core\App;
@@ -79,16 +80,15 @@ class RouterManager
         continue;
       }
       // 获取类路由注解
-      $classAttributes = $refClass->getAttributes(RouteController::class);
-      if (empty($classAttributes)) {
-        $classAttributes = $refClass->getAttributes(AutoRouteController::class);
-        // 如果不存在路由注解则跳过
-        if (empty($classAttributes)) continue;
-      }
+      $classAttributes = $refClass->getAttributes(
+        RouteController::class, ReflectionAttribute::IS_INSTANCEOF
+      );
+      // 如果没有主键则直接跳过
+      if (empty($classAttributes)) continue;
       /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
       // 判断是否设置了描述
-      if (!isset($controller->options['describe'])) {
+      if (!isset($controller->describe)) {
         $controller->options['describe'] = $this->getDocComment($refClass);
       }
       /** 是否为自动路由 */
