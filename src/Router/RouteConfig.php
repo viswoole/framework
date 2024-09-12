@@ -69,6 +69,7 @@ abstract class RouteConfig implements ArrayAccess
     } else {
       $this->suffix(config('router.suffix', ['*']));
       $this->domain(config('router.domain', []));
+      $this->domain(config('router.method', ['*']));
     }
     $this->paths($paths);
     $this->handler($handler);
