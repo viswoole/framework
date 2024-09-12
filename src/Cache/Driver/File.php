@@ -131,7 +131,7 @@ class File extends Driver
       $dir = $this->storage . DIRECTORY_SEPARATOR . $dir;
     }
     // 创建目录（如果不存在）
-    if (!is_dir($dir)) {
+    if (!is_dir(dirname($dir))) {
       mkdir($dir, 0755, true);
     }
     return str_ends_with($dir, DIRECTORY_SEPARATOR) ? $dir : $dir . DIRECTORY_SEPARATOR;
