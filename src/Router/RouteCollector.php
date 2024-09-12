@@ -313,6 +313,9 @@ class RouteCollector
    */
   public function parseRoute(): void
   {
+    usort($this->routes, function (RouteConfig $a, RouteConfig $b) {
+      return $b->sort <=> $a->sort;
+    });
     foreach ($this->routes as $item) {
       $item->register($this);
       $doc = $item->getShape();

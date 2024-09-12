@@ -52,6 +52,9 @@ class RouteGroup extends RouteConfig
       $this->options['handler'] = null;
       $collector->currentGroup = null;
     }
+    usort($this->items, function (RouteConfig $a, RouteConfig $b) {
+      return $b->sort <=> $a->sort;
+    });
     foreach ($this->items as $item) {
       $item->register($collector);
     }

@@ -23,6 +23,18 @@ use RuntimeException;
 
 /**
  * 路线配置类
+ *
+ * @property array $paths 路由路径
+ * @property string $describe 路由描述
+ * @property callable $handler 路由处理方法
+ * @property string[] $method 请求方式
+ * @property array $params 路由参数
+ * @property array $middleware 路由中间件
+ * @property string[] $suffix 伪静态后缀
+ * @property string[] $domain 域名
+ * @property array $pattern 变量正则表达式
+ * @property bool $hidden 是否隐藏在文档中隐藏
+ * @property int $sort 路由排序
  */
 abstract class RouteConfig implements ArrayAccess
 {
@@ -48,8 +60,10 @@ abstract class RouteConfig implements ArrayAccess
     'domain' => ['*'],
     // 变量正则表达式
     'pattern' => [],
-    // 是否隐藏doc文档
-    'hidden' => false
+    // 是否隐藏在文档中隐藏
+    'hidden' => false,
+    // 文档排序,值越大越靠前
+    'sort' => 0,
   ];
 
   /**
@@ -64,6 +78,7 @@ abstract class RouteConfig implements ArrayAccess
   )
   {
     if (is_array($parentOption)) {
+      $parentOption['sort'] = 0;
       $this->options = $parentOption;
       $this->options['describe'] = '';
     } else {
@@ -178,6 +193,17 @@ abstract class RouteConfig implements ArrayAccess
   }
 
   /**
+   * 设置排序值
+   *
+   * @param int $sort 越大越靠前
+   * @return $this
+   */
+  public function sort(int $sort): static
+  {
+    return $this;
+  }
+
+  /**
    * 请求方法
    *
    * @param string|array[] $method
@@ -289,14 +315,6 @@ abstract class RouteConfig implements ArrayAccess
   /**
    * @inheritDoc
    */
-  #[Override] public function offsetGet(mixed $offset): mixed
-  {
-    return $this->options[$offset] ?? null;
-  }
-
-  /**
-   * @inheritDoc
-   */
   #[Override] public function offsetSet(mixed $offset, mixed $value): void
   {
     throw new RuntimeException('Router option is read-only.');
@@ -362,6 +380,23 @@ abstract class RouteConfig implements ArrayAccess
       $docShape['children'] = $children;
     }
     return $docShape;
+  }
+
+  /**
+   * @param string $name
+   * @return mixed
+   */
+  public function __get(string $name)
+  {
+    return $this->offsetGet($name);
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function offsetGet(mixed $offset): mixed
+  {
+    return $this->options[$offset] ?? null;
   }
 
   /**
