@@ -27,22 +27,22 @@ class Atomic
 {
   // PHP内置原子类型
   public const array TYPES = [
-    'bool' => ['ts' => 'boolean', 'dart' => 'bool'],
-    'null' => ['ts' => 'null', 'dart' => 'Null'],
-    'int' => ['ts' => 'number', 'dart' => 'int'],
-    'float' => ['ts' => 'number', 'dart' => 'double'],
-    'string' => ['ts' => 'string', 'dart' => 'String'],
-    'array' => ['ts' => 'Array<any>', 'dart' => 'List<dynamic>'],
-    'object' => ['ts' => '{[key: string]: any}', 'dart' => 'Map<String, dynamic>'],
-    'true' => ['ts' => 'true', 'dart' => 'bool'],
-    'false' => ['ts' => 'false', 'dart' => 'bool'],
-    'boolean' => ['ts' => 'boolean', 'dart' => 'bool'],
-    'integer' => ['ts' => 'number', 'dart' => 'int'],
-    'double' => ['ts' => 'number', 'dart' => 'double'],
-    'iterable' => ['ts' => 'Iterable<any>', 'dart' => 'Iterable<dynamic>'],
-    'mixed' => ['ts' => 'any', 'dart' => 'dynamic'],
-    'callable' => ['ts' => 'Function', 'dart' => 'Function'],
-    'Closure' => ['ts' => 'Function', 'dart' => 'Function']
+    'bool',
+    'null',
+    'int',
+    'float',
+    'string',
+    'array',
+    'object',
+    'true',
+    'false',
+    'boolean',
+    'integer',
+    'double',
+    'iterable',
+    'mixed',
+    'callable',
+    'Closure'
   ];
 
   /**
@@ -284,6 +284,6 @@ class Atomic
     } elseif ($type instanceof ReflectionNamedType) {
       $type = $type->getName();
     }
-    return array_key_exists($type, self::TYPES);
+    return in_array($type, self::TYPES);
   }
 }
