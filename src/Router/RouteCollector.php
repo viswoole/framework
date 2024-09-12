@@ -130,14 +130,14 @@ class RouteCollector
    * 自定义路由
    *
    * @param string|array $paths 匹配规则，动态规则示例：user/{id}|user/{id?}
-   * @param string|array|Closure $handler 路由地址
+   * @param string|array|callable|Closure $handler 路由地址
    * @param string|string[] $method 请求类型可传数组定义多个
    * @return RouteConfig
    */
   public function addRoute(
-    string|array         $paths,
-    string|array|Closure $handler,
-    string|array         $method = '*',
+    string|array                  $paths,
+    string|callable|array|Closure $handler,
+    string|array                  $method = '*',
   ): RouteConfig
   {
     $route = new RouteItem(
