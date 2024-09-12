@@ -190,17 +190,20 @@ class Validate
    */
   public static function enum(string $enum, mixed $case): UnitEnum
   {
+    if ($case instanceof $enum) return $case;
     $cases = call_user_func($enum . '::cases');
     $names = [];
     foreach ($cases as $item) {
-      $names[$item->name] = $item;
+      $names[strtolower($item->name)] = $item;
     }
-    if (isset($names[$case])) {
-      return $names[$case];
-    } else {
-      $names = implode('|', array_keys($names));
-      throw new ValidateException("must be between $names");
+    if (is_string($case)) {
+      $case = strtolower(trim($case));
+      if (isset($names[$case])) {
+        return $names[$case];
+      }
     }
+    $names = implode('|', array_keys($names));
+    throw new ValidateException("must be between $names");
   }
 
   /**
