@@ -24,14 +24,14 @@ class RouteController extends AnnotationRouteAbstract
 {
   /**
    * @param array|string|null $prefix 前缀，null代表当前控制器类名称
-   * @param array|string $methods 请求方法
+   * @param array|string|null $methods 请求方法
    * @param string|null $server 服务器名称
    * @param string|null $describe 描述
-   * @param array{describe:string,params:array,middleware:array,suffix:string[]|string,domain:string[]|string,pattern:array} $options 更多配置选项
+   * @param array{middleware:array,suffix:string[],domain:string[],pattern:array,hidden:bool} $options 更多配置选项
    */
   public function __construct(
     array|string|null $prefix = null,
-    array|string      $methods = ['GET', 'POST'],
+    array|string      $methods = null,
     public ?string    $server = null,
     ?string           $describe = null,
     array             $options = []
