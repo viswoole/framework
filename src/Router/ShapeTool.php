@@ -42,7 +42,7 @@ final class ShapeTool
    * @access public
    * @param object|string $objectOrClass 类实例或类名称
    * @param string $property_name 要反射的属性名称
-   * @param bool $cache 缓存结果，默认TRUE
+   * @param bool $cache 缓存结果，默认false
    * @return array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool}
    */
   public static function getPropertyShape(
@@ -184,7 +184,7 @@ final class ShapeTool
    *
    * @access public
    * @param Closure|array|string $callable
-   * @param bool $cache 缓存结果，默认TRUE
+   * @param bool $cache 缓存结果，默认false
    * @return array<int,array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool,variadic:bool}>
    */
   public static function getParamTypeShape(
