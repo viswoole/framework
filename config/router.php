@@ -12,6 +12,8 @@ return [
   'suffix' => '*',
   // 域名校验 例如 [www.baidu.com]
   'domain' => '*',
+  // HTTP请求方法
+  'method' => '*',
   // 默认的路由变量正则表达式
   'default_pattern_regex' => '[\w\.]+',
   // 要加载的路线配置文件
