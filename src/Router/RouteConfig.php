@@ -295,6 +295,7 @@ abstract class RouteConfig implements ArrayAccess
   public function options(array $options): static
   {
     foreach ($options as $key => $value) {
+      if (is_int($key)) continue;
       if (method_exists($this, $key)) {
         $this->$key($value);
       } else {
