@@ -192,6 +192,14 @@ class Validate
   {
     if ($case instanceof $enum) return $case;
     $cases = call_user_func($enum . '::cases');
+    // 兼容用数字索引枚举
+    if (is_int($case)) {
+      if ($cases[$case]) {
+        return $cases[$case];
+      } else {
+        return throw new ValidateException('must be between 0 and ' . count($cases) - 1);
+      }
+    }
     $names = [];
     foreach ($cases as $item) {
       $names[strtolower($item->name)] = $item;
