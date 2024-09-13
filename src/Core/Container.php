@@ -37,6 +37,7 @@ use Viswoole\Core\Exception\FuncNotFoundException;
 use Viswoole\Core\Exception\MethodNotFoundException;
 use Viswoole\Core\Exception\NotFoundException;
 use Viswoole\Core\Exception\ValidateException;
+use Viswoole\Core\Validate\Rules\RuleAbstract;
 
 /**
  * 容器基本功能类
@@ -254,49 +255,51 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $shapes = $reflect->getParameters();
     // 如果没有参数 则返回空待注入参数数组
     if (empty($shapes)) return [];
+
     /** @var array<int,mixed> $args 最终要注入的参数 */
     $args = [];
     foreach ($shapes as $index => $shape) {
-      // 参数类型
-      $paramType = $shape->getType();
-      // 扩展属性
-      $attributes = $shape->getAttributes();
-      // 是否允许为null
-      $allowsNull = $shape->allowsNull();
-      // 参数名称
-      $name = $shape->getName();
-      // 如果是可变参数则返回参数数组
-      if ($shape->isVariadic()) {
-        foreach ($params as &$item) {
-          $item = $this->validateParam(
-            $paramType, $item, $index, $name, $allowsNull, $attributes
-          );
+      try {
+        // 参数类型
+        $paramType = $shape->getType();
+        // 是否允许为null
+        $allowsNull = $shape->allowsNull();
+        // 参数名称
+        $name = $shape->getName();
+        // 扩展验证规则
+        $validateAttributes = $shape->getAttributes(
+          RuleAbstract::class, ReflectionAttribute::IS_INSTANCEOF
+        );
+        // 如果是可变参数则返回参数数组
+        if ($shape->isVariadic()) {
+          foreach ($params as &$item) {
+            $item = $this->validateParam(
+              $name, $paramType, $item, $allowsNull, $validateAttributes
+            );
+          }
+          return array_merge($args, $params);
         }
-        return array_merge($args, $params);
+        // 先判断是否存在命名，不存在则使用位置
+        $key = array_key_exists($name, $params) ? $name : $index;
+        // 参数默认值
+        $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
+        // 获得值
+        $value = Arr::arrayPopValue($params, $key, $default);
+        // 前置注入
+        $preInject = $shape->getAttributes(
+          PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF
+        );
+        foreach ($preInject as $inject) {
+          $value = $inject->newInstance()->inject($name, $value, $allowsNull);
+        }
+        // 验证类型
+        $value = $this->validateParam(
+          $name, $paramType, $value, $allowsNull, $validateAttributes
+        );
+        $args[$index] = $value;
+      } catch (ValidateException $e) {
+        $this->handleParamsError($index, $name, $e);
       }
-      // 先判断是否存在命名，不存在则使用位置
-      $key = array_key_exists($name, $params) ? $name : $index;
-      // 参数默认值
-      $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
-      // 获得值
-      $value = Arr::arrayPopValue($params, $key, $default);
-      // 前置注入
-      $preInject = $shape->getAttributes(
-        PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF
-      );
-      foreach ($preInject as $inject) {
-        $value = $inject->newInstance()->inject($name, $value, $allowsNull);
-      }
-      // 验证类型
-      $value = $this->validateParam(
-        $paramType,
-        $value,
-        $index,
-        $name,
-        $allowsNull,
-        $attributes
-      );
-      $args[$index] = $value;
     }
     return $args;
   }
@@ -304,45 +307,32 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 验证参数
    *
+   * @param string $name 参数名称
    * @param ReflectionType|null $paramType 参数类型
    * @param mixed $value 值
-   * @param int|string $index 索引
-   * @param string $name 参数名称
    * @param bool $allowsNull 是否允许为空
-   * @param array $attributes 扩展属性
+   * @param ReflectionAttribute[] $validateAttributes 扩展属性
    * @return mixed
    */
   protected function validateParam(
+    string              $name,
     ReflectionType|null $paramType,
     mixed               $value,
-    int|string          $index,
-    string              $name,
     bool                $allowsNull,
-    array               $attributes
+    array               $validateAttributes
   ): mixed
   {
     if (!is_null($paramType)) {
       // 如果$value等于null 且设置的是内置类型 则判断是否允许为null，如果允许则返回null，否则抛出异常
       if (is_null($value) && $paramType->isBuiltin()) {
         if ($allowsNull) return null;
-        $this->handleParamsError($index, $name, "$$name must be of type $paramType, null given");
+        throw new ValidateException("$$name must be of type $paramType, null given");
       }
       // 进行类型验证
-      try {
-        $value = Validate::check($value, $paramType);
-      } catch (ValidateException $e) {
-        $this->handleParamsError($index, $name, $e);
-      }
+      $value = Validate::check($value, $paramType);
     }
-    try {
-      // 验证扩展规则
-      if (!empty($attributes)) {
-        $value = Validate::checkRules($attributes, $value, $name);
-      }
-    } catch (ValidateException $e) {
-      $this->handleParamsError($index, $name, $e);
-    }
-    return $value;
+    // 验证扩展规则
+    return Validate::checkRules($validateAttributes, $value, $name);
   }
 
   /**
