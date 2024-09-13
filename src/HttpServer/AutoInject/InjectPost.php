@@ -24,7 +24,7 @@ use Viswoole\Router\ApiDoc\Body\PostParamInterface;
  * 用于注入POST请求参数
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Post implements PostParamInterface
+class InjectPost implements PostParamInterface
 {
   /**
    * @inheritDoc
