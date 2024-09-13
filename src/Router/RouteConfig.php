@@ -64,6 +64,8 @@ abstract class RouteConfig implements ArrayAccess
     'hidden' => false,
     // 文档排序,值越大越靠前
     'sort' => 0,
+    // 额外的元数据
+    'meta' => [],
   ];
 
   /**
@@ -193,6 +195,20 @@ abstract class RouteConfig implements ArrayAccess
   }
 
   /**
+   * 自定义的元数据
+   *
+   * @access public
+   * @param string $key 键
+   * @param mixed $value 值，必须是可序列化的变量。
+   * @return static
+   */
+  public function meta(string $key, mixed $value): static
+  {
+    $this->options['mate'][$key] = $value;
+    return $this;
+  }
+
+  /**
    * 设置排序值
    *
    * @param int $sort 越大越靠前
@@ -290,14 +306,16 @@ abstract class RouteConfig implements ArrayAccess
   /**
    * 批量设置选项
    *
-   * @param array $options
-   * @return RouteConfig
+   * @param array{middleware:array,suffix:string[],domain:string[],pattern:array,hidden:bool,sort:int,meta:array} $options
+   * @return static
    */
   public function options(array $options): static
   {
     foreach ($options as $key => $value) {
       if (is_int($key)) continue;
-      if (method_exists($this, $key)) {
+      if ($key === 'mate') {
+        $this->options['mate'] = is_array($value) ? $value : [];
+      } elseif (method_exists($this, $key)) {
         $this->$key($value);
       } else {
         trigger_error("不存在{$key}路由选项", E_USER_WARNING);
@@ -401,17 +419,5 @@ abstract class RouteConfig implements ArrayAccess
   #[Override] public function offsetGet(mixed $offset): mixed
   {
     return $this->options[$offset] ?? null;
-  }
-
-  /**
-   * 请求参数
-   *
-   * @param array $params shape
-   * @return static
-   */
-  protected function params(array $params): static
-  {
-    $this->options['params'] = array_merge($this->options['params'], $params);
-    return $this;
   }
 }
