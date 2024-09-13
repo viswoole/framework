@@ -29,11 +29,18 @@ use Viswoole\Router\ApiDoc\Body\FileParamInterface;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectFile implements FileParamInterface
 {
+  use ValidateEmpty;
+
   /**
    * @inheritDoc
    */
-  #[Override] public function inject(string $name, mixed $value): array|null|UploadedFile
+  #[Override] public function inject(
+    string $name,
+    mixed  $value,
+    bool   $allowEmpty
+  ): array|null|UploadedFile
   {
-    return Request::files($name) ?? $value;
+    $value = Request::files($name) ?? $value;
+    return $this->validateEmpty($value, $allowEmpty, "必须上传{$name}文件");
   }
 }
