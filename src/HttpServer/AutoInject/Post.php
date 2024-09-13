@@ -18,7 +18,7 @@ namespace Viswoole\HttpServer\AutoInject;
 use Attribute;
 use Override;
 use Viswoole\HttpServer\Facade\Request;
-use Viswoole\Router\ApiDoc\Params\PostParamInterface;
+use Viswoole\Router\ApiDoc\Body\PostParamInterface;
 
 /**
  * 用于注入POST请求参数

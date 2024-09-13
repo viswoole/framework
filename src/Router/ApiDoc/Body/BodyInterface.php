@@ -13,14 +13,14 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\ApiDoc\Params;
+namespace Viswoole\Router\ApiDoc\Body;
+
+use Viswoole\Core\Contract\PreInjectInterface;
 
 /**
- * 参数需带有实现了该接口的注解声明，文档才能解析参数类型为Post请求参数。
- *
- * 使用路由的服务应该实现该接口，并在inject方法中注入对应的Post请求参数。
+ * 该接口为文档解析请求body参数声明提供了一个标记。
  */
-interface PostParamInterface extends BodyInterface
+interface BodyInterface extends PreInjectInterface
 {
 
 }

@@ -18,7 +18,7 @@ namespace Viswoole\HttpServer\AutoInject;
 use Attribute;
 use Override;
 use Viswoole\HttpServer\Facade\Request;
-use Viswoole\Router\ApiDoc\Params\GetParamInterface;
+use Viswoole\Router\ApiDoc\Body\GetParamInterface;
 
 /**
  * 注入GET请求参数

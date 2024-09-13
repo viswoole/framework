@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\ApiDoc\Params;
+namespace Viswoole\Router\ApiDoc\Body;
 
 /**
  * 参数需带有实现了该接口的注解声明，文档才能解析参数类型为get请求查询参数。

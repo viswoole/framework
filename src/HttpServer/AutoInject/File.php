@@ -19,7 +19,7 @@ use Attribute;
 use Override;
 use Viswoole\HttpServer\Facade\Request;
 use Viswoole\HttpServer\Message\UploadedFile;
-use Viswoole\Router\ApiDoc\Params\FileParamInterface;
+use Viswoole\Router\ApiDoc\Body\FileParamInterface;
 
 /**
  * 注入上传的文件
