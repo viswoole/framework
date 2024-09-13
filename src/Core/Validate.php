@@ -227,10 +227,10 @@ class Validate
     if ($value instanceof $class) return $value;
     $app = App::factory();
     if (interface_exists($class)) {
-      if ($app->has($class)) return $app->make($class);
+      if ($app->has($class)) return $app->make($class, is_array($value) ? $value : []);
     } else {
       // 如果验证通过，则将值注入,得到新实例
-      return $app->make($class);
+      return $app->make($class, is_array($value) ? $value : []);
     }
     throw new ValidateException(
       "must be an instance of $class" . ' , ' . gettype($value) . ' given'
