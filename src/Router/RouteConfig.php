@@ -45,6 +45,8 @@ abstract class RouteConfig implements ArrayAccess
   protected array $options = [
     // 路由访问路径
     'paths' => null,
+    // 标题
+    'title' => '',
     // 路由描述
     'describe' => '',
     // 处理方法
@@ -193,6 +195,18 @@ abstract class RouteConfig implements ArrayAccess
     $this->options['handler'] = $handler;
     // 请求参数
     $this->options['params'] = ShapeTool::getParamTypeShape($handler);
+  }
+
+  /**
+   * 路由标题
+   *
+   * @param string $title
+   * @return static
+   */
+  public function title(string $title): static
+  {
+    $this->options['title'] = $title;
+    return $this;
   }
 
   /**

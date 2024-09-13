@@ -23,18 +23,21 @@ abstract class AnnotationRouteAbstract
 {
   /**
    * @param string|string[]|null $paths null则为当前方法名
+   * @param string|null $title 路由标题，null则会自动获取注释中的标题
+   * @param string $describe 路由描述，null则会自动获取注释
    * @param string|array|null $methods 请求方法
-   * @param string|null $describe 路由描述，null则会自动获取注释
    * @param array{middleware:array,suffix:string[],domain:string[],pattern:array<string,string>,hidden:bool,sort:int,meta:array<string,string>} $options
    */
   public function __construct(
     public string|array|null $paths = null,
+    public ?string           $title = null,
+    public string            $describe = '',
     public string|array|null $methods = null,
-    public ?string           $describe = null,
     public array             $options = []
   )
   {
     if (!empty($this->methods)) $this->options['method'] = $this->methods;
-    if (!empty($this->describe)) $this->options['describe'] = $this->describe;
+    $this->options['describe'] = $this->describe;
+    if (!empty($this->title)) $this->options['title'] = $this->title;
   }
 }

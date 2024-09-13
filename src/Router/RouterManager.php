@@ -88,8 +88,8 @@ class RouterManager
       /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
       $controller = $classAttributes[0]->newInstance();
       // 判断是否设置了描述
-      if (!isset($controller->describe)) {
-        $controller->options['describe'] = $this->getDocComment($refClass);
+      if (!isset($controller->title)) {
+        $controller->options['title'] = $this->getDocComment($refClass);
       }
       /** 是否为自动路由 */
       $isAutoRoute = $controller instanceof AutoRouteController;
@@ -123,7 +123,7 @@ class RouterManager
           // 创建新的路由项
           $routeItem = new RouteItem($method->getName(), $handler, $group->getOptions());
           // 设置描述
-          $routeItem->describe($this->getDocComment($method));
+          $routeItem->title($this->getDocComment($method));
           // 添加到组的子路由中
           $group->addItem($routeItem);
         } elseif (isset($methodAttributes[0])) {
@@ -131,8 +131,8 @@ class RouterManager
           /** @var RouteMapping $methodAnnotationRoute 注解路由 */
           $methodAnnotationRoute = $methodAttributes[0]->newInstance();
           // 设置描述
-          if (!isset($methodAnnotationRoute->describe)) {
-            $methodAnnotationRoute->options['describe'] = $this->getDocComment($method);
+          if (!isset($methodAnnotationRoute->title)) {
+            $methodAnnotationRoute->options['title'] = $this->getDocComment($method);
           }
           $path = $methodAnnotationRoute->paths ?: $method->getName();
           // 创建新的路由项

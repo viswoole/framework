@@ -35,7 +35,7 @@ class ApiDocParseTool
   public static function parse(callable $handler)
   {
     $reflector = self::toReflector($handler);
-    var_dump($reflector->getParameters());
+    var_dump($reflector->getDocComment());
   }
 
   /**
