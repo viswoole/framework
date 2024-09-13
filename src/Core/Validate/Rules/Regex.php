@@ -17,12 +17,13 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 正则表达式校验
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Regex extends RuleAbstract
+class Regex extends BaseValidateRule
 {
   /**
    * @param string $pattern 正则表达式

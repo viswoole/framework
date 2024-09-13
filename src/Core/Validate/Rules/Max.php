@@ -17,12 +17,13 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 验证数值是否大于或等于$max
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Max extends RuleAbstract
+class Max extends BaseValidateRule
 {
   /**
    * @param int $max 最大值

@@ -37,7 +37,7 @@ use Viswoole\Core\Exception\FuncNotFoundException;
 use Viswoole\Core\Exception\MethodNotFoundException;
 use Viswoole\Core\Exception\NotFoundException;
 use Viswoole\Core\Exception\ValidateException;
-use Viswoole\Core\Validate\Rules\RuleAbstract;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 容器基本功能类
@@ -278,7 +278,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         );
         // 扩展验证规则
         $validateAttributes = $shape->getAttributes(
-          RuleAbstract::class, ReflectionAttribute::IS_INSTANCEOF
+          BaseValidateRule::class, ReflectionAttribute::IS_INSTANCEOF
         );
         // 如果是可变参数则返回参数数组
         if ($shape->isVariadic()) {

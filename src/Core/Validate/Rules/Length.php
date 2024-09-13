@@ -17,12 +17,13 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 长度验证，仅对基本类型为 string、array生效。
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Length extends RuleAbstract
+class Length extends BaseValidateRule
 {
   /**
    * @param int $min 最小长度

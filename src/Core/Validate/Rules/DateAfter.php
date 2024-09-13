@@ -17,12 +17,13 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 日期验证，验证日期必须大于datetime
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class DateAfter extends RuleAbstract
+class DateAfter extends BaseValidateRule
 {
   /**
    * @param string|int $datetime datetime,接收Y-m-d H:i:s格式的日期时间字符串，支持传入+N或-N表示从当前时间偏移N秒

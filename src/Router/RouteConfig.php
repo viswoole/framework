@@ -370,26 +370,8 @@ abstract class RouteConfig implements ArrayAccess
   public function getShape(): ?array
   {
     if ($this->options['hidden']) return null;
-    $docShape = [
-      // 路由路径
-      'paths' => $this->options['paths'],
-      // 路由描述
-      'describe' => $this->options['describe'],
-      // 请求方式
-      'method' => $this->options['method'],
-      // 请求参数验证
-      'params' => $this->options['params'],
-      // 伪静态后缀校验，例如html
-      'suffix' => $this->options['suffix'],
-      // 域名路由
-      'domain' => $this->options['domain'],
-      // 变量正则表达式
-      'pattern' => $this->options['pattern'],
-      // 子路由
-      'children' => [],
-      // 路由排序
-      'sort' => $this->options['sort']
-    ];
+    $docShape = $this->options;
+    unset($docShape['hidden'], $docShape['handler']);
     $docShape['params'] = array_filter($docShape['params'], function ($param) {
       return !$param['depend'];
     });

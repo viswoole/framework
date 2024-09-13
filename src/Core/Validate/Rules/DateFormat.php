@@ -18,12 +18,13 @@ namespace Viswoole\Core\Validate\Rules;
 use Attribute;
 use DateTime;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 验证日期格式
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class DateFormat extends RuleAbstract
+class DateFormat extends BaseValidateRule
 {
   /**
    * @param string $format 日期格式(可选值参考date())

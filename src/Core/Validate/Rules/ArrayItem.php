@@ -19,13 +19,14 @@ use Attribute;
 use Override;
 use Viswoole\Core\Exception\ValidateException;
 use Viswoole\Core\Validate;
+use Viswoole\Core\Validate\BaseValidateRule;
 use Viswoole\Core\Validate\Type;
 
 /**
  * 数组元素验证器
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class ArrayItem extends RuleAbstract
+class ArrayItem extends BaseValidateRule
 {
   /**
    * @param Type[]|Type $types 需要核验的类型，多个类型请用数组表达

@@ -17,13 +17,14 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 区间验证,对数值类型数据进行验证。
  * 大于等于 起始值 或小于等于 结束值
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Between extends RuleAbstract
+class Between extends BaseValidateRule
 {
   /**
    * @param int|float $start 起始值

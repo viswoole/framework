@@ -13,14 +13,14 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Core\Validate\Rules;
+namespace Viswoole\Core\Validate;
 
 use Viswoole\Core\Exception\ValidateException;
 
 /**
- * 默认验证规则，抽象类
+ * 拓展验证规则，基类
  */
-abstract class RuleAbstract
+abstract class BaseValidateRule
 {
   /**
    * @var string 错误提示消息

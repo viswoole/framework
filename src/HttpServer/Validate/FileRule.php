@@ -17,7 +17,7 @@ namespace Viswoole\HttpServer\Validate;
 
 use Attribute;
 use Override;
-use Viswoole\Core\Validate\Rules\RuleAbstract;
+use Viswoole\Core\Validate\BaseValidateRule;
 use Viswoole\HttpServer\Message\UploadedFile;
 
 /**
@@ -26,7 +26,7 @@ use Viswoole\HttpServer\Message\UploadedFile;
  * 与Viswoole\HttpServer\AutoInject\File注解配合使用
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class FileRule extends RuleAbstract
+class FileRule extends BaseValidateRule
 {
   /**
    * @param string $fileMime 文件媒体类型，多个用`|`分割

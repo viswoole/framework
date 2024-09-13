@@ -17,12 +17,13 @@ namespace Viswoole\Core\Validate\Rules;
 
 use Attribute;
 use Override;
+use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
  * 排除范围 验证器
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class NotInArray extends RuleAbstract
+class NotInArray extends BaseValidateRule
 {
   /**
    * @param array $haystack 范围数组

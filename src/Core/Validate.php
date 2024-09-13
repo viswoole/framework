@@ -23,7 +23,7 @@ use ReflectionUnionType;
 use UnitEnum;
 use Viswoole\Core\Exception\ValidateException;
 use Viswoole\Core\Validate\Atomic;
-use Viswoole\Core\Validate\Rules\RuleAbstract;
+use Viswoole\Core\Validate\BaseValidateRule;
 use Viswoole\Core\Validate\Type;
 
 /**
@@ -34,15 +34,15 @@ class Validate
   /**
    * 验证扩展类型
    *
-   * @param ReflectionAttribute[]|RuleAbstract[] $rules 扩展验证规则
+   * @param ReflectionAttribute[]|BaseValidateRule[] $rules 扩展验证规则
    * @param mixed $value 验证值
    * @param mixed ...$args 额外需要传递给验证器的参数（依赖注入时会传入属性或参数名称，供validate使用）
    * @return mixed
    */
   public static function checkRules(
-    array|ReflectionAttribute|RuleAbstract $rules,
-    mixed                                  $value,
-    mixed                                  ...$args
+    array|ReflectionAttribute|BaseValidateRule $rules,
+    mixed                                      $value,
+    mixed                                      ...$args
   ): mixed
   {
     if (empty($rules)) return $value;
@@ -53,7 +53,7 @@ class Validate
         $instance = $attribute->newInstance();
       }
       // 判断是否为扩展规则
-      if ($instance instanceof RuleAbstract) {
+      if ($instance instanceof BaseValidateRule) {
         $value = call_user_func_array([$instance, 'validate'], [$value, ...$args]);
       }
     }
