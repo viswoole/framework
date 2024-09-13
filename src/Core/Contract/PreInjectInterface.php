@@ -28,9 +28,9 @@ interface PreInjectInterface
    * 注入参数值
    *
    * @param string $name 当前正在注入的参数名称
-   * @param mixed $value 参数值,如果没有传递的参数值，则为null
+   * @param mixed $value 默认值,如果没有默认值，则为null
    * @return mixed 返回要注入的值
    * @throws ValidateException 如果希望停止注入，则抛出一个ValidateException异常，当然你也可以抛出其他任何异常来终止注入。
    */
-  public function inject(string $name, mixed $value): mixed;
+  public function inject(string $name, mixed $value, bool $allowEmpty): mixed;
 }
