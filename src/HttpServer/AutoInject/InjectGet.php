@@ -24,7 +24,7 @@ use Viswoole\Router\ApiDoc\Body\GetParamInterface;
  * 注入GET请求参数
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class Get implements GetParamInterface
+class InjectGet implements GetParamInterface
 {
 
   /**
