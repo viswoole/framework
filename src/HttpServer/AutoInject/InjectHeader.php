@@ -28,12 +28,10 @@ use Viswoole\HttpServer\Request\Header;
 class InjectHeader extends RuleAbstract
 {
   /**
-   * @param string $key 标头，为空则为参数名
-   * @param string $message
+   * @param string $message 错误提示信息
    */
   public function __construct(
-    private string $key = '',
-    string         $message = ''
+    string $message = ''
   )
   {
     parent::__construct($message);
@@ -48,14 +46,13 @@ class InjectHeader extends RuleAbstract
    */
   #[Override] public function validate(mixed $value, string $key = ''): mixed
   {
-    $this->key = empty($this->key) ? $key : $this->key;
-    $headerValue = Request::getHeader($this->key);
+    $headerValue = Request::getHeader($key);
     if (empty($headerValue)) {
       if (is_null($value)) return null;
-      $this->error("必须具有 $this->key 请求标头");
+      $this->error("必须具有 $key 请求标头");
     }
     if (!$value instanceof Header) $value = new Header();
-    $value->inject($this->key, $headerValue);
+    $value->inject($key, $headerValue);
     return $value;
   }
 }
