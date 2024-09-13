@@ -278,13 +278,15 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       $key = array_key_exists($name, $params) ? $name : $index;
       // 参数默认值
       $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
-      // 扩展属性
+      // 获得值
+      $value = Arr::arrayPopValue($params, $key, $default);
+      // 前置注入
       $preInject = $shape->getAttributes(
         PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF
       );
-      var_dump($preInject);
-      // 获得值
-      $value = Arr::arrayPopValue($params, $key, $default);
+      foreach ($preInject as $inject) {
+        $value = $inject->newInstance()->inject($name, $value, $allowsNull);
+      }
       // 验证类型
       $value = $this->validateParam(
         $paramType,
