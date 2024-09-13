@@ -92,7 +92,7 @@ class Request implements RequestInterface
       if (is_numeric(implode('', array_keys($file)))) {
         $uploadedFiles[$name] = array_map(fn(array $info) => new UploadedFile(...$info), $file);
       } else {
-        $uploadedFiles[$name] = [new UploadedFile(...$file)];
+        $uploadedFiles[$name] = new UploadedFile(...$file);
       }
     }
     return $uploadedFiles;
