@@ -21,6 +21,7 @@ use Closure;
 use Countable;
 use IteratorAggregate;
 use Override;
+use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionFunction;
@@ -29,6 +30,7 @@ use ReflectionMethod;
 use ReflectionType;
 use TypeError;
 use Viswoole\Core\Common\Arr;
+use Viswoole\Core\Contract\PreInjectInterface;
 use Viswoole\Core\Coroutine\Context;
 use Viswoole\Core\Exception\ClassNotFoundException;
 use Viswoole\Core\Exception\FuncNotFoundException;
@@ -276,6 +278,11 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       $key = array_key_exists($name, $params) ? $name : $index;
       // 参数默认值
       $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
+      // 扩展属性
+      $preInject = $shape->getAttributes(
+        PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF
+      );
+      var_dump($preInject);
       // 获得值
       $value = Arr::arrayPopValue($params, $key, $default);
       // 验证类型
@@ -316,7 +323,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       // 如果$value等于null 且设置的是内置类型 则判断是否允许为null，如果允许则返回null，否则抛出异常
       if (is_null($value) && $paramType->isBuiltin()) {
         if ($allowsNull) return null;
-        $this->handleParamsError($index, $name, "must be of type $paramType, null given");
+        $this->handleParamsError($index, $name, "$$name must be of type $paramType, null given");
       }
       // 进行类型验证
       try {
