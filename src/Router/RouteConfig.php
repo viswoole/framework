@@ -20,6 +20,7 @@ use Closure;
 use InvalidArgumentException;
 use Override;
 use RuntimeException;
+use Viswoole\Core\Common\Arr;
 
 /**
  * 路线配置类
@@ -314,7 +315,11 @@ abstract class RouteConfig implements ArrayAccess
     foreach ($options as $key => $value) {
       if (is_int($key)) continue;
       if ($key === 'mate') {
-        $this->options['mate'] = is_array($value) ? $value : [];
+        if (Arr::isAssociativeArray($value)) {
+          $this->options['mate'] = array_merge($this->options['mate'], $value);
+        } else {
+          throw new InvalidArgumentException('路由meta配置错误，需给定键值对数组');
+        }
       } elseif (method_exists($this, $key)) {
         $this->$key($value);
       } else {
