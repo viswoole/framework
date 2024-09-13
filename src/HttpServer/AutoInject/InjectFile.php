@@ -17,71 +17,23 @@ namespace Viswoole\HttpServer\AutoInject;
 
 use Attribute;
 use Override;
-use Viswoole\Core\App;
-use Viswoole\Core\Validate\Rules\RuleAbstract;
 use Viswoole\HttpServer\Facade\Request;
 use Viswoole\HttpServer\Message\UploadedFile;
-use Viswoole\HttpServer\Request\File;
+use Viswoole\Router\ApiDoc\Body\FileParamInterface;
 
 /**
- * HTTP上传文件注入与校验
+ * 注入上传的文件
  *
- * 与\Viswoole\HttpServer\Request\File配合使用
+ * 多个文件为数组`UploadedFile[]`, 单个文件为`UploadedFile`对象
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class InjectFile extends RuleAbstract
+class InjectFile implements FileParamInterface
 {
-  /**
-   * @param string $fileMime 文件媒体类型
-   * @param int $maxSize 文件最大长度,单位字节，小于等于0为不限制长度
-   * @param int $count 上传文件数量，小于等于0为不限制文件数量
-   * @param string $message
-   */
-  public function __construct(
-    public readonly string $fileMime = '*',
-    public readonly int    $maxSize = 0,
-    public readonly int    $count = 0,
-    string                 $message = ''
-  )
-  {
-    parent::__construct($message);
-  }
-
   /**
    * @inheritDoc
    */
-  #[Override] public function validate(mixed $value, string $key = ''): mixed
+  #[Override] public function inject(string $name, mixed $value): array|null|UploadedFile
   {
-    $upload = Request::files($key);
-    if (empty($upload)) {
-      if (is_null($value)) return null;
-      $this->error("必须上传 $key 文件");
-    }
-    if ($this->count > 0 && count($upload) !== $this->count) {
-      $this->error("必须上传 $this->count 个 $key 文件");
-    }
-    foreach ($upload as $item) $this->checkFile($item, $key);
-    if (!$value instanceof File) {
-      $value = App::factory()->invokeClass(File::class);
-    }
-    $value->inject($key, $upload);
-    return $value;
-  }
-
-  /**
-   * 验证文件
-   *
-   * @param UploadedFile $file
-   * @param string $key
-   * @return void
-   */
-  private function checkFile(UploadedFile $file, string $key): void
-  {
-    if ($this->fileMime !== '*' && $file->getClientMediaType() !== $this->fileMime) {
-      $this->error("$key 文件的类型必须为 $this->fileMime");
-    }
-    if ($this->maxSize > 0 && $file->getSize() > $this->maxSize) {
-      $this->error("$key 文件大小不能超过 $this->maxSize 字节");
-    }
+    return Request::files($name) ?? $value;
   }
 }
