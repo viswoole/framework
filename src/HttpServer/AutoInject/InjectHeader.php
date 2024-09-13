@@ -17,7 +17,6 @@ namespace Viswoole\HttpServer\AutoInject;
 
 use Attribute;
 use Override;
-use Viswoole\Core\Exception\ValidateException;
 use Viswoole\HttpServer\Facade\Request;
 use Viswoole\Router\ApiDoc\Body\HeaderParamInterface;
 
@@ -29,6 +28,8 @@ use Viswoole\Router\ApiDoc\Body\HeaderParamInterface;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectHeader implements HeaderParamInterface
 {
+  use ValidateEmpty;
+
   /**
    * 注入请求头
    *
@@ -40,9 +41,6 @@ class InjectHeader implements HeaderParamInterface
   #[Override] public function inject(string $name, mixed $value, bool $allowEmpty): string|null
   {
     $value = Request::getHeader($name, $value);
-    if (!$allowEmpty && empty($value)) {
-      throw new ValidateException('请求头' . $name . '不能为空');
-    }
-    return $value;
+    return $this->validateEmpty($value, $allowEmpty, "请求头{$name}不能为空");
   }
 }
