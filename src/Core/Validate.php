@@ -45,6 +45,7 @@ class Validate
     mixed                                  ...$args
   ): mixed
   {
+    if (empty($rules)) return $value;
     if (!is_array($rules)) $rules = [$rules];
     foreach ($rules as $attribute) {
       $instance = $attribute;
