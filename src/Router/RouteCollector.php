@@ -349,16 +349,18 @@ class RouteCollector
    *
    * @access public
    * @param string $path 路由路径
-   * @param array $params 请求参数，匹配到的路由动态参数会合并到params中，自动检测类型。
    * @param string $method 请求方式
    * @param string $domain 请求域名
+   * @param array|null $params 请求参数，如果传入则会同动态路由参数合并，并传递给路由处理函数
+   * @param callable|null $callback 回调函数，用于处理动态路由参数，例如将动态路由参数添加到Request对象中，该回调触发时间早于调用路由处理函数
    * @return mixed 输出结果
    */
   public function dispatch(
-    string $path,
-    array  &$params,
-    string $method,
-    string $domain,
+    string    $path,
+    string    $method,
+    string    $domain,
+    ?array    $params = null,
+    ?callable $callback = null,
   ): mixed
   {
     $PathAndExt = explode('.', $path);
@@ -403,9 +405,12 @@ class RouteCollector
       // 判断伪静态后缀
       $this->checkOption($route, 'suffix', $ext);
       // 合并参数
-      if (!empty($pattern)) $params = array_merge($params, $pattern);
+      if (!empty($pattern)) {
+        if ($callback) $callback($pattern);
+        if ($params) $params = array_merge($params, $pattern);
+      }
       return $this->middleware->process(function () use ($route, $params) {
-        return invoke($route['handler'], $params);
+        return invoke($route['handler'], $params ?? []);
       }, $route['middleware']);
     } catch (RouteNotFoundException $e) {
       // 匹配miss路由
