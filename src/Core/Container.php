@@ -266,19 +266,6 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         $allowsNull = $shape->allowsNull();
         // 参数名称
         $name = $shape->getName();
-        // 扩展验证规则
-        $validateAttributes = $shape->getAttributes(
-          RuleAbstract::class, ReflectionAttribute::IS_INSTANCEOF
-        );
-        // 如果是可变参数则返回参数数组
-        if ($shape->isVariadic()) {
-          foreach ($params as &$item) {
-            $item = $this->validateParam(
-              $name, $paramType, $item, $allowsNull, $validateAttributes
-            );
-          }
-          return array_merge($args, $params);
-        }
         // 先判断是否存在命名，不存在则使用位置
         $key = array_key_exists($name, $params) ? $name : $index;
         // 参数默认值
@@ -289,10 +276,31 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         $preInject = $shape->getAttributes(
           PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF
         );
+        // 扩展验证规则
+        $validateAttributes = $shape->getAttributes(
+          RuleAbstract::class, ReflectionAttribute::IS_INSTANCEOF
+        );
+        // 如果是可变参数则返回参数数组
+        if ($shape->isVariadic()) {
+          // 将剩下的参数列表丢给前置注入
+          foreach ($preInject as $inject) {
+            // 前置注入可变数量参数时 默认允许为空数组
+            $params = $inject->newInstance()->inject($name, $params, true);
+            // 可变数量参数在注入时必须是数组
+            if (!is_array($params)) $params = [];
+          }
+          foreach ($params as &$item) {
+            $item = $this->validateParam(
+              $name, $paramType, $item, $allowsNull, $validateAttributes
+            );
+          }
+          return array_merge($args, $params);
+        }
+        // 执行所有前置注入
         foreach ($preInject as $inject) {
           $value = $inject->newInstance()->inject($name, $value, $allowsNull);
         }
-        // 验证类型
+        // 验证参数类型
         $value = $this->validateParam(
           $name, $paramType, $value, $allowsNull, $validateAttributes
         );
