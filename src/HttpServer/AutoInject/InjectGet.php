@@ -17,7 +17,6 @@ namespace Viswoole\HttpServer\AutoInject;
 
 use Attribute;
 use Override;
-use Viswoole\Core\Exception\ValidateException;
 use Viswoole\HttpServer\Facade\Request;
 use Viswoole\Router\ApiDoc\Body\GetParamInterface;
 
@@ -27,6 +26,7 @@ use Viswoole\Router\ApiDoc\Body\GetParamInterface;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectGet implements GetParamInterface
 {
+  use ValidateEmpty;
 
   /**
    * @inheritDoc
@@ -34,9 +34,6 @@ class InjectGet implements GetParamInterface
   #[Override] public function inject(string $name, mixed $value, bool $allowEmpty): mixed
   {
     $value = Request::get($name, $value);
-    if (!$allowEmpty && empty($value)) {
-      throw new ValidateException('(GET)请求参数' . $name . '不能为空');
-    }
-    return $value;
+    return $this->validateEmpty($value, $allowEmpty, "(GET)请求参数{$name}不能为空");
   }
 }
