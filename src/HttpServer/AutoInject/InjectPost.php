@@ -26,11 +26,14 @@ use Viswoole\Router\ApiDoc\Body\PostParamInterface;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectPost implements PostParamInterface
 {
+  use ValidateEmpty;
+
   /**
    * @inheritDoc
    */
-  #[Override] public function inject(string $name, mixed $value): mixed
+  #[Override] public function inject(string $name, mixed $value, bool $allowEmpty): mixed
   {
-    return Request::post($name, $value);
+    $value = Request::post($name, $value);
+    return $this->validateEmpty($value, $allowEmpty, "请求参数{$name}不能为空");
   }
 }
