@@ -60,7 +60,7 @@ class InjectFile extends RuleAbstract
     if ($this->count > 0 && count($upload) !== $this->count) {
       $this->error("必须上传 $this->count 个 $key 文件");
     }
-    foreach ($upload as $item) $this->checkFile($item);
+    foreach ($upload as $item) $this->checkFile($item, $key);
     if (!$value instanceof File) {
       $value = App::factory()->invokeClass(File::class);
     }
@@ -72,15 +72,16 @@ class InjectFile extends RuleAbstract
    * 验证文件
    *
    * @param UploadedFile $file
+   * @param string $key
    * @return void
    */
-  private function checkFile(UploadedFile $file): void
+  private function checkFile(UploadedFile $file, string $key): void
   {
     if ($this->fileMime !== '*' && $file->getClientMediaType() !== $this->fileMime) {
-      $this->error("$this->key 文件的类型必须为 $this->fileMime");
+      $this->error("$key 文件的类型必须为 $this->fileMime");
     }
     if ($this->maxSize > 0 && $file->getSize() > $this->maxSize) {
-      $this->error("$this->key 文件大小不能超过 $this->maxSize 字节");
+      $this->error("$key 文件大小不能超过 $this->maxSize 字节");
     }
   }
 }
