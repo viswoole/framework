@@ -27,7 +27,7 @@ class RouteController extends AnnotationRouteAbstract
    * @param array|string|null $methods 请求方法
    * @param string|null $server 服务器名称
    * @param string|null $describe 描述
-   * @param array{middleware:array,suffix:string[],domain:string[],pattern:array,hidden:bool,sort:int} $options 更多配置选项
+   * @param array{middleware:array,suffix:string[],domain:string[],pattern:array<string,string>,hidden:bool,sort:int,meta:array<string,string>} $options 更多配置选项
    */
   public function __construct(
     array|string|null $prefix = null,
