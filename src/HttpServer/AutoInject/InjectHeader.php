@@ -17,42 +17,22 @@ namespace Viswoole\HttpServer\AutoInject;
 
 use Attribute;
 use Override;
-use Viswoole\Core\Validate\Rules\RuleAbstract;
 use Viswoole\HttpServer\Facade\Request;
-use Viswoole\HttpServer\Request\Header;
+use Viswoole\Router\ApiDoc\Body\HeaderParamInterface;
 
 /**
- * 自动注入请求标头
+ * 注入请求头
+ *
+ * 多个文件为数组`UploadedFile[]`, 单个文件为`UploadedFile`对象
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class InjectHeader extends RuleAbstract
+class InjectHeader implements HeaderParamInterface
 {
   /**
-   * @param string $message 错误提示信息
+   * @inheritDoc
    */
-  public function __construct(
-    string $message = ''
-  )
+  #[Override] public function inject(string $name, mixed $value): string|null
   {
-    parent::__construct($message);
-  }
-
-  /**
-   * 验证数据
-   *
-   * @param mixed $value
-   * @param string $key 参数名
-   * @return mixed 返回校验后的数据
-   */
-  #[Override] public function validate(mixed $value, string $key = ''): mixed
-  {
-    $headerValue = Request::getHeader($key);
-    if (empty($headerValue)) {
-      if (is_null($value)) return null;
-      $this->error("必须具有 $key 请求标头");
-    }
-    if (!$value instanceof Header) $value = new Header();
-    $value->inject($key, $headerValue);
-    return $value;
+    return Request::getHeader($name, $value);
   }
 }
