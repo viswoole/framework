@@ -31,7 +31,7 @@ class ObjectStructure extends ClassStructure
   /**
    * @var array<string,FieldStructure> 属性列表
    */
-  public array $properties;
+  public array $properties = [];
   /**
    * @var string 类型
    */
@@ -56,12 +56,8 @@ class ObjectStructure extends ClassStructure
     if (!$parseProperties) {
       // ReflectionParameter[] 获取构造函数参数
       $parameters = $reflector->getConstructor()?->getParameters();
-      if (is_null($parameters)) {
-        $this->properties = [];
-      } else {
-        $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
-        $this->parseParams($parameters, $docComment);
-      }
+      $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
+      $this->parseParams($parameters, $docComment);
     } else {
       $properties = $reflector->getProperties(ReflectionProperty::IS_PUBLIC);
       $this->parseProperties($properties);
