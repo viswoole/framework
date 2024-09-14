@@ -15,7 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
-use InvalidArgumentException;
 use Override;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -125,28 +124,5 @@ class FieldStructure extends BaseStructure
       'default' => $this->default,
       'types' => $this->types
     ];
-  }
-
-  /**
-   * 提取类名
-   *
-   * @param string $class 完整的类名（包含命名空间）
-   * @return string 只包含类名的部分
-   * @throws InvalidArgumentException 如果传入的不是有效的类名字符串
-   */
-  private function extractClassName(string $class): string
-  {
-    $class = trim($class);
-    if (empty($class)) {
-      throw new InvalidArgumentException('Class name cannot be empty.');
-    }
-    // 没有命名空间 直接返回类
-    if (!str_contains($class, '\\')) return $class;
-    // 使用PHP内置函数获取类名
-    $className = basename(str_replace('\\', '/', $class));
-    if ($className === '') {
-      throw new InvalidArgumentException('Invalid class name provided.');
-    }
-    return $className;
   }
 }
