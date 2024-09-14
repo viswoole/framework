@@ -32,5 +32,5 @@ interface PreInjectInterface
    * @return mixed 返回要注入的值
    * @throws ValidateException 如果希望停止注入，则抛出一个ValidateException异常，当然你也可以抛出其他任何异常来终止注入。
    */
-  public function inject(string $name, mixed $value, bool $allowEmpty): mixed;
+  public function inject(string $name, mixed $value, bool $allowNull): mixed;
 }

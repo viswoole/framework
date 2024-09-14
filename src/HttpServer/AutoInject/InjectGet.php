@@ -26,14 +26,14 @@ use Viswoole\Router\ApiDoc\Body\GetParamInterface;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectGet implements GetParamInterface
 {
-  use ValidateEmpty;
+  use ValidateNull;
 
   /**
    * @inheritDoc
    */
-  #[Override] public function inject(string $name, mixed $value, bool $allowEmpty): mixed
+  #[Override] public function inject(string $name, mixed $value, bool $allowNull): mixed
   {
     $value = Request::get($name, $value);
-    return $this->validateEmpty($value, $allowEmpty, "(GET)请求参数{$name}不能为空");
+    return $this->validateEmpty($value, $allowNull, "(GET)请求参数{$name}不能为空");
   }
 }

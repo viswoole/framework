@@ -28,19 +28,19 @@ use Viswoole\Router\ApiDoc\Body\HeaderParamInterface;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectHeader implements HeaderParamInterface
 {
-  use ValidateEmpty;
+  use ValidateNull;
 
   /**
    * 注入请求头
    *
    * @param string $name 标头
    * @param mixed $value 默认值
-   * @param bool $allowEmpty 是否允许为空
+   * @param bool $allowNull 是否允许为空
    * @inheritDoc
    */
-  #[Override] public function inject(string $name, mixed $value, bool $allowEmpty): string|null
+  #[Override] public function inject(string $name, mixed $value, bool $allowNull): string|null
   {
     $value = Request::getHeader($name, $value);
-    return $this->validateEmpty($value, $allowEmpty, "请求头{$name}不能为空");
+    return $this->validateEmpty($value, $allowNull, "请求头{$name}不能为空");
   }
 }

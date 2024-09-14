@@ -20,19 +20,19 @@ use Viswoole\Core\Exception\ValidateException;
 /**
  * 验证是否为空
  */
-trait ValidateEmpty
+trait ValidateNull
 {
   /**
    * 验证是否为空
    *
    * @param mixed $value 处理好的值
-   * @param bool $allowEmpty 是否允许为空
+   * @param bool $allowNull 是否允许为空
    * @param string $message 如果为空的提示信息
    * @return mixed
    */
-  protected function validateEmpty(mixed $value, bool $allowEmpty, string $message): mixed
+  protected function validateEmpty(mixed $value, bool $allowNull, string $message): mixed
   {
-    if (!$allowEmpty && empty($value)) {
+    if (!$allowNull && is_null($value)) {
       throw new ValidateException($message);
     }
     return $value;
