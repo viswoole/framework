@@ -100,8 +100,7 @@ class Validate
     if ($type instanceof ReflectionIntersectionType) return (string)$type;
     if ($type instanceof ReflectionNamedType) {
       $typeString = $type->getName();
-      return ($type->allowsNull() && str_starts_with($typeString, '?'))
-        ? ['null', substr($typeString, 1)] : $typeString;
+      return $type->allowsNull() ? ['null', $typeString] : $typeString;
     }
     if (str_contains($type, '|')) return explode('|', $type);
     return $type;
