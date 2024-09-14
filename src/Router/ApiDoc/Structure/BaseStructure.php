@@ -50,12 +50,23 @@ abstract class BaseStructure implements JsonSerializable
   }
 
   /**
+   * @inheritDoc
+   */
+  public function jsonSerialize(): array
+  {
+    return [
+      'name' => $this->name,
+      'type' => $this->type,
+    ];
+  }
+
+  /**
    * 转换为字符串
    *
    * @return string json字符串
    */
   public function __toString(): string
   {
-    return json_encode($this->jsonSerialize(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    return $this->name;
   }
 }
