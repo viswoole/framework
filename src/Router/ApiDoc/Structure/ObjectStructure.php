@@ -20,6 +20,7 @@ use Override;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionParameter;
+use ReflectionProperty;
 use Viswoole\Router\ApiDoc\DocCommentTool;
 
 /**
@@ -40,8 +41,9 @@ class ObjectStructure extends ClassStructure
    * 构建对象结构
    *
    * @param string|object $classOrInstance
+   * @param bool $parseProperties 是否解析公开属性
    */
-  public function __construct(string|object $classOrInstance)
+  public function __construct(string|object $classOrInstance, bool $parseProperties = false)
   {
     try {
       $reflector = new ReflectionClass($classOrInstance);
@@ -51,13 +53,18 @@ class ObjectStructure extends ClassStructure
     $this->description = DocCommentTool::extractDocTitle($reflector->getDocComment() ?: '');
     $this->namespace = $reflector->getNamespaceName();
     $this->name = $reflector->getShortName();
-    // ReflectionParameter[] 获取构造函数参数
-    $parameters = $reflector->getConstructor()?->getParameters();
-    if (is_null($parameters)) {
-      $this->properties = [];
+    if (!$parseProperties) {
+      // ReflectionParameter[] 获取构造函数参数
+      $parameters = $reflector->getConstructor()?->getParameters();
+      if (is_null($parameters)) {
+        $this->properties = [];
+      } else {
+        $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
+        $this->parseParams($parameters, $docComment);
+      }
     } else {
-      $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
-      $this->parseProperties($parameters, $docComment);
+      $properties = $reflector->getProperties(ReflectionProperty::IS_PUBLIC);
+      $this->parseProperties($properties);
     }
   }
 
@@ -68,7 +75,7 @@ class ObjectStructure extends ClassStructure
    * @param string $docComment 构造函数文档注释
    * @return void
    */
-  private function parseProperties(array $parameters, string $docComment): void
+  private function parseParams(array $parameters, string $docComment): void
   {
     foreach ($parameters as $parameter) {
       $name = $parameter->getName();
@@ -78,6 +85,27 @@ class ObjectStructure extends ClassStructure
         $parameter->allowsNull(),
         $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null,
         $parameter->getType()
+      );
+    }
+  }
+
+  /**
+   * 解析类构造参数
+   *
+   * @param ReflectionProperty[] $properties 参数列表
+   * @return void
+   */
+  private function parseProperties(array $properties): void
+  {
+    foreach ($properties as $item) {
+      $name = $item->getName();
+      $type = $item->getType();
+      $this->properties[$name] = new FieldStructure(
+        $name,
+        DocCommentTool::extractPropertyDoc($item->getDocComment() ?: ''),
+        $type->allowsNull(),
+        $item->getDefaultValue(),
+        $type
       );
     }
   }
