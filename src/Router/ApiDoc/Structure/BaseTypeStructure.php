@@ -23,7 +23,7 @@ use JsonSerializable;
  */
 class BaseTypeStructure implements JsonSerializable
 {
-  const array BASE_TYPE = ['object', 'array', 'string', 'int', 'float', 'bool', 'null', 'File', 'mixed', 'enum'];
+  const array BASE_TYPE_LIST = ['object', 'array', 'string', 'int', 'float', 'bool', 'null', 'File', 'mixed', 'enum'];
   /**
    * @var string 结构名称
    */
@@ -34,9 +34,9 @@ class BaseTypeStructure implements JsonSerializable
    */
   public function __construct(protected readonly string $type)
   {
-    if (!in_array($this->type, self::BASE_TYPE)) {
+    if (!in_array($this->type, self::BASE_TYPE_LIST)) {
       throw new InvalidArgumentException(
-        "基本类型错误{$this->type}，可选值：" . implode('|', self::BASE_TYPE)
+        "基本类型错误{$this->type}，可选值：" . implode('|', self::BASE_TYPE_LIST)
       );
     }
   }
