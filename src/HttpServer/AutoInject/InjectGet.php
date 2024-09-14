@@ -18,13 +18,13 @@ namespace Viswoole\HttpServer\AutoInject;
 use Attribute;
 use Override;
 use Viswoole\HttpServer\Facade\Request;
-use Viswoole\Router\ApiDoc\Body\GetParamInterface;
+use Viswoole\Router\ApiDoc\ParamSourceInterface\QueryParamInterface;
 
 /**
- * 注入GET请求参数
+ * 注入GET查询参数
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class InjectGet implements GetParamInterface
+class InjectGet implements QueryParamInterface
 {
   use ValidateNull;
 

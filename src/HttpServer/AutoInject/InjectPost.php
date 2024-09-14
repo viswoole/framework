@@ -18,13 +18,13 @@ namespace Viswoole\HttpServer\AutoInject;
 use Attribute;
 use Override;
 use Viswoole\HttpServer\Facade\Request;
-use Viswoole\Router\ApiDoc\Body\PostParamInterface;
+use Viswoole\Router\ApiDoc\ParamSourceInterface\BodyParamInterface;
 
 /**
- * 用于注入POST请求参数
+ * 用于注入Body中传入的参数
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
-class InjectPost implements PostParamInterface
+class InjectPost implements BodyParamInterface
 {
   use ValidateNull;
 

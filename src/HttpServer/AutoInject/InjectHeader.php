@@ -18,12 +18,10 @@ namespace Viswoole\HttpServer\AutoInject;
 use Attribute;
 use Override;
 use Viswoole\HttpServer\Facade\Request;
-use Viswoole\Router\ApiDoc\Body\HeaderParamInterface;
+use Viswoole\Router\ApiDoc\ParamSourceInterface\HeaderParamInterface;
 
 /**
- * 注入请求头
- *
- * 多个文件为数组`UploadedFile[]`, 单个文件为`UploadedFile`对象
+ * 注入请求标头
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectHeader implements HeaderParamInterface
