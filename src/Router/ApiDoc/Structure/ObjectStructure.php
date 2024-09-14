@@ -61,6 +61,7 @@ class ObjectStructure extends ClassStructure
       if (!$parseProperties) {
         // ReflectionParameter[] 获取构造函数参数
         $parameters = $reflector->getConstructor()?->getParameters();
+        if (empty($parameters)) return;
         $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
         $this->parseParams($parameters, $docComment);
       } else {
