@@ -13,32 +13,26 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\ApiDoc;
+namespace Viswoole\Router\ApiDoc\Structure;
 
 use InvalidArgumentException;
+use Override;
 use ReflectionEnum;
+use Viswoole\Router\ApiDoc\DocCommentTool;
 
 /**
  * 枚举结构对象
  */
-class EnumStructure
+class EnumStructure extends ClassStructure
 {
-  /**
-   * @var string 命名空间
-   */
-  public readonly string $namespace;
-  /**
-   * @var string 枚举类名称
-   */
-  public readonly string $name;
-  /**
-   * @var string 描述
-   */
-  public string $description;
   /**
    * @var array 枚举case列表
    */
   public readonly array $cases;
+  /**
+   * @var string 类型声明
+   */
+  protected string $type = 'enum';
 
   /**
    * 构建枚举结构
@@ -58,5 +52,15 @@ class EnumStructure
     $this->cases = array_map(function ($case) {
       return $case->name;
     }, $reflector->getCases());
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function jsonSerialize(): array
+  {
+    $structure = parent::jsonSerialize();
+    $structure['cases'] = $this->cases;
+    return $structure;
   }
 }
