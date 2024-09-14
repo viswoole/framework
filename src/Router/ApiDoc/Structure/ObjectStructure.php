@@ -40,12 +40,14 @@ class ObjectStructure extends ClassStructure
   /**
    * 构建对象结构
    *
-   * @param string|object|null $classOrInstance 类名或实例，不传入将不会解析
+   * @param string|object|array $classOrInstance 类名或实例，支持传入FieldStructure[]
    * @param bool $parseProperties 是否解析公开属性
    */
-  public function __construct(string|object|null $classOrInstance, bool $parseProperties = false)
+  public function __construct(string|object|array $classOrInstance, bool $parseProperties = false)
   {
-    if ($classOrInstance) {
+    if (is_array($classOrInstance)) {
+      $this->addProperty($classOrInstance);
+    } else {
       try {
         $reflector = new ReflectionClass($classOrInstance);
       } catch (ReflectionException $e) {
@@ -66,6 +68,22 @@ class ObjectStructure extends ClassStructure
         $this->parseProperties($properties);
       }
     }
+  }
+
+  /**
+   * 添加属性描述
+   *
+   * @param FieldStructure|FieldStructure[] $fieldStructure
+   * @return $this
+   */
+  public function addProperty(FieldStructure|array $fieldStructure): static
+  {
+    if (is_array($fieldStructure)) {
+      foreach ($fieldStructure as $item) $this->addProperty($item);
+    } else {
+      $this->properties[$fieldStructure->name] = $fieldStructure;
+    }
+    return $this;
   }
 
   /**
