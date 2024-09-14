@@ -39,23 +39,13 @@ class TypeStructure extends BaseStructure
   }
 
   /**
-   * 转换为字符串
-   *
-   * @return string 类型名称字符串
-   */
-  public function __toString(): string
-  {
-    return $this->name;
-  }
-
-  /**
    * @inheritDoc
    */
   #[Override] public function jsonSerialize(): array
   {
+    $array = parent::jsonSerialize();
     return [
-      'name' => $this->name,
-      'type' => $this->type,
+      ...$array,
       'isBuiltin' => $this->isBuiltin,
       'structure' => $this->structure
     ];
