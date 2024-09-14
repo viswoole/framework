@@ -118,7 +118,7 @@ class Validate
   {
     if (is_array($type)) {
       $value = self::checkTypes($value, $type);
-    } else if (BuiltinTypeValidate::isBuiltin($type)) {
+    } elseif (BuiltinTypeValidate::isBuiltin($type)) {
       $value = BuiltinTypeValidate::$type($value);
     } elseif (str_contains($type, '&')) {
       $value = self::intersection($type, $value);
