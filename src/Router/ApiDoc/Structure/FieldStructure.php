@@ -39,17 +39,20 @@ class FieldStructure implements JsonSerializable
    * @param string $description 描述
    * @param bool $allowNull 是否允许为null
    * @param mixed $default 默认值
-   * @param ReflectionType|BaseTypeStructure|array|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组
+   * @param ReflectionType|BaseTypeStructure|array|string|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组或基本类型
+   * @see BaseTypeStructure::BASE_TYPE_LIST 基本类型列表
    */
   public function __construct(
-    public string                               $name,
-    public string                               $description,
-    public bool                                 $allowNull,
-    public mixed                                $default,
-    null|ReflectionType|BaseTypeStructure|array $type
+    public string                                      $name,
+    public string                                      $description,
+    public bool                                        $allowNull,
+    public mixed                                       $default,
+    null|ReflectionType|BaseTypeStructure|array|string $type
   )
   {
-    if ($type instanceof BaseTypeStructure) {
+    if (is_string($type)) {
+      $this->types = [new BaseTypeStructure($type)];
+    } elseif ($type instanceof BaseTypeStructure) {
       $this->types = [$type];
     } elseif (is_array($type)) {
       $this->types = $type;
