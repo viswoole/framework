@@ -23,16 +23,12 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 /**
  * 枚举结构对象
  */
-class EnumStructure extends ClassStructure
+class EnumStructure extends ClassTypeStructure
 {
   /**
    * @var array 枚举case列表
    */
   public readonly array $cases;
-  /**
-   * @var string 类型声明
-   */
-  public string $type = 'enum';
 
   /**
    * 构建枚举结构
@@ -41,6 +37,7 @@ class EnumStructure extends ClassStructure
    */
   public function __construct(string $enum)
   {
+    parent::__construct('enum');
     if (!enum_exists($enum)) {
       throw new InvalidArgumentException('not a enum class');
     }

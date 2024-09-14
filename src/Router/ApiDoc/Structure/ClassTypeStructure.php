@@ -20,24 +20,16 @@ use Override;
 /**
  * 类结构声明
  */
-class ClassStructure extends BaseStructure
+abstract class ClassTypeStructure extends BaseTypeStructure
 {
   /**
    * @var string 命名空间
    */
   public string $namespace;
   /**
-   * @var string 对象名称
-   */
-  public string $name;
-  /**
    * @var string 类描述
    */
   public string $description;
-  /**
-   * @var string 类型 object|enum
-   */
-  public string $type = 'object';
 
   /**
    * @inheritDoc

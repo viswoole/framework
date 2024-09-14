@@ -26,16 +26,12 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 /**
  * 对象结构
  */
-class ObjectStructure extends ClassStructure
+class ObjectStructure extends ClassTypeStructure
 {
   /**
    * @var array<string,FieldStructure> 属性列表
    */
   public array $properties = [];
-  /**
-   * @var string 类型
-   */
-  public string $type = 'object';
 
   /**
    * 构建对象结构
@@ -45,6 +41,7 @@ class ObjectStructure extends ClassStructure
    */
   public function __construct(string|object|array $classOrInstance, bool $parseProperties = false)
   {
+    parent::__construct('object');
     if (is_array($classOrInstance)) {
       $this->addProperty($classOrInstance);
     } else {

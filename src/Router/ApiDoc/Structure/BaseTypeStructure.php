@@ -15,21 +15,31 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
+use InvalidArgumentException;
 use JsonSerializable;
 
 /**
  * 结构声明基类
  */
-abstract class BaseStructure implements JsonSerializable
+class BaseTypeStructure implements JsonSerializable
 {
+  const array BASE_TYPE = ['object', 'array', 'string', 'int', 'float', 'bool', 'null', 'File', 'mixed', 'enum'];
   /**
    * @var string 结构名称
    */
-  public string $name;
+  protected string $name;
+
   /**
-   * @var string 实际类型
+   * @param string $type 基本类型[object|array|string|int|float|bool|null|File|mixed]
    */
-  public string $type = 'object';
+  public function __construct(protected readonly string $type)
+  {
+    if (!in_array($this->type, self::BASE_TYPE)) {
+      throw new InvalidArgumentException(
+        "基本类型错误{$this->type}，可选值：" . implode('|', self::BASE_TYPE)
+      );
+    }
+  }
 
   /**
    * 转换为数组
@@ -55,9 +65,30 @@ abstract class BaseStructure implements JsonSerializable
   public function jsonSerialize(): array
   {
     return [
-      'name' => $this->name,
+      'name' => $this->getName(),
       'type' => $this->type,
     ];
+  }
+
+  /**
+   * 获取结构名称
+   *
+   * @return string
+   */
+  public function getName(): string
+  {
+    if (!isset($this->name)) $this->name = $this->type;
+    return $this->name;
+  }
+
+  /**
+   * 获取类型
+   *
+   * @return string
+   */
+  public function getType(): string
+  {
+    return $this->type;
   }
 
   /**
@@ -67,6 +98,6 @@ abstract class BaseStructure implements JsonSerializable
    */
   public function __toString(): string
   {
-    return $this->name;
+    return $this->getName();
   }
 }
