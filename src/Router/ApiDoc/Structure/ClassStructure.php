@@ -35,7 +35,7 @@ class ClassStructure extends BaseStructure
   /**
    * @var string 类型 object|enum
    */
-  protected string $type = 'object';
+  public string $type = 'object';
 
   /**
    * @inheritDoc

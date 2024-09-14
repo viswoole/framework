@@ -23,6 +23,15 @@ use JsonSerializable;
 abstract class BaseStructure implements JsonSerializable
 {
   /**
+   * @var string 结构名称
+   */
+  public string $name;
+  /**
+   * @var string 实际类型
+   */
+  public string $type = 'object';
+
+  /**
    * 转换为数组
    *
    * @param bool $recursion 递归

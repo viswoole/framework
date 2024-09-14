@@ -32,7 +32,7 @@ class EnumStructure extends ClassStructure
   /**
    * @var string 类型声明
    */
-  protected string $type = 'enum';
+  public string $type = 'enum';
 
   /**
    * 构建枚举结构

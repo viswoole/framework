@@ -35,7 +35,7 @@ class ObjectStructure extends ClassStructure
   /**
    * @var string 类型
    */
-  protected string $type = 'object';
+  public string $type = 'object';
 
   /**
    * 构建对象结构
