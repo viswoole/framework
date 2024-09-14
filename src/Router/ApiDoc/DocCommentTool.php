@@ -18,7 +18,7 @@ namespace Viswoole\Router\ApiDoc;
 /**
  * 公共类
  */
-class Common
+class DocCommentTool
 {
   /**
    * 从注释文档中提取到属性说明
@@ -59,5 +59,21 @@ class Common
       return trim($doc);
     }
     return '';
+  }
+
+  /**
+   * 提取文档注释中的标题
+   *
+   * @param string $docComment
+   * @return string
+   */
+  public static function extractDocTitle(string $docComment): string
+  {
+    if (empty($docComment)) return '';
+    $title = '';
+    if (preg_match('/^\s+\*\s+([^@\n][^\n]*)$/m', $docComment, $matches)) {
+      $title = trim($matches[1]);
+    }
+    return $title;
   }
 }
