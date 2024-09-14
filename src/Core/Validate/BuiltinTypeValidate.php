@@ -21,9 +21,9 @@ use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Exception\ValidateException;
 
 /**
- * 原子类型校验
+ * 内置类型校验
  */
-class Atomic
+class BuiltinTypeValidate
 {
   // PHP内置原子类型
   public const array TYPES = [
@@ -272,12 +272,12 @@ class Atomic
   }
 
   /**
-   * 判断是否内置原子类型
+   * 判断是否内置类型
    *
    * @param string|Type|ReflectionNamedType $type
    * @return bool
    */
-  public static function isAtomicType(string|Type|ReflectionNamedType $type): bool
+  public static function isBuiltin(string|Type|ReflectionNamedType $type): bool
   {
     if ($type instanceof Type) {
       $type = $type->value;
