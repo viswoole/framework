@@ -33,7 +33,10 @@ abstract class BaseStructure implements JsonSerializable
     if (!$recursion) {
       return $this->jsonSerialize();
     } else {
-      return json_decode($this->__toString(), $recursion);
+      return json_decode(
+        json_encode($this->jsonSerialize(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        $recursion
+      );
     }
   }
 
