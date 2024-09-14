@@ -40,27 +40,31 @@ class ObjectStructure extends ClassStructure
   /**
    * 构建对象结构
    *
-   * @param string|object $classOrInstance
+   * @param string|object|null $classOrInstance 类名或实例，不传入将不会解析
    * @param bool $parseProperties 是否解析公开属性
    */
-  public function __construct(string|object $classOrInstance, bool $parseProperties = false)
+  public function __construct(string|object|null $classOrInstance, bool $parseProperties = false)
   {
-    try {
-      $reflector = new ReflectionClass($classOrInstance);
-    } catch (ReflectionException $e) {
-      throw new InvalidArgumentException('必须是类名或实例：' . $e->getMessage(), $e->getCode(), $e);
-    }
-    $this->description = DocCommentTool::extractDocTitle($reflector->getDocComment() ?: '');
-    $this->namespace = $reflector->getNamespaceName();
-    $this->name = $reflector->getShortName();
-    if (!$parseProperties) {
-      // ReflectionParameter[] 获取构造函数参数
-      $parameters = $reflector->getConstructor()?->getParameters();
-      $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
-      $this->parseParams($parameters, $docComment);
-    } else {
-      $properties = $reflector->getProperties(ReflectionProperty::IS_PUBLIC);
-      $this->parseProperties($properties);
+    if ($classOrInstance) {
+      try {
+        $reflector = new ReflectionClass($classOrInstance);
+      } catch (ReflectionException $e) {
+        throw new InvalidArgumentException(
+          '必须是类名或实例：' . $e->getMessage(), $e->getCode(), $e
+        );
+      }
+      $this->description = DocCommentTool::extractDocTitle($reflector->getDocComment() ?: '');
+      $this->namespace = $reflector->getNamespaceName();
+      $this->name = $reflector->getShortName();
+      if (!$parseProperties) {
+        // ReflectionParameter[] 获取构造函数参数
+        $parameters = $reflector->getConstructor()?->getParameters();
+        $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
+        $this->parseParams($parameters, $docComment);
+      } else {
+        $properties = $reflector->getProperties(ReflectionProperty::IS_PUBLIC);
+        $this->parseProperties($properties);
+      }
     }
   }
 
