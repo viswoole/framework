@@ -23,7 +23,7 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /**
- * 参数或属性字段结构描述
+ * 用于声明字段结构，声明请求参数
  */
 class FieldStructure implements JsonSerializable
 {
@@ -33,10 +33,10 @@ class FieldStructure implements JsonSerializable
   public array $types;
 
   /**
-   * 构建结构
+   * 参数结构描述
    *
-   * @param string $name 参数名称
-   * @param string $description 参数描述
+   * @param string $name 名称
+   * @param string $description 描述
    * @param bool $allowNull 是否允许为null
    * @param mixed $default 默认值
    * @param ReflectionType|BaseTypeStructure|array|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组
