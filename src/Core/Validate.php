@@ -22,8 +22,8 @@ use ReflectionType;
 use ReflectionUnionType;
 use UnitEnum;
 use Viswoole\Core\Exception\ValidateException;
-use Viswoole\Core\Validate\Atomic;
 use Viswoole\Core\Validate\BaseValidateRule;
+use Viswoole\Core\Validate\BuiltinTypeValidate;
 use Viswoole\Core\Validate\Type;
 
 /**
@@ -99,7 +99,9 @@ class Validate
     }
     if ($type instanceof ReflectionIntersectionType) return (string)$type;
     if ($type instanceof ReflectionNamedType) {
-      return $type->allowsNull() ? ['null', $type->getName()] : $type->getName();
+      $typeString = $type->getName();
+      return ($type->allowsNull() && str_starts_with($typeString, '?'))
+        ? ['null', substr($typeString, 1)] : $typeString;
     }
     if (str_contains($type, '|')) return explode('|', $type);
     return $type;
@@ -116,8 +118,8 @@ class Validate
   {
     if (is_array($type)) {
       $value = self::checkTypes($value, $type);
-    } else if (Atomic::isAtomicType($type)) {
-      $value = Atomic::$type($value);
+    } else if (BuiltinTypeValidate::isBuiltin($type)) {
+      $value = BuiltinTypeValidate::$type($value);
     } elseif (str_contains($type, '&')) {
       $value = self::intersection($type, $value);
     } elseif (enum_exists($type)) {
