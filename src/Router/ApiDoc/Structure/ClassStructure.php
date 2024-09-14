@@ -15,6 +15,8 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
+use Override;
+
 /**
  * 类结构声明
  */
@@ -40,13 +42,13 @@ class ClassStructure extends BaseStructure
   /**
    * @inheritDoc
    */
-  public function jsonSerialize(): array
+  #[Override] public function jsonSerialize(): array
   {
+    $array = parent::jsonSerialize();
     return [
+      ...$array,
       'namespace' => $this->namespace,
-      'name' => $this->name,
-      'description' => $this->description,
-      'type' => $this->type
+      'description' => $this->description
     ];
   }
 }
