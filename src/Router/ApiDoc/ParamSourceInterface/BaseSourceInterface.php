@@ -13,14 +13,14 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\ApiDoc\Body;
+namespace Viswoole\Router\ApiDoc\ParamSourceInterface;
 
 use Viswoole\Core\Contract\PreInjectInterface;
 
 /**
- * 该接口为文档解析请求body参数声明提供了一个标记。
+ * 该接口为文档解析请求参数声明提供了一个标记。
  */
-interface BodyInterface extends PreInjectInterface
+interface BaseSourceInterface extends PreInjectInterface
 {
 
 }
