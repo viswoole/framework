@@ -26,7 +26,7 @@ use Viswoole\Core\Common\Arr;
  * 路线配置类
  *
  * @property array $paths 路由路径
- * @property string $describe 路由描述
+ * @property string $description 路由描述
  * @property callable $handler 路由处理方法
  * @property string[] $method 请求方式
  * @property array $params 路由参数
@@ -48,7 +48,7 @@ abstract class RouteConfig implements ArrayAccess
     // 标题
     'title' => '',
     // 路由描述
-    'describe' => '',
+    'description' => '',
     // 处理方法
     'handler' => null,
     // 请求方式
@@ -85,7 +85,7 @@ abstract class RouteConfig implements ArrayAccess
     if (is_array($parentOption)) {
       $parentOption['sort'] = 0;
       $this->options = $parentOption;
-      $this->options['describe'] = '';
+      $this->options['description'] = '';
     } else {
       $this->suffix(config('router.suffix', ['*']));
       $this->domain(config('router.domain', []));
@@ -256,7 +256,7 @@ abstract class RouteConfig implements ArrayAccess
    *
    * @return array{
    *   paths: string[],
-   *   describe: string,
+   *   description: string,
    *   handler: callable,
    *   method: string[],
    *   params: array,
@@ -274,12 +274,12 @@ abstract class RouteConfig implements ArrayAccess
   /**
    * 路由描述
    *
-   * @param string $describe 描述
+   * @param string $description 描述
    * @return static
    */
-  public function describe(string $describe): static
+  public function description(string $description): static
   {
-    $this->options['describe'] = $describe;
+    $this->options['description'] = $description;
     return $this;
   }
 
@@ -372,9 +372,9 @@ abstract class RouteConfig implements ArrayAccess
    *
    * @return array{
    *    paths: string[],
-   *    describe: string,
+   *    description: string,
    *    method:string[],
-   *    params:array<int,array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool,variadic:bool}>,
+   *    params:array<int,array{name:string,type:string,required:bool,default:mixed,description:string,depend:bool,variadic:bool}>,
    *    suffix:string[],
    *    domain:string[],
    *    pattern:array<string,string>,
