@@ -16,13 +16,14 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 use Closure;
-use Override;
+use JsonSerializable;
 use ReflectionAttribute;
 use ReflectionException;
 use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use RuntimeException;
+use Viswoole\Router\Annotation\Returned;
 use Viswoole\Router\ApiDoc\DocCommentTool;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BaseSourceInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BodyParamInterface;
@@ -33,7 +34,7 @@ use Viswoole\Router\ApiDoc\ParamSourceInterface\QueryParamInterface;
 /**
  * 请求参数结构
  */
-class ApiStructure extends BaseStructure
+class ApiStructure implements JsonSerializable
 {
   /**
    * @var FieldStructure[] 文件请求参数
@@ -51,6 +52,10 @@ class ApiStructure extends BaseStructure
    * @var FieldStructure[] 请求头参数
    */
   public array $header = [];
+  /**
+   * @var array 返回值列表
+   */
+  public array $returned = [];
 
   /**
    * 解析请求处理函数
@@ -64,8 +69,15 @@ class ApiStructure extends BaseStructure
     $parameters = $reflector->getParameters();
     // 文档注释
     $docComment = $reflector->getDocComment() ?: '';
+    // 解析参数结构
     foreach ($parameters as $parameter) {
       $this->parseParamField($parameter, $docComment);
+    }
+    $returnedAttributes = $reflector->getAttributes(Returned::class);
+    if (!empty($returnedAttributes)) {
+      foreach ($returnedAttributes as $item) {
+        $this->returned[] = $item->newInstance();
+      }
     }
   }
 
@@ -131,10 +143,10 @@ class ApiStructure extends BaseStructure
         $type = [];
         // 如果类型当中包含了数组，则视为要求上传多个文件
         if (str_contains($typeString, 'array')) {
-          $type[] = new TypeStructure('File[]', 'File[]', true);
+          $type[] = new ArrayTypeStructure(new BaseTypeStructure('File'));
         } elseif (str_contains($typeString, 'File')) {
           // 否则视为上传单个文件
-          $type[] = new TypeStructure('File', 'File', true);
+          $type[] = new BaseTypeStructure('File');
         }
       }
       $this->{$source}[] = new FieldStructure($name, $description, $allowNull, $default, $type);
@@ -165,7 +177,7 @@ class ApiStructure extends BaseStructure
   /**
    * @inheritDoc
    */
-  #[Override] public function jsonSerialize(): array
+  public function jsonSerialize(): array
   {
     return [
       'file' => $this->file,
