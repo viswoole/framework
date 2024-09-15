@@ -202,7 +202,7 @@ class RouterManager
     // 服务名称
     $serverName = $controller->server ?? SERVER_NAME;
     // 判断服务名称是否匹配当前服务
-    if (strtoupper($serverName) !== strtolower(SERVER_NAME)) return null;
+    if (strtolower($serverName) !== strtolower(SERVER_NAME)) return null;
     // 判断是否设置了描述
     if (!isset($controller->title)) {
       $controller->options['title'] = $this->getDocComment($refClass);
