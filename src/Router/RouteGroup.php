@@ -22,6 +22,7 @@ use Closure;
  */
 class RouteGroup extends RouteConfig
 {
+
   /**
    * @var array 分组、域名路由存储items
    */
@@ -58,5 +59,14 @@ class RouteGroup extends RouteConfig
     foreach ($this->items as $item) {
       $item->register($collector);
     }
+  }
+
+  /**
+   * @inheritDoc
+   */
+  protected function handler(callable|array|string $handler): void
+  {
+    if (empty($handler)) return;
+    parent::handler($handler);
   }
 }
