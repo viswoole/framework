@@ -15,8 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
-use JsonSerializable;
-use Override;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
 use ReflectionType;
@@ -25,7 +23,7 @@ use ReflectionUnionType;
 /**
  * 用于声明字段结构，声明请求参数
  */
-class FieldStructure implements JsonSerializable
+class FieldStructure
 {
   /**
    * @var BaseTypeStructure[] 参数类型列表
@@ -110,19 +108,5 @@ class FieldStructure implements JsonSerializable
     } else {
       return new  BaseTypeStructure($name);
     }
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function jsonSerialize(): array
-  {
-    return [
-      'name' => $this->name,
-      'description' => $this->description,
-      'allowNull' => $this->allowNull,
-      'default' => $this->default,
-      'types' => $this->types
-    ];
   }
 }

@@ -16,18 +16,17 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 use InvalidArgumentException;
-use JsonSerializable;
 
 /**
  * 结构声明基类
  */
-class BaseTypeStructure implements JsonSerializable
+class BaseTypeStructure
 {
   const array BASE_TYPE_LIST = ['object', 'array', 'string', 'int', 'float', 'bool', 'null', 'File', 'mixed', 'enum'];
   /**
    * @var string 结构名称
    */
-  protected string $name;
+  public string $name;
 
   /**
    * @param string $type 基本类型[object|array|string|int|float|bool|null|File|mixed]
@@ -39,6 +38,7 @@ class BaseTypeStructure implements JsonSerializable
         "基本类型错误{$this->type}，可选值：" . implode('|', self::BASE_TYPE_LIST)
       );
     }
+    $this->name = $this->type;
   }
 
   /**
@@ -60,28 +60,6 @@ class BaseTypeStructure implements JsonSerializable
   }
 
   /**
-   * @inheritDoc
-   */
-  public function jsonSerialize(): array
-  {
-    return [
-      'name' => $this->getName(),
-      'type' => $this->type,
-    ];
-  }
-
-  /**
-   * 获取结构名称
-   *
-   * @return string
-   */
-  public function getName(): string
-  {
-    if (!isset($this->name)) $this->name = $this->type;
-    return $this->name;
-  }
-
-  /**
    * 获取类型
    *
    * @return string
@@ -98,6 +76,6 @@ class BaseTypeStructure implements JsonSerializable
    */
   public function __toString(): string
   {
-    return $this->getName();
+    return $this->name;
   }
 }

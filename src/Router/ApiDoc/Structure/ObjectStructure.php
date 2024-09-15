@@ -16,7 +16,6 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 use InvalidArgumentException;
-use Override;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionParameter;
@@ -124,15 +123,5 @@ class ObjectStructure extends ClassTypeStructure
         $type
       );
     }
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function jsonSerialize(): array
-  {
-    $structure = parent::jsonSerialize();
-    $structure['properties'] = $this->properties;
-    return $structure;
   }
 }

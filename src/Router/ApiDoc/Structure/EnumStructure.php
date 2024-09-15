@@ -16,7 +16,6 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 use InvalidArgumentException;
-use Override;
 use ReflectionEnum;
 use Viswoole\Router\ApiDoc\DocCommentTool;
 
@@ -49,15 +48,5 @@ class EnumStructure extends ClassTypeStructure
     $this->cases = array_map(function ($case) {
       return $case->name;
     }, $reflector->getCases());
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function jsonSerialize(): array
-  {
-    $structure = parent::jsonSerialize();
-    $structure['cases'] = $this->cases;
-    return $structure;
   }
 }

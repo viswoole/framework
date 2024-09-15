@@ -15,8 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
-use Override;
-
 /**
  * 数组结构描述
  */
@@ -48,7 +46,7 @@ class ArrayTypeStructure extends BaseTypeStructure
   public function addItem(BaseTypeStructure ...$items): void
   {
     foreach ($items as $item) {
-      $this->items[$item->getName()] = $item;
+      $this->items[$item->name] = $item;
     }
     $this->buildName();
   }
@@ -63,16 +61,5 @@ class ArrayTypeStructure extends BaseTypeStructure
     $names = array_keys($this->items);
     $types = implode(' | ', $names);
     $this->name = "Array<$types>";
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function jsonSerialize(): array
-  {
-    return [
-      'type' => $this->type,
-      'items' => $this->items
-    ];
   }
 }
