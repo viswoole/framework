@@ -17,6 +17,8 @@ namespace Viswoole\Router;
 
 use BadMethodCallException;
 use Closure;
+use InvalidArgumentException;
+use RuntimeException;
 use Viswoole\Core\Config;
 use Viswoole\Core\Middleware;
 use Viswoole\Router\Exception\RouteNotFoundException;
@@ -31,21 +33,17 @@ class RouteCollector
    */
   public null|RouteGroup $currentGroup = null;
   /**
-   * @var int[] 完全静态的路由item索引
+   * @var array<string,string> 完全静态的路由item索引
    */
   protected array $staticRoute = [];
   /**
-   * @var array 动态参数的子节点
+   * @var array<string,string> 动态参数的子节点
    */
   protected array $dynamicRoute = [];
   /**
    * @var RouteItem[]|RouteGroup[] 路由列表
    */
   protected array $routes = [];
-  /**
-   * @var RouteItem[] 已经解析处理过的路由item
-   */
-  protected array $routeItems = [];
   /**
    * @var array{string:RouteMiss} miss路由404
    */
@@ -155,7 +153,12 @@ class RouteCollector
   public function recordRouteItem(RouteConfig $route): void
   {
     if ($this->currentGroup === null) {
-      $this->routes[] = $route;
+      $id = $route['id'];
+      if (isset($this->routes[$id])) {
+        $path = implode('|', $route['paths']);
+        throw new RuntimeException("Route id:$id already exists,path:$path");
+      }
+      $this->routes[$id] = $route;
     } else {
       $this->currentGroup->addItem($route);
     }
@@ -170,20 +173,18 @@ class RouteCollector
    */
   public function registerRouteItem(RouteItem $route): void
   {
-    $this->routeItems[] = $route;
-    $index = count($this->routeItems) - 1;
     foreach ($route['paths'] as $path) {
-      $this->insertRoute($path, $index);
+      $this->insertRoute($path, $route->getCiteLink());
     }
   }
 
   /**
    * 插入路由到node树
    * @param string $path
-   * @param int $routeIndex
+   * @param string $routeIndex
    * @return void
    */
-  private function insertRoute(string $path, int $routeIndex): void
+  private function insertRoute(string $path, string $routeIndex): void
   {
     if (self::isVariable($path)) {
       $urlSegments = explode('/', $path);
@@ -192,7 +193,7 @@ class RouteCollector
       });
       $regex = $this->convertRegex(
         $urlSegments,
-        $this->routeItems[$routeIndex]['pattern']
+        $this->getRoute($routeIndex)['pattern']
       );
       $this->addDynamicRoute($urlSegments, $regex, $routeIndex);
     } else {
@@ -267,13 +268,39 @@ class RouteCollector
   }
 
   /**
+   * 获取路由对象
+   *
+   * @param string $idOrCiteLink
+   * @return RouteConfig
+   * @throws InvalidArgumentException
+   */
+  private function getRoute(string $idOrCiteLink): RouteConfig
+  {
+    if (str_contains($idOrCiteLink, '.')) {
+      $citeLink = explode('.', $idOrCiteLink);
+      $key = $citeLink[0];
+      $route = $this->routes[$key]
+        ?? throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
+      for ($i = 1; $i < count($citeLink); $i++) {
+        $key = $citeLink[$i];
+        if (!$route) throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
+        $route = $route->getItem($key);
+      }
+      return $route;
+    } else {
+      return $this->routes[$idOrCiteLink]
+        ?? throw new InvalidArgumentException("路由不存在：$idOrCiteLink");
+    }
+  }
+
+  /**
    * 添加动态路由
    * @param string[] $urlSegments 规则数组
    * @param string $regex
-   * @param int $routeIndex
+   * @param string $routeIndex
    * @return void
    */
-  private function addDynamicRoute(array $urlSegments, string $regex, int $routeIndex): void
+  private function addDynamicRoute(array $urlSegments, string $regex, string $routeIndex): void
   {
     $len = count($urlSegments);
     foreach ($urlSegments as $rule) {
@@ -299,10 +326,10 @@ class RouteCollector
    * 添加静态路由
    *
    * @param string $urlPath 匹配path
-   * @param int $routeIndex 路由item实例索引
+   * @param string $routeIndex 路由item实例索引
    * @return void
    */
-  private function addStaticRoute(string $urlPath, int $routeIndex): void
+  private function addStaticRoute(string $urlPath, string $routeIndex): void
   {
     if (isset($this->staticRoute[$urlPath])) {
       trigger_error(
@@ -320,7 +347,7 @@ class RouteCollector
    */
   public function parseRoute(): void
   {
-    usort($this->routes, function (RouteConfig $a, RouteConfig $b) {
+    uasort($this->routes, function (RouteConfig $a, RouteConfig $b) {
       return $b->sort <=> $a->sort;
     });
     foreach ($this->routes as $item) {
@@ -357,7 +384,7 @@ class RouteCollector
     $route = null;
     //判断是否存在静态路由
     if (isset($this->staticRoute[$path])) {
-      $route = $this->routeItems[$this->staticRoute[$path]];
+      $route = $this->getRoute($this->staticRoute[$path]);
     } else {
       //转换为urlPath数组
       $segments = substr_count($path, '/');
@@ -371,7 +398,7 @@ class RouteCollector
           // 如果匹配成功 则弹出默认的uri
           array_shift($matches);
           // 拿到路由
-          $route = $this->routeItems[$routes[$regex]];
+          $route = $this->getRoute($routes[$regex]);
           // 去除匹配到的key
           $keys = array_slice(array_keys($route['pattern']), 0, count($matches));
           // 组合为关联数组
@@ -425,9 +452,7 @@ class RouteCollector
   {
     if (
       !in_array('*', $route[$option_name] ?? [])
-      && !in_array(
-        $value, $route[$option_name] ?? []
-      )
+      && !in_array($value, $route[$option_name] ?? [])
     ) {
       throw new RouteNotFoundException('路由匹配失败');
     }
