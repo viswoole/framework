@@ -25,13 +25,16 @@ use Viswoole\Core\Contract\MiddlewareInterface;
 class Middleware
 {
   /**
-   * 中间件执行队列
-   * @var array
+   * @var array 全局中间件
    */
-  protected array $queue = [];
+  protected array $middlewares = [];
+  /**
+   * @var array 服务中间件
+   */
+  protected array $serverMiddlewares = [];
 
   /**
-   * 注册一个中间件
+   * 注册一个全局中间件
    *
    * Example usage:
    *
@@ -44,38 +47,44 @@ class Middleware
    * // 注册一个实现了MiddlewareInterface接口的类
    * \Viswoole\Core\Facade\Middleware::register(UserAuthMiddleware::class, 'http');
    * ```
-   * @param Closure|string $handler 中间件
+   * @param callable|string|array $handler 中间件
    * @param string|null $server 服务器名称，默认为null，表示应用于所有服务器
    * @return void
    */
   public function register(
-    Closure|string $handler,
-    string         $server = null
+    callable|string|array $handler,
+    string                $server = null
   ): void
   {
-    // 如果设置了服务器名称，并且当前服务器不是指定的服务器，则不注册该中间件
-    if ($server && $server !== SERVER_NAME) return;
-    $this->queue[] = $this->checkMiddleware($handler);
+    if ($server) {
+      $this->serverMiddlewares[$server][] = self::checkMiddleware($handler);
+    } else {
+      $this->middlewares[] = self::checkMiddleware($handler);
+    }
   }
 
   /**
    * 验证中间件是否有效
    *
-   * @param string|Closure $handler
-   * @return array|Closure
-   * @throws InvalidArgumentException
+   * @param callable|string|array $handler
+   * @return callable|array
    */
-  protected function checkMiddleware(string|Closure $handler): array|Closure
+  public static function checkMiddleware(callable|string|array $handler): callable|array
   {
     if (is_string($handler) && class_exists($handler)) {
       $implements = class_implements($handler);
       if ($implements === false || !in_array(MiddlewareInterface::class, $implements)) {
         throw new InvalidArgumentException(
-          '$' . "handler参数值 $handler 不是一个有效的中间件类,必须实现" . MiddlewareInterface::class . '接口'
+          "\$handler参数值 $handler 不是一个有效的中间件类,必须实现" . MiddlewareInterface::class . '接口'
         );
       } else {
         return [$handler, 'process'];
       }
+    }
+    if (!App::isCallable($handler)) {
+      throw new InvalidArgumentException(
+        '$handler参数不是可调用类型，只支持闭包、中间件类名、[classOrInstance,method]、可调用函数名称'
+      );
     }
     return $handler;
   }
@@ -83,16 +92,18 @@ class Middleware
   /**
    * 运行中间件
    *
-   * @param callable|array|string $handler 最终的处理者
-   * @param callable[]|string[] $middlewares 额外的中间件
+   * @param callable $handler 最终的处理者,支持任意可调用的类型回调
+   * @param array<string|callable> $middlewares 额外的中间件
    * @return mixed
    */
-  public function process(callable|array|string $handler, array $middlewares = []): mixed
+  public function process(callable $handler, array $middlewares = []): mixed
   {
     $middlewares = array_map(function ($middleware) {
-      return $this->checkMiddleware($middleware);
+      return self::checkMiddleware($middleware);
     }, $middlewares);
-    $middlewares = array_merge($this->queue, $middlewares);
+    $serverMiddlewares = defined('SERVER_NAME')
+      ? ($this->serverMiddlewares[SERVER_NAME] ?? []) : [];
+    $middlewares = array_merge($this->middlewares, $serverMiddlewares, $middlewares);
     // 创建中间件管道
     $pipeline = array_reduce(
       array_reverse($middlewares),
