@@ -69,4 +69,19 @@ class Route
       static::$currentServer = null;
     }
   }
+
+  /**
+   * 生成哈希ID
+   *
+   * @param string $id
+   * @return string
+   */
+  public static function generateHashId(string $id): string
+  {
+    if (strlen($id) > 32) $id = md5($id);
+    // 将 MD5 哈希值转换为二进制字符串
+    $binaryHash = pack('H*', $id);
+    // 使用 Base64 对二进制字符串进行编码
+    return base64_encode($binaryHash);
+  }
 }
