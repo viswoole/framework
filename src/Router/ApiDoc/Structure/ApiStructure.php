@@ -60,9 +60,9 @@ class ApiStructure implements JsonSerializable
   /**
    * 解析请求处理函数
    *
-   * @param callable $handle 请求处理函数
+   * @param callable|array $handle 请求处理函数
    */
-  public function __construct(callable $handle)
+  public function __construct(callable|array $handle)
   {
     $reflector = $this->toReflector($handle);
     // 参数列表
