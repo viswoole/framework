@@ -345,10 +345,11 @@ class RouteCollector
   /**
    * 解析路由(最后执行)
    *
-   * @access public
    * @return void
+   * @deprecated 不可外部调用！
+   * @access private
    */
-  public function parseRoute(): void
+  public function _parseRoute(): void
   {
     // 对路由进行排序
     uasort($this->routes, function (RouteConfig $a, RouteConfig $b) {

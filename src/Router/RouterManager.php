@@ -290,7 +290,7 @@ class RouterManager
   private function parseRoute(): void
   {
     foreach ($this->serverRouteCollector as $collector) {
-      $collector->parseRoute();
+      $collector->_parseRoute();
     }
     $this->event->emit('RouteLoaded');
   }
