@@ -23,10 +23,6 @@ use Closure;
 class RouteGroup extends RouteConfig
 {
   /**
-   * @var string|null 父级分组路由id
-   */
-  public ?string $parent = null;
-  /**
    * @var RouteItem[]|RouteGroup[] 分组、域名路由存储items
    */
   protected array $items = [];
@@ -39,7 +35,25 @@ class RouteGroup extends RouteConfig
    */
   public function addItem(RouteConfig $item): void
   {
-    $this->items[] = $item;
+    $parent = $this->options['parent'];
+    $id = $this->options['id'];
+    if (empty($parent)) {
+      $item->options['parent'] = $id;
+    } else {
+      $item->options['parent'] = "$parent.$id";
+    }
+    $this->items[$item->options['id']] = $item;
+  }
+
+  /**
+   * 获取分组中的路由
+   *
+   * @param string $id
+   * @return RouteGroup|RouteItem|null
+   */
+  public function getItem(string $id): RouteItem|RouteGroup|null
+  {
+    return $this->items[$id] ?? null;
   }
 
   /**
@@ -57,7 +71,7 @@ class RouteGroup extends RouteConfig
       $this->options['handler'] = null;
       $collector->currentGroup = null;
     }
-    usort($this->items, function (RouteConfig $a, RouteConfig $b) {
+    uasort($this->items, function (RouteConfig $a, RouteConfig $b) {
       return $b->sort <=> $a->sort;
     });
     foreach ($this->items as $item) {
