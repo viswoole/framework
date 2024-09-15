@@ -24,7 +24,7 @@ class RouteGroup extends RouteConfig
 {
 
   /**
-   * @var array 分组、域名路由存储items
+   * @var RouteConfig[] 分组、域名路由存储items
    */
   protected array $items = [];
 
