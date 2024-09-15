@@ -52,7 +52,28 @@ class RouteCacheTool
    */
   private static function generateCacheFileName(string $controller): string
   {
-    return str_replace('\\', '_', $controller) . '.cache';
+    return self::getCachePath()
+      . DIRECTORY_SEPARATOR
+      . str_replace('\\', '_', $controller)
+      . '.cache';
+  }
+
+  /**
+   * 获取缓存路径
+   *
+   * @return string
+   */
+  public static function getCachePath(): string
+  {
+    if (!isset(self::$cachePath)) {
+      $dir = config('router.cache.path', BASE_PATH . '/runtime/route');
+      $dir = rtrim($dir, '/');
+      if (!is_dir($dir)) {
+        mkdir($dir, 0755);
+      }
+      self::$cachePath = $dir;
+    }
+    return self::$cachePath;
   }
 
   /**
@@ -83,19 +104,6 @@ class RouteCacheTool
   }
 
   /**
-   * 获取缓存路径
-   *
-   * @return string
-   */
-  public static function getCachePath(): string
-  {
-    if (!isset(self::$cachePath)) {
-      self::$cachePath = dirname(config('router.cache.path', BASE_PATH . '/runtime/route'));
-    }
-    return self::$cachePath;
-  }
-
-  /**
    * 缓存到文件
    *
    * @param string $controller 控制器类完全名称，包含命名空间
@@ -111,12 +119,9 @@ class RouteCacheTool
     RouteGroup $groupRoute
   ): void
   {
-    $fileName = self::generateCacheFileName($controller);
-    if (!is_dir(dirname(self::getCachePath()))) {
-      mkdir(self::getCachePath(), 0755);
-    }
+    $file = self::generateCacheFileName($controller);
     file_put_contents(
-      self::getCachePath() . $fileName,
+      $file,
       serialize(['hash' => $hash, 'data' => ['server' => $server, 'route' => $groupRoute]])
     );
   }
