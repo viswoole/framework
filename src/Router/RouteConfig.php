@@ -25,17 +25,19 @@ use Viswoole\Core\Common\Arr;
 /**
  * 路线配置类
  *
+ * @property string $id 路由唯一id
+ * @property string $title 路由标题
  * @property array $paths 路由路径
  * @property string $description 路由描述
  * @property callable $handler 路由处理方法
  * @property string[] $method 请求方式
- * @property array $params 路由参数
  * @property array $middleware 路由中间件
  * @property string[] $suffix 伪静态后缀
  * @property string[] $domain 域名
  * @property array $pattern 变量正则表达式
  * @property bool $hidden 是否隐藏在文档中隐藏
  * @property int $sort 路由排序
+ * @property array $meta 额外的元数据
  */
 abstract class RouteConfig implements ArrayAccess
 {
