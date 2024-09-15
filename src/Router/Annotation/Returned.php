@@ -17,8 +17,6 @@ namespace Viswoole\Router\Annotation;
 
 use Attribute;
 use Closure;
-use JsonSerializable;
-use Override;
 use UnitEnum;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Router\ApiDoc\Structure\ArrayTypeStructure;
@@ -30,7 +28,7 @@ use Viswoole\Router\ApiDoc\Structure\ObjectStructure;
  * 返回值注解
  */
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_FUNCTION | Attribute::IS_REPEATABLE)]
-class Returned implements JsonSerializable
+class Returned
 {
   /** json */
   const string TYPE_JSON = 'application/json';
@@ -173,18 +171,5 @@ class Returned implements JsonSerializable
     }
     $description = $array[1] ?? '';
     return [trim($key), trim($description), $allowNull];
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function jsonSerialize(): array
-  {
-    return [
-      'title' => $this->title,
-      'data' => $this->data,
-      'statusCode' => $this->statusCode,
-      'type' => $this->type,
-    ];
   }
 }
