@@ -31,7 +31,7 @@ class BaseTypeStructure
   /**
    * @param string $type 基本类型[object|array|string|int|float|bool|null|File|mixed]
    */
-  public function __construct(protected readonly string $type)
+  public function __construct(public readonly string $type)
   {
     if (!in_array($this->type, self::BASE_TYPE_LIST)) {
       throw new InvalidArgumentException(
