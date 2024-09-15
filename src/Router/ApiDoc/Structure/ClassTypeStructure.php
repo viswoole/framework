@@ -25,11 +25,11 @@ abstract class ClassTypeStructure extends BaseTypeStructure
   /**
    * @var string 命名空间
    */
-  public string $namespace;
+  public string $namespace = '';
   /**
    * @var string 类描述
    */
-  public string $description;
+  public string $description = '';
 
   /**
    * @inheritDoc
