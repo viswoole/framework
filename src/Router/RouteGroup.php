@@ -27,7 +27,7 @@ class RouteGroup extends RouteConfig
    */
   public ?string $parent = null;
   /**
-   * @var RouteConfig[] 分组、域名路由存储items
+   * @var RouteItem[]|RouteGroup[] 分组、域名路由存储items
    */
   protected array $items = [];
 
