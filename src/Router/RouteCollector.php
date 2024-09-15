@@ -17,7 +17,6 @@ namespace Viswoole\Router;
 
 use BadMethodCallException;
 use Closure;
-use RuntimeException;
 use Viswoole\Core\Config;
 use Viswoole\Core\Middleware;
 use Viswoole\Router\Exception\RouteNotFoundException;
@@ -51,10 +50,6 @@ class RouteCollector
    * @var array{string:RouteMiss} miss路由404
    */
   protected array $missRoutes = [];
-  /**
-   * @var array 路由文档结构
-   */
-  protected array $apiDoc;
 
   /**
    * @param Config $config
@@ -77,14 +72,14 @@ class RouteCollector
    */
   public function group(string|array $prefix, Closure $closure): RouteGroup
   {
-    $routes = new RouteGroup($prefix, $closure, $this->currentGroup?->getOptions());
+    $route = new RouteGroup($prefix, $closure, $this->currentGroup?->getOptions());
     // 判断是否存在路由分组，如果存在则添加到当前分组
     if ($this->currentGroup === null) {
-      $this->routes[] = $routes;
+      $this->routes[] = $route;
     } else {
-      $this->currentGroup->addItem($routes);
+      $this->currentGroup->addItem($route);
     }
-    return $routes;
+    return $route;
   }
 
   /**
@@ -137,7 +132,7 @@ class RouteCollector
   public function addRoute(
     string|array                  $paths,
     string|callable|array|Closure $handler,
-    string|array                  $method = '*',
+    null|string|array             $method,
   ): RouteConfig
   {
     $route = new RouteItem(
@@ -146,12 +141,23 @@ class RouteCollector
       $this->currentGroup?->getOptions(),
     );
     if (!empty($method)) $route->method($method);
+    $this->recordRouteItem($route);
+    return $route;
+  }
+
+  /**
+   * 记录路由
+   *
+   * @param RouteConfig $route
+   * @return void
+   */
+  public function recordRouteItem(RouteConfig $route): void
+  {
     if ($this->currentGroup === null) {
       $this->routes[] = $route;
     } else {
       $this->currentGroup->addItem($route);
     }
-    return $route;
   }
 
   /**
@@ -318,30 +324,7 @@ class RouteCollector
     });
     foreach ($this->routes as $item) {
       $item->register($this);
-      $doc = $item->getShape();
-      if ($doc) $this->apiDoc[] = $doc;
     }
-  }
-
-  /**
-   * 获取api文档
-   *
-   * @access public
-   * @return array<int,array{
-   *   paths: string[],
-   *   describe: string,
-   *   method:string[],
-   *   params:array<int,array{name:string,type:string,required:bool,default:mixed,describe:string,depend:bool,variadic:bool}>,
-   *   suffix:string[],
-   *   domain:string[],
-   *   pattern:array<string,string>,
-   *   children:array,
-   * }>
-   */
-  public function getApiShape(): array
-  {
-    if (!isset($this->apiDoc)) throw new RuntimeException('请等待路由解析完毕');
-    return $this->apiDoc;
   }
 
   /**
