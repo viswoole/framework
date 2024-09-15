@@ -74,12 +74,14 @@ abstract class RouteConfig implements ArrayAccess
   /**
    * @param string|array $paths
    * @param callable|string|array $handler
+   * @param string|null $id 自定义路由id
    * @param array|null $parentOption
    */
   public function __construct(
     string|array          $paths,
     callable|string|array $handler,
-    array                 $parentOption = null
+    array                 $parentOption = null,
+    string                $id = null,
   )
   {
     if (is_array($parentOption)) {
@@ -93,6 +95,7 @@ abstract class RouteConfig implements ArrayAccess
     }
     $this->paths($paths);
     $this->handler($handler);
+    $this->id($id ?? $this->generateId());
   }
 
   /**
@@ -205,6 +208,17 @@ abstract class RouteConfig implements ArrayAccess
   {
     $this->options['id'] = $id;
     return $this;
+  }
+
+  /**
+   * 生成唯一id
+   *
+   * @return string
+   */
+  public function generateId(): string
+  {
+    $id = implode('&', $this->options['paths']);
+    return md5($id);
   }
 
   /**
