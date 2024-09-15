@@ -190,8 +190,10 @@ class RouterManager
     $classAttributes = $refClass->getAttributes(
       RouteController::class, ReflectionAttribute::IS_INSTANCEOF
     );
-    // 没有路由控制器主键属性则不解析
+    // 没有路由控制器注解属性则不解析
     if (empty($classAttributes)) return null;
+    // 类完全名称md5值作为路由分组名称
+    $groupId = md5($fullClass);
     /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
     $controller = $classAttributes[0]->newInstance();
     // 服务名称
@@ -205,7 +207,7 @@ class RouterManager
     // 如果类路由注解的paths设置为null则默认为类名称
     if ($controller->paths === null) $controller->paths = $className;
     /** 分组路由实例 */
-    $group = new RouteGroup($controller->paths, []);
+    $group = new RouteGroup($controller->paths, [], id: $groupId);
     // 类的全部方法
     $methods = $refClass->getMethods();
     // 处理类的方法
@@ -217,6 +219,8 @@ class RouterManager
         && !$method->isDestructor();
       // 不需要创建路由则跳过
       if (!$isCreate) continue;
+      // 方法id
+      $methodId = md5($fullClass . $method->getName());
       // 获取方法注解
       $methodAttributes = $method->getAttributes(RouteMapping::class);
       // 构建处理方法
@@ -224,10 +228,11 @@ class RouterManager
         $refClass->getName() . '::' . $method->getName()
         : [$refClass->getName(), $method->getName()];
       // 如果没有设置路由注解，且该类为自动路由则创建路由
-      if (empty($methodAttributes) && $isAutoRoute) {
-        // 自动路由
+      if (empty($methodAttributes) && $isAutoRoute) {  // 自动路由
         // 创建新的路由项
-        $routeItem = new RouteItem($method->getName(), $handler, $group->getOptions());
+        $routeItem = new RouteItem(
+          $method->getName(), $handler, $group->getOptions(), id: $methodId
+        );
         // 设置描述
         $routeItem->title($this->getDocComment($method));
         // 添加到组的子路由中
@@ -242,7 +247,7 @@ class RouterManager
         }
         $path = $methodAnnotationRoute->paths ?: $method->getName();
         // 创建新的路由项
-        $routeItem = new RouteItem($path, $handler, $group->getOptions());
+        $routeItem = new RouteItem($path, $handler, $group->getOptions(), id: $methodId);
         // 批量设置选项
         $routeItem->options($methodAnnotationRoute->options);
         // 添加到组的子路由中
