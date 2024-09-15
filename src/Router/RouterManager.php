@@ -196,7 +196,7 @@ class RouterManager
     // 没有路由控制器注解属性则不解析
     if (empty($classAttributes)) return null;
     // 类完全名称md5值作为路由分组名称
-    $groupId = md5($fullClass);
+    $groupId = Route::generateHashId($fullClass);
     /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
     $controller = $classAttributes[0]->newInstance();
     // 服务名称
@@ -225,7 +225,7 @@ class RouterManager
       // 不需要创建路由则跳过
       if (!$isCreate) continue;
       // 方法id
-      $methodId = md5($fullClass . $method->getName());
+      $methodId = Route::generateHashId($fullClass . $method->getName());
       // 获取方法注解
       $methodAttributes = $method->getAttributes(RouteMapping::class);
       // 构建处理方法
