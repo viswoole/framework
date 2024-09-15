@@ -19,6 +19,7 @@ use ArrayAccess;
 use ArrayIterator;
 use Closure;
 use Countable;
+use InvalidArgumentException;
 use IteratorAggregate;
 use Override;
 use ReflectionAttribute;
@@ -57,6 +58,30 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @var array 解析类时的需要触发的回调
    */
   protected array $invokeCallback = [];
+
+  /**
+   * 检测是否可调用
+   *
+   * @param mixed $handle 待检测的回调
+   * @param bool $throw 不合格是否抛出异常
+   * @return bool 如果通过self::invoke方法可以调用返回true，否则返回false
+   * @throws InvalidArgumentException 如果不合格，且$throw为true，则抛出异常
+   */
+  public static function isCallable(mixed $handle, bool $throw = false): bool
+  {
+    if (is_callable($handle)) return true;
+    if (is_string($handle)) {
+      if (class_exists($handle)) return true;
+      if (function_exists($handle)) return true;
+    } elseif (is_array($handle)) {
+      if (count($handle) === 2) {
+        [$class, $method] = array_values($handle);
+        if (class_exists($class) && method_exists($class, $method)) return true;
+      }
+    }
+    if ($throw) throw new InvalidArgumentException('$handle 无法调用，请检查。');
+    return false;
+  }
 
   /**
    * 添加一个钩子，在解析类时触发
