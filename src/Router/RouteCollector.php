@@ -324,7 +324,7 @@ class RouteCollector
       return $b->sort <=> $a->sort;
     });
     foreach ($this->routes as $item) {
-      $item->register($this);
+      $item->_register($this);
     }
   }
 

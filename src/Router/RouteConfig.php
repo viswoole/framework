@@ -337,8 +337,9 @@ abstract class RouteConfig implements ArrayAccess
    *
    * @param RouteCollector $collector 当前路线收集器实例
    * @return void
+   * @deprecated 外部调用警告！
    */
-  abstract public function register(RouteCollector $collector): void;
+  abstract public function _register(RouteCollector $collector): void;
 
   /**
    * 批量设置选项

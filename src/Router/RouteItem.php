@@ -40,7 +40,7 @@ class RouteItem extends RouteConfig
   /**
    * @inheritDoc
    */
-  public function register(RouteCollector $collector): void
+  public function _register(RouteCollector $collector): void
   {
     $collector->registerRouteItem($this);
   }

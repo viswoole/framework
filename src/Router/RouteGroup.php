@@ -22,7 +22,10 @@ use Closure;
  */
 class RouteGroup extends RouteConfig
 {
-
+  /**
+   * @var string|null 父级分组路由id
+   */
+  public ?string $parent = null;
   /**
    * @var RouteConfig[] 分组、域名路由存储items
    */
@@ -40,12 +43,13 @@ class RouteGroup extends RouteConfig
   }
 
   /**
-   * 注册路由
+   * 注册路由（该方法由路由管理器自动调用，请勿手动调用）
    *
    * @param RouteCollector $collector
    * @return void
+   * @deprecated 切勿外部调用
    */
-  public function register(RouteCollector $collector): void
+  public function _register(RouteCollector $collector): void
   {
     if ($this->options['handler'] instanceof Closure) {
       $collector->currentGroup = $this;
@@ -57,7 +61,7 @@ class RouteGroup extends RouteConfig
       return $b->sort <=> $a->sort;
     });
     foreach ($this->items as $item) {
-      $item->register($collector);
+      $item->_register($collector);
     }
   }
 
