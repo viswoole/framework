@@ -15,7 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
-use InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -88,7 +87,7 @@ class RouterManager
         $hash = hash_file('md5', $controller);
         $cacheRouteInfo = RouteCacheTool::getCache($fullClass, $hash);
         if (is_array($cacheRouteInfo)) {
-          self::collector($cacheRouteInfo['server'])->recordRouteItem($cacheRouteInfo['route']);
+          $this->collector($cacheRouteInfo['server'])->recordRouteItem($cacheRouteInfo['route']);
           continue;
         }
       }
@@ -97,7 +96,7 @@ class RouterManager
       // 如果没有解析到路由则跳过
       if (empty($routeInfo)) continue;
       // 记录路由
-      self::collector($routeInfo['server'])->recordRouteItem($routeInfo['route']);
+      $this->collector($routeInfo['server'])->recordRouteItem($routeInfo['route']);
       // 如果hash不为null则缓存路由
       if (!$hash) continue;
       RouteCacheTool::setCache($fullClass, $hash, $routeInfo['server'], $routeInfo['route']);
@@ -284,30 +283,5 @@ class RouterManager
       $collector->parseRoute();
     }
     $this->event->emit('RouteLoaded');
-  }
-
-  /**
-   * 获取api结构
-   *
-   * @access public
-   * @param string|null $serverName 服务名称，如果为空则获取全部
-   * @return array 如果$serverName为空，返回值数组的键是服务名称，值是路由结构数组，否则返回路由结构数组
-   * @see RouteController::getShape() 具体数组结构
-   */
-  public function getApiShape(?string $serverName = null): array
-  {
-    if (empty($this->serverRouteCollector)) return [];
-    $apiShape = [];
-    if (empty($serverName)) {
-      foreach ($this->serverRouteCollector as $serverName => $collector) {
-//        $apiShape[$serverName] = $collector->getApiShape();
-      }
-    } else {
-      if (!isset($this->serverRouteCollector[$serverName])) throw new InvalidArgumentException(
-        "not found $serverName route collector"
-      );
-//      $apiShape = $this->serverRouteCollector[$serverName]->getApiShape();
-    }
-    return $apiShape;
   }
 }

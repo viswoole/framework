@@ -24,7 +24,6 @@ use Viswoole\Router\RouterManager;
  * 路由管理器
  *
  * @method static RouteCollector collector(?string $serverName = null) 获取路由控制器实例
- * @method static array getApiShape() 获取API结构
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Core\\Facade\\Router
  */
