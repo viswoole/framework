@@ -43,6 +43,8 @@ abstract class RouteConfig implements ArrayAccess
    * @var array 路由可选配置选项
    */
   protected array $options = [
+    // 路由唯一id
+    'id' => null,
     // 路由访问路径
     'paths' => null,
     // 标题
@@ -189,6 +191,20 @@ abstract class RouteConfig implements ArrayAccess
     }
     // [类=>方法] | 闭包
     $this->options['handler'] = $handler;
+  }
+
+  /**
+   * 路由唯一id
+   *
+   * 无需手动设置，框架会对每个路由项生成一个尽可能不变且唯一的id
+   *
+   * @param string $id
+   * @return static
+   */
+  public function id(string $id): static
+  {
+    $this->options['id'] = $id;
+    return $this;
   }
 
   /**
