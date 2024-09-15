@@ -416,14 +416,17 @@ abstract class RouteConfig implements ArrayAccess
   /**
    * 获取完整的引用链路，包含当前路由id
    *
-   * @return string
+   * @param bool $self 是否包含自身id
+   * @return string|null
    */
-  public function getCiteLink(): string
+  public function getCiteLink(bool $self = true): ?string
   {
     if (empty($this->options['parent'])) {
-      return $this->options['id'];
-    } else {
+      return $self ? $this->options['id'] : null;
+    } elseif ($self) {
       return $this->options['parent'] . '.' . $this->options['id'];
+    } else {
+      return $this->options['parent'];
     }
   }
 }
