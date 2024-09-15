@@ -85,7 +85,7 @@ class RouterManager
       if ($this->cache) {
         // 类文件哈希值
         $hash = hash_file('md5', $controller);
-        $cacheRouteInfo = RouteCacheTool::getCache($fullClass, $hash);
+        $cacheRouteInfo = RouteCacheTool::getCache(SERVER_NAME . $fullClass, $hash);
         if (is_array($cacheRouteInfo)) {
           $this->collector($cacheRouteInfo['server'])->recordRouteItem($cacheRouteInfo['route']);
           continue;
@@ -99,7 +99,9 @@ class RouterManager
       $this->collector($routeInfo['server'])->recordRouteItem($routeInfo['route']);
       // 如果hash不为null则缓存路由
       if (!$hash) continue;
-      RouteCacheTool::setCache($fullClass, $hash, $routeInfo['server'], $routeInfo['route']);
+      RouteCacheTool::setCache(
+        SERVER_NAME . $fullClass, $hash, $routeInfo['server'], $routeInfo['route']
+      );
     }
   }
 
@@ -166,6 +168,7 @@ class RouterManager
   public function collector(string $serverName = null): RouteCollector
   {
     if (empty($serverName)) $serverName = SERVER_NAME;
+    $serverName = strtolower($serverName);
     if (isset($this->serverRouteCollector[$serverName])) return $this->serverRouteCollector[$serverName];
     return $this->serverRouteCollector[$serverName] = invoke(RouteCollector::class);
   }
@@ -197,7 +200,9 @@ class RouterManager
     /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
     $controller = $classAttributes[0]->newInstance();
     // 服务名称
-    $serverName = $controller->server;
+    $serverName = $controller->server ?? SERVER_NAME;
+    // 判断服务名称是否匹配当前服务
+    if (strtoupper($serverName) !== strtolower(SERVER_NAME)) return null;
     // 判断是否设置了描述
     if (!isset($controller->title)) {
       $controller->options['title'] = $this->getDocComment($refClass);
