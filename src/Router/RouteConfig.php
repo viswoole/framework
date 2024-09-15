@@ -25,6 +25,7 @@ use Viswoole\Core\Common\Arr;
 /**
  * 路线配置类
  *
+ * @property string|null $parent 父级分组路由id
  * @property string $id 路由唯一id
  * @property string $title 路由标题
  * @property array $paths 路由路径
@@ -45,6 +46,8 @@ abstract class RouteConfig implements ArrayAccess
    * @var array 路由可选配置选项
    */
   protected array $options = [
+    // 父级分组路由id
+    'parent' => null,
     // 路由唯一id
     'id' => null,
     // 路由访问路径
@@ -217,10 +220,10 @@ abstract class RouteConfig implements ArrayAccess
    *
    * @return string
    */
-  public function generateId(): string
+  private function generateId(): string
   {
     $id = implode('&', $this->options['paths']);
-    return md5($id);
+    return Route::generateHashId($id);
   }
 
   /**
