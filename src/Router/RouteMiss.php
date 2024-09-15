@@ -22,6 +22,9 @@ use Viswoole\Core\App;
  */
 readonly class RouteMiss
 {
+  /**
+   * @param Closure $handler
+   */
   public function __construct(
     public Closure $handler
   )
