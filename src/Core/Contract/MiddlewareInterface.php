@@ -18,6 +18,9 @@ namespace Viswoole\Core\Contract;
 
 use Closure;
 
+/**
+ * 中间件接口
+ */
 interface MiddlewareInterface
 {
   /**
