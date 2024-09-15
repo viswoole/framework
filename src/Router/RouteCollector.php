@@ -284,6 +284,9 @@ class RouteCollector
       for ($i = 1; $i < count($citeLink); $i++) {
         $key = $citeLink[$i];
         if (!$route) throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
+        if (!$route instanceof RouteGroup) throw new InvalidArgumentException(
+          "路由链路引用错误{$idOrCiteLink}： {$key}必须是组路由|控制器注解路由"
+        );
         $route = $route->getItem($key);
       }
       return $route;
@@ -347,10 +350,20 @@ class RouteCollector
    */
   public function parseRoute(): void
   {
+    // 对路由进行排序
     uasort($this->routes, function (RouteConfig $a, RouteConfig $b) {
       return $b->sort <=> $a->sort;
     });
-    foreach ($this->routes as $item) {
+    foreach ($this->routes as $key => $item) {
+      if ($parent = $item->getCiteLink(false)) {
+        // 处理自定义父级路由依赖
+        $routeGroup = $this->getRoute($parent);
+        if ($routeGroup instanceof RouteGroup) {
+          $routeGroup->addItem($item);
+          unset($this->routes[$key]);
+          continue;
+        }
+      }
       $item->_register($this);
     }
   }
