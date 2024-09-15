@@ -412,4 +412,18 @@ abstract class RouteConfig implements ArrayAccess
   {
     return $this->options[$offset] ?? null;
   }
+
+  /**
+   * 获取完整的引用链路，包含当前路由id
+   *
+   * @return string
+   */
+  public function getCiteLink(): string
+  {
+    if (empty($this->options['parent'])) {
+      return $this->options['id'];
+    } else {
+      return $this->options['parent'] . '.' . $this->options['id'];
+    }
+  }
 }
