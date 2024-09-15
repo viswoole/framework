@@ -53,7 +53,7 @@ class ApiStructure implements JsonSerializable
    */
   public array $header = [];
   /**
-   * @var array 返回值列表
+   * @var Returned[] 返回值列表
    */
   public array $returned = [];
 
@@ -73,11 +73,11 @@ class ApiStructure implements JsonSerializable
     foreach ($parameters as $parameter) {
       $this->parseParamField($parameter, $docComment);
     }
+    // 获取返回值注解属性
     $returnedAttributes = $reflector->getAttributes(Returned::class);
-    if (!empty($returnedAttributes)) {
-      foreach ($returnedAttributes as $item) {
-        $this->returned[] = $item->newInstance();
-      }
+    // 解析返回值
+    foreach ($returnedAttributes as $item) {
+      $this->returned[] = $item->newInstance();
     }
   }
 
