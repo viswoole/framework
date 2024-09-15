@@ -16,10 +16,10 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use ArrayAccess;
-use Closure;
 use InvalidArgumentException;
 use Override;
 use RuntimeException;
+use Viswoole\Core\App;
 use Viswoole\Core\Common\Arr;
 
 /**
@@ -53,9 +53,7 @@ abstract class RouteConfig implements ArrayAccess
     'handler' => null,
     // 请求方式
     'method' => ['*'],
-    // 请求参数验证
-    'params' => [],
-    // 路由中间件
+    // 中间件列表
     'middleware' => [],
     // 伪静态后缀校验，例如html
     'suffix' => ['*'],
@@ -186,15 +184,11 @@ abstract class RouteConfig implements ArrayAccess
     if (is_string($handler) && str_contains($handler, '@')) {
       $handler = explode('@', $handler);
     }
-    if (!is_array($handler) && !is_callable($handler)) {
-      throw new InvalidArgumentException(
-        '路由handler配置错误，需给定class::method|class@method|[class|object,method]|Closure'
-      );
+    if (!App::isCallable($handler)) {
+      throw new InvalidArgumentException('Invalid handler');
     }
     // [类=>方法] | 闭包
     $this->options['handler'] = $handler;
-    // 请求参数
-    $this->options['params'] = ShapeTool::getParamTypeShape($handler);
   }
 
   /**
@@ -285,16 +279,14 @@ abstract class RouteConfig implements ArrayAccess
 
   /**
    * 设置路由中间件
+   *
    * @access public
-   * @param string|Closure|array{string|Closure} $middleware middleware::class | Closure
+   * @param array $middlewares 中间件
    * @return static
    */
-  public function middleware(string|Closure|array $middleware): static
+  public function middleware(array $middlewares): static
   {
-    if (!is_array($middleware)) {
-      $middleware = [$middleware];
-    }
-    $this->options['middleware'] = array_merge($this->options['middleware'], $middleware);
+    $this->options['middleware'] = array_merge($this->options['middleware'], $middlewares);
     return $this;
   }
 
@@ -328,16 +320,17 @@ abstract class RouteConfig implements ArrayAccess
   {
     foreach ($options as $key => $value) {
       if (is_int($key)) continue;
-      if ($key === 'mate') {
+      if ($key === 'handler') continue;
+      if ($key === 'meta') {
         if (Arr::isAssociativeArray($value)) {
-          $this->options['mate'] = array_merge($this->options['mate'], $value);
+          $this->options['meta'] = array_merge($this->options['meta'], $value);
         } else {
           throw new InvalidArgumentException('路由meta配置错误，需给定键值对数组');
         }
       } elseif (method_exists($this, $key)) {
         $this->$key($value);
       } else {
-        trigger_error("不存在{$key}路由选项", E_USER_WARNING);
+        trigger_error("不存在{$key}路由配置", E_USER_WARNING);
       }
     }
     return $this;
@@ -365,44 +358,6 @@ abstract class RouteConfig implements ArrayAccess
   #[Override] public function offsetUnset(mixed $offset): void
   {
     throw new RuntimeException('Router option is read-only.');
-  }
-
-  /**
-   * 获取api结构
-   *
-   * @return array{
-   *    paths: string[],
-   *    description: string,
-   *    method:string[],
-   *    params:array<int,array{name:string,type:string,required:bool,default:mixed,description:string,depend:bool,variadic:bool}>,
-   *    suffix:string[],
-   *    domain:string[],
-   *    pattern:array<string,string>,
-   *    children:array,
-   *  }|null 如果返回null则是隐藏
-   */
-  public function getShape(): ?array
-  {
-    if ($this->options['hidden']) return null;
-    $docShape = $this->options;
-    unset($docShape['hidden'], $docShape['handler']);
-    $docShape['params'] = array_filter($docShape['params'], function ($param) {
-      return !$param['depend'];
-    });
-    if ($this instanceof RouteGroup) {
-      $children = [];
-      /**
-       * @var RouteConfig $item
-       */
-      foreach ($this->items as $item) {
-        $item = $item->getShape();
-        if (is_array($item)) {
-          $children[] = $item;
-        }
-      }
-      $docShape['children'] = $children;
-    }
-    return $docShape;
   }
 
   /**
