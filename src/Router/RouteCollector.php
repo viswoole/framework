@@ -68,11 +68,12 @@ class RouteCollector
    * @access public
    * @param string|array $prefix 前缀
    * @param Closure $closure 闭包
+   * @param string $id 非注解路由，系统无法生成唯一且不变的id，需手动指定id
    * @return RouteGroup
    */
-  public function group(string|array $prefix, Closure $closure): RouteGroup
+  public function group(string|array $prefix, Closure $closure, string $id): RouteGroup
   {
-    $route = new RouteGroup($prefix, $closure, $this->currentGroup?->getOptions());
+    $route = new RouteGroup($prefix, $closure, $this->currentGroup?->getOptions(), id: $id);
     // 判断是否存在路由分组，如果存在则添加到当前分组
     if ($this->currentGroup === null) {
       $this->routes[] = $route;
