@@ -9,8 +9,8 @@ use Swoole\Constant;
 use Swoole\Http\Server as httpServer;
 use Swoole\Server as SwooleServer;
 use Viswoole\Core\Console\Output;
-use Viswoole\HttpServer\EventHandle as HttpEventHandle;
 use Viswoole\HttpServer\Exception\Handle as HttpExceptionHandle;
+use Viswoole\HttpServer\HttpEventHandle;
 
 return [
   // 默认启动的服务
