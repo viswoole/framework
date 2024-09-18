@@ -117,7 +117,7 @@ class FieldStructure
       }
     } else {
       return match ($name) {
-        'bool' => new BaseTypeStructure(Types::Bool),
+        'bool', 'false', 'true' => new BaseTypeStructure(Types::Bool),
         'float' => new BaseTypeStructure(Types::Float),
         'int' => new BaseTypeStructure(Types::Int),
         'null' => new BaseTypeStructure(Types::Null),
