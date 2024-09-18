@@ -16,7 +16,6 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 use Closure;
-use JsonSerializable;
 use ReflectionAttribute;
 use ReflectionException;
 use ReflectionFunction;
@@ -34,12 +33,16 @@ use Viswoole\Router\ApiDoc\ParamSourceInterface\QueryParamInterface;
 /**
  * 请求参数结构
  */
-class ApiStructure implements JsonSerializable
+class ApiStructure
 {
   /**
-   * @var FieldStructure[] 文件请求参数
+   * @var string 作者
    */
-  public array $file = [];
+  public string $author;
+  /**
+   * @var string 更新时间
+   */
+  public string $date;
   /**
    * @var FieldStructure[] body请求参数
    */
@@ -69,6 +72,10 @@ class ApiStructure implements JsonSerializable
     $parameters = $reflector->getParameters();
     // 文档注释
     $docComment = $reflector->getDocComment() ?: '';
+    // 作者
+    $this->author = DocCommentTool::extractAuthor($docComment);
+    // 更新时间
+    $this->date = DocCommentTool::extractDate($docComment);
     // 解析参数结构
     foreach ($parameters as $parameter) {
       $this->parseParamField($parameter, $docComment);
@@ -139,17 +146,21 @@ class ApiStructure implements JsonSerializable
       // 参数来源
       $source = $this->parseParamSource($instance);
       if ($source === 'file') {
+        $source = 'body';
         $typeString = (string)$type;
         $type = [];
         // 如果类型当中包含了数组，则视为要求上传多个文件
         if (str_contains($typeString, 'array')) {
           $type[] = new ArrayTypeStructure(new BaseTypeStructure('File'));
-        } elseif (str_contains($typeString, 'File')) {
+        }
+        if (str_contains($typeString, 'File')) {
           // 否则视为上传单个文件
           $type[] = new BaseTypeStructure('File');
         }
       }
-      $this->{$source}[] = new FieldStructure($name, $description, $allowNull, $default, $type);
+      $this->{$source}[] = new FieldStructure(
+        $name, $description, $allowNull, $default, $type
+      );
     }
   }
 
@@ -172,18 +183,5 @@ class ApiStructure implements JsonSerializable
     }
     // 如果都没有匹配 则默认为body
     return 'body';
-  }
-
-  /**
-   * @inheritDoc
-   */
-  public function jsonSerialize(): array
-  {
-    return [
-      'file' => $this->file,
-      'body' => $this->body,
-      'query' => $this->query,
-      'header' => $this->header,
-    ];
   }
 }
