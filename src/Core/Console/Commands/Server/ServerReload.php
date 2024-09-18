@@ -35,6 +35,9 @@ use Viswoole\Core\Server\Action;
 )]
 class ServerReload extends Command
 {
+  /**
+   * @inheritDoc
+   */
   protected function configure(): void
   {
     $this->addArgument(
@@ -63,6 +66,9 @@ class ServerReload extends Command
     );
   }
 
+  /**
+   * @inheritDoc
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int
   {
     $service = $input->getArgument('service');
@@ -77,7 +83,12 @@ class ServerReload extends Command
         Action::reload($service, $taskReload);
       }
     } catch (Throwable $e) {
-      $io->error($e->getMessage());
+      $io->error(
+        $e->getMessage() . ' in '
+        . $e->getFile() . ' on line '
+        . $e->getLine() . PHP_EOL
+        . $e->getTraceAsString()
+      );
       return Command::FAILURE;
     }
     $io->success($force ? "{$service}服务进程强制重启成功" : "{$service}服务进程重启成功");
