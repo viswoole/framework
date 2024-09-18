@@ -42,23 +42,63 @@ class DocCommentTool
   /**
    * 从注释文档中提取到参数说明
    *
-   * @param string $method_doc 完整的doc注释
+   * @param string $docComment 完整的doc注释
    * @param string $param_name 参数名称
    * @return string
    */
-  public static function extractParamDoc(string $method_doc, string $param_name): string
+  public static function extractParamDoc(string $docComment, string $param_name): string
   {
-    if (empty($method_doc)) return $method_doc;
+    if (empty($docComment)) return $docComment;
     if (preg_match(
       '/@param\s+\S+\s+\$' . preg_quote(
         $param_name, '/'
-      ) . '\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/', $method_doc,
+      ) . '\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/', $docComment,
       $matches
     )) {
       $doc = $matches[1] ?? '';
       return trim($doc);
     }
     return '';
+  }
+
+  /**
+   * 提取文档注释中的作者
+   *
+   * @param string $docComment
+   * @return string
+   */
+  public static function extractAuthor(string $docComment): string
+  {
+    return self::extract($docComment, 'author');
+  }
+
+  /**
+   * 提取任意标签描述部分
+   *
+   * @param string $docComment
+   * @param string $tag
+   * @return string
+   */
+  public static function extract(string $docComment, string $tag): string
+  {
+    if (empty($docComment)) return '';
+    $pattern = "/@$tag\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/";
+    if (preg_match($pattern, $docComment, $matches)) {
+      $doc = $matches[1] ?? '';
+      return trim($doc);
+    }
+    return '';
+  }
+
+  /**
+   * 提取时间
+   *
+   * @param string $docComment
+   * @return string
+   */
+  public static function extractDate(string $docComment): string
+  {
+    return self::extract($docComment, 'date');
   }
 
   /**
