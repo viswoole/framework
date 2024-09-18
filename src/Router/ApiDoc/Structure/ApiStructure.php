@@ -151,16 +151,14 @@ class ApiStructure
         $type = [];
         // 如果类型当中包含了数组，则视为要求上传多个文件
         if (str_contains($typeString, 'array')) {
-          $type[] = new ArrayTypeStructure(new BaseTypeStructure('File'));
+          $type[] = new ArrayTypeStructure(new BaseTypeStructure(Types::File));
         }
         if (str_contains($typeString, 'File')) {
           // 否则视为上传单个文件
-          $type[] = new BaseTypeStructure('File');
+          $type[] = new BaseTypeStructure(Types::File);
         }
       }
-      $this->{$source}[] = new FieldStructure(
-        $name, $description, $allowNull, $default, $type
-      );
+      $this->{$source}[] = new FieldStructure($name, $description, $allowNull, $default, $type);
     }
   }
 
