@@ -27,7 +27,6 @@ use Viswoole\HttpServer\HttpService;
 use Viswoole\Log\LogManager;
 use Viswoole\Log\LogService;
 use Viswoole\Router\Router;
-use Viswoole\Router\RouterManager;
 use Viswoole\Router\RouterService;
 
 /**
