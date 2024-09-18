@@ -37,6 +37,7 @@ trait ApiDoc
    */
   private int $sort = 0;
 
+
   /**
    * 获取路由是否隐藏
    *
