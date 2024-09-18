@@ -153,7 +153,7 @@ class ApiStructure
         if (str_contains($typeString, 'array')) {
           $type[] = new ArrayTypeStructure(new BaseTypeStructure(Types::File));
         }
-        if (str_contains($typeString, 'File')) {
+        if (empty($type) || str_contains($typeString, 'File')) {
           // 否则视为上传单个文件
           $type[] = new BaseTypeStructure(Types::File);
         }
