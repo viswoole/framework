@@ -37,18 +37,17 @@ class FieldStructure
    * @param string $description 描述
    * @param bool $allowNull 是否允许为null
    * @param mixed $default 默认值
-   * @param ReflectionType|BaseTypeStructure|array|string|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组或基本类型
-   * @see BaseTypeStructure::BASE_TYPE_LIST 基本类型列表
+   * @param ReflectionType|BaseTypeStructure|array|Types|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组或基本类型
    */
   public function __construct(
-    public string                                      $name,
-    public string                                      $description,
-    public bool                                        $allowNull,
-    public mixed                                       $default,
-    null|ReflectionType|BaseTypeStructure|array|string $type
+    public string                                     $name,
+    public string                                     $description,
+    public bool                                       $allowNull,
+    public mixed                                      $default,
+    null|ReflectionType|BaseTypeStructure|array|Types $type
   )
   {
-    if (is_string($type)) {
+    if ($type instanceof Types) {
       $type = new BaseTypeStructure($type);
       $this->types[$type->getName()] = $type;
     } elseif ($type instanceof BaseTypeStructure) {
@@ -56,6 +55,9 @@ class FieldStructure
     } elseif (is_array($type)) {
       foreach ($type as $typeItem) {
         if ($typeItem instanceof BaseTypeStructure) {
+          $this->types[$typeItem->getName()] = $typeItem;
+        } elseif ($typeItem instanceof Types) {
+          $typeItem = new BaseTypeStructure($typeItem);
           $this->types[$typeItem->getName()] = $typeItem;
         }
       }
@@ -75,15 +77,15 @@ class FieldStructure
   ): array
   {
     if (is_null($type)) {
-      return ['mixed' => new BaseTypeStructure('mixed')];
+      return ['mixed' => new BaseTypeStructure()];
     }
     if ($type instanceof ReflectionIntersectionType) {
-      $types = [new BaseTypeStructure('object')];
+      $types = [new BaseTypeStructure(Types::Object)];
     } elseif ($type instanceof ReflectionUnionType) {
       $types = [];
       foreach ($type->getTypes() as $typeItem) {
         if ($typeItem instanceof ReflectionIntersectionType) {
-          $type = new BaseTypeStructure('object');
+          $type = new BaseTypeStructure(Types::Object);
         } else {
           $type = $this->parseNamedType($typeItem);
         }
@@ -114,7 +116,14 @@ class FieldStructure
         return new ObjectStructure($name);
       }
     } else {
-      return new  BaseTypeStructure($name);
+      return match ($name) {
+        'bool' => new BaseTypeStructure(Types::Bool),
+        'float' => new BaseTypeStructure(Types::Float),
+        'int' => new BaseTypeStructure(Types::Int),
+        'null' => new BaseTypeStructure(Types::Null),
+        'string' => new BaseTypeStructure(Types::String),
+        default => new BaseTypeStructure(Types::Mixed),
+      };
     }
   }
 }
