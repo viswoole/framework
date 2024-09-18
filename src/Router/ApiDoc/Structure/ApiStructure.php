@@ -22,7 +22,7 @@ use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use RuntimeException;
-use Viswoole\Router\Annotation\Returned;
+use Viswoole\Router\ApiDoc\Annotation\Returned;
 use Viswoole\Router\ApiDoc\DocCommentTool;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BaseSourceInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BodyParamInterface;
