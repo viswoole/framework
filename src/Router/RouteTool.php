@@ -13,12 +13,14 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
+use Viswoole\Router\Route\RouteGroup;
+
 /**
  * 文档解析工具
  *
  * 用于将路由配置转换为成文档结构
  */
-class RouteCacheTool
+class RouteTool
 {
   private static string $cachePath;
 
@@ -124,5 +126,50 @@ class RouteCacheTool
       $file,
       serialize(['hash' => $hash, 'data' => ['server' => $server, 'route' => $groupRoute]])
     );
+  }
+
+  /**
+   * 生成哈希ID
+   *
+   * @param string $id
+   * @return string
+   */
+  public static function generateHashId(string $id): string
+  {
+    // 将 MD5 哈希值转换为二进制字符串
+    $binaryHash = pack('H*', md5($id));
+    // 使用 Base64 对二进制字符串进行编码
+    return base64_encode($binaryHash);
+  }
+
+  /**
+   * 提取变量名称
+   * @param string $routePattern
+   * @return string
+   */
+  public static function extractVariableName(string $routePattern): string
+  {
+    return str_replace(['{', '}', '?', ' '], '', $routePattern);
+  }
+
+  /**
+   * 判断是否为可选变量
+   * @param string $str
+   * @return bool
+   */
+  public static function isOptionalVariable(string $str): bool
+  {
+    return preg_match('/^\{[^}]+\?}$/', $str) === 1;
+  }
+
+  /**
+   * 判断字符串中是否包含{}包裹的变量
+   *
+   * @param string $str
+   * @return bool
+   */
+  public static function isVariable(string $str): bool
+  {
+    return preg_match('/\{[^}]+\??}/', $str) === 1;
   }
 }
