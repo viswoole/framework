@@ -66,7 +66,12 @@ class ServerStart extends Command
     try {
       ServerAction::start($service, $force, $daemonize);
     } catch (Throwable $e) {
-      $io->error($e->getMessage() . ' in ' . $e->getFile() . ' on line ' . $e->getLine());
+      $io->error(
+        $e->getMessage() . ' in '
+        . $e->getFile() . ' on line '
+        . $e->getLine() . PHP_EOL
+        . $e->getTraceAsString()
+      );
       return Command::FAILURE;
     }
     return Command::SUCCESS;
