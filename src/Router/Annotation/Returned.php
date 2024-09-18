@@ -23,6 +23,7 @@ use Viswoole\Router\ApiDoc\Structure\ArrayTypeStructure;
 use Viswoole\Router\ApiDoc\Structure\BaseTypeStructure;
 use Viswoole\Router\ApiDoc\Structure\FieldStructure;
 use Viswoole\Router\ApiDoc\Structure\ObjectStructure;
+use Viswoole\Router\ApiDoc\Structure\Types;
 
 /**
  * 返回值注解
@@ -75,7 +76,7 @@ class Returned
       }
     } else {
       $this->data = $data;
-      $this->structure = new BaseTypeStructure('string');
+      $this->structure = new BaseTypeStructure(Types::String);
     }
   }
 
@@ -88,11 +89,11 @@ class Returned
   private function parseValueType(mixed $value): array
   {
     $builtin = [
-      'boolean' => 'bool',
-      'integer' => 'int',
-      'double' => 'float',
-      'string' => 'string',
-      'NULL' => 'null'
+      'boolean' => Types::Bool,
+      'integer' => Types::Int,
+      'double' => Types::Float,
+      'string' => Types::String,
+      'NULL' => Types::Null
     ];
     $type = gettype($value);
     // 内置类型
@@ -102,7 +103,7 @@ class Returned
     switch ($type) {
       case 'array':
         if (empty($value)) {
-          return [$value, new BaseTypeStructure('array')];
+          return [$value, new ArrayTypeStructure(new BaseTypeStructure(Types::Mixed))];
         }
         if (Arr::isIndexArray($value)) {
           $items = [];
@@ -121,15 +122,15 @@ class Returned
         }
       case 'object':
         if ($value instanceof Closure) {
-          return ['Closure', new BaseTypeStructure('mixed')];
+          return ['Closure', new BaseTypeStructure(Types::Mixed)];
         }
         if ($value instanceof UnitEnum) {
-          return [$value->name, new BaseTypeStructure('string')];
+          return [$value->name, new BaseTypeStructure(Types::String)];
         }
         return [$value, new ObjectStructure($value, true)];
       default:
         // 未知类型 或 资源类型
-        return ['unknown', new BaseTypeStructure('mixed')];
+        return ['unknown', new BaseTypeStructure(Types::Mixed)];
     }
   }
 
