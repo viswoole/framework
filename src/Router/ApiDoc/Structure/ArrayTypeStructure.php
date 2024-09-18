@@ -21,18 +21,13 @@ namespace Viswoole\Router\ApiDoc\Structure;
 class ArrayTypeStructure extends BaseTypeStructure
 {
   /**
-   * @var array<string,BaseTypeStructure> 数组元素结构
-   */
-  public array $items = [];
-
-  /**
    * 构建数组结构
    *
    * @param BaseTypeStructure ...$items 数组元素结构
    */
   public function __construct(BaseTypeStructure ...$items)
   {
-    parent::__construct('array');
+    parent::__construct(Types::Array);
     $this->addItem(...$items);
   }
 
@@ -45,9 +40,7 @@ class ArrayTypeStructure extends BaseTypeStructure
    */
   public function addItem(BaseTypeStructure ...$items): void
   {
-    foreach ($items as $item) {
-      $this->items[$item->name] = $item;
-    }
+    $this->properties = array_merge($this->properties, $items);
     $this->buildName();
   }
 
@@ -58,7 +51,8 @@ class ArrayTypeStructure extends BaseTypeStructure
    */
   private function buildName(): void
   {
-    $names = array_keys($this->items);
+    $names = [];
+    foreach ($this->properties as $item) $names[] = $item->getName();
     $types = implode(' | ', $names);
     $this->name = "Array<$types>";
   }
