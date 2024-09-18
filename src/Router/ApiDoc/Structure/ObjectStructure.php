@@ -28,7 +28,7 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 class ObjectStructure extends ClassTypeStructure
 {
   /**
-   * @var array<string,FieldStructure> 属性列表
+   * @var FieldStructure[] 属性列表
    */
   public array $properties = [];
 
@@ -77,8 +77,12 @@ class ObjectStructure extends ClassTypeStructure
   {
     if (is_array($fieldStructure)) {
       foreach ($fieldStructure as $item) $this->addProperty($item);
+    } elseif ($fieldStructure instanceof FieldStructure) {
+      $this->properties[] = $fieldStructure;
     } else {
-      $this->properties[$fieldStructure->name] = $fieldStructure;
+      throw new InvalidArgumentException(
+        '$fieldStructure must be instance of ' . FieldStructure::class
+      );
     }
     return $this;
   }
@@ -94,13 +98,14 @@ class ObjectStructure extends ClassTypeStructure
   {
     foreach ($parameters as $parameter) {
       $name = $parameter->getName();
-      $this->properties[$name] = new FieldStructure(
+      $item = new FieldStructure(
         $name,
         DocCommentTool::extractParamDoc($docComment, $name),
         $parameter->allowsNull(),
         $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null,
         $parameter->getType()
       );
+      $this->properties[] = $item;
     }
   }
 
@@ -115,13 +120,14 @@ class ObjectStructure extends ClassTypeStructure
     foreach ($properties as $item) {
       $name = $item->getName();
       $type = $item->getType();
-      $this->properties[$name] = new FieldStructure(
+      $item = new FieldStructure(
         $name,
         DocCommentTool::extractPropertyDoc($item->getDocComment() ?: ''),
         $type->allowsNull(),
         $item->getDefaultValue(),
         $type
       );
+      $this->properties[] = $item;
     }
   }
 }
