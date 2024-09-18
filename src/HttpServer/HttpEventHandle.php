@@ -27,7 +27,7 @@ use Viswoole\HttpServer\Contract\ResponseInterface;
 /**
  * HTTP服务事件处理
  */
-class EventHandle
+class HttpEventHandle
 {
   /**
    * 处理http请求
@@ -54,7 +54,7 @@ class EventHandle
        */
       $psr7Response = $app->make(ResponseInterface::class, [$response]);
       // 交由路由分发
-      $result = $app->router->collector()->dispatch(
+      $result = $app->router->dispatch(
         $psr7Request->getPath(),
         $psr7Request->getMethod(),
         $psr7Request->getUri()->getHost(),
