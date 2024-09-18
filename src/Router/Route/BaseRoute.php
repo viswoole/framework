@@ -47,7 +47,7 @@ abstract class BaseRoute
   /**
    * @var array 访问路径
    */
-  private readonly array $paths;
+  private array $paths;
   /**
    * @var array 请求方式
    */
@@ -94,12 +94,16 @@ abstract class BaseRoute
       $this->suffix = $parentOption->suffix;
       $this->domain = $parentOption->domain;
       $this->method = $parentOption->method;
+      $this->paths = $parentOption->paths;
     } else {
       // 默认配置
       $this->parentId = null;
-      $this->method = config('router.method', ['*']);
-      $this->suffix = config('router.suffix', ['*']);
-      $this->domain = config('router.domain', ['*']);
+      $defaultMethod = config('router.method', ['*']);
+      $this->setMethod(...(is_string($defaultMethod) ? [$defaultMethod] : $defaultMethod));
+      $defaultSuffix = config('router.suffix', ['*']);
+      $this->setSuffix(...(is_string($defaultSuffix) ? [$defaultSuffix] : $defaultSuffix));
+      $defaultDomain = config('router.domain', ['*']);
+      $this->setDomain(...(is_string($defaultDomain) ? [$defaultDomain] : $defaultDomain));
     }
     [$paths, $pattern] = $this->handelPaths($paths);
     // 路由path
@@ -119,11 +123,33 @@ abstract class BaseRoute
    */
   public function getCiteLink(): ?string
   {
-    if (empty($this->parent)) {
+    if (empty($this->getParentId())) {
       return $this->id;
     } else {
-      return $this->parent . '.' . $this->id;
+      return $this->getParentId() . '.' . $this->id;
     }
+  }
+
+  /**
+   * 获取父级路由ID
+   *
+   * @return ?string 父级路由ID
+   */
+  public function getParentId(): ?string
+  {
+    return $this->parentId;
+  }
+
+  /**
+   * 设置父级路由ID
+   *
+   * @param ?string $parentId
+   * @return $this
+   */
+  public function setParentId(?string $parentId): static
+  {
+    $this->parentId = $parentId;
+    return $this;
   }
 
   /**
@@ -205,6 +231,16 @@ abstract class BaseRoute
   }
 
   /**
+   * 获取handler
+   *
+   * @return callable|array
+   */
+  public function getHandler(): callable|array
+  {
+    return $this->handler;
+  }
+
+  /**
    * 获取访问路径
    *
    * @return array 访问路径
@@ -212,28 +248,6 @@ abstract class BaseRoute
   public function getPaths(): array
   {
     return $this->paths;
-  }
-
-  /**
-   * 获取父级路由ID
-   *
-   * @return ?string 父级路由ID
-   */
-  public function getParentId(): ?string
-  {
-    return $this->parentId;
-  }
-
-  /**
-   * 设置父级路由ID
-   *
-   * @param ?string $parentId
-   * @return $this
-   */
-  public function setParentId(?string $parentId): static
-  {
-    $this->parentId = $parentId;
-    return $this;
   }
 
   /**
@@ -259,11 +273,14 @@ abstract class BaseRoute
   /**
    * 设置请求方式
    *
-   * @param string ...$method
+   * @param string ...$method 自动转换为大写
    * @return $this
    */
   public function setMethod(string ...$method): static
   {
+    array_walk($method, function (&$value) {
+      $value = strtoupper(trim($value));
+    });
     $this->method = $method;
     return $this;
   }
@@ -317,7 +334,7 @@ abstract class BaseRoute
    */
   public function setPatterns(array $patterns): static
   {
-    $this->patterns = $patterns;
+    $this->patterns = array_merge($this->patterns, $patterns);
     return $this;
   }
 
