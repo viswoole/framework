@@ -15,31 +15,32 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
-use InvalidArgumentException;
-
 /**
  * 结构声明基类
  */
 class BaseTypeStructure
 {
-  const array BASE_TYPE_LIST = ['object', 'array', 'string', 'int', 'float', 'bool', 'null', 'File', 'mixed', 'enum'];
   /**
    * @var string 结构名称
    */
   public string $name;
+  /**
+   * @var BaseTypeStructure[]|string[] 类型额外属性列表
+   */
+  public array $properties = [];
+  /**
+   * @var string 类型
+   */
+  public readonly string $type;
 
   /**
-   * @param string $type 基本类型 [object|array|string|int|float|bool|null|File|mixed]
-   * @see self::BASE_TYPE_LIST
+   * @param Types $type 基本类型
    */
-  public function __construct(public readonly string $type)
+  public function __construct(Types $type = Types::Mixed)
   {
-    if (!in_array($this->type, self::BASE_TYPE_LIST)) {
-      throw new InvalidArgumentException(
-        "基本类型错误{$this->type}，可选值：" . implode('|', self::BASE_TYPE_LIST)
-      );
-    }
-    $this->name = $this->type;
+    $type = strtolower($type->name);
+    $this->type = $type;
+    $this->name = $type;
   }
 
   /**
