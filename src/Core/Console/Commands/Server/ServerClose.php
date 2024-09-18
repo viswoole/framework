@@ -34,6 +34,9 @@ use Viswoole\Core\Server\Action;
 )]
 class ServerClose extends Command
 {
+  /**
+   * @inheritDoc
+   */
   protected function configure(): void
   {
     $this->addArgument(
@@ -44,6 +47,9 @@ class ServerClose extends Command
     );
   }
 
+  /**
+   * @inheritDoc
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int
   {
     $service = $input->getArgument('server');
@@ -51,7 +57,12 @@ class ServerClose extends Command
     try {
       Action::close($service);
     } catch (Throwable $e) {
-      $io->error($e->getMessage());
+      $io->error(
+        $e->getMessage() . ' in '
+        . $e->getFile() . ' on line '
+        . $e->getLine() . PHP_EOL
+        . $e->getTraceAsString()
+      );
       return Command::FAILURE;
     }
     return Command::SUCCESS;
