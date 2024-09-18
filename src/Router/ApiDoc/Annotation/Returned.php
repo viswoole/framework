@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\Annotation;
+namespace Viswoole\Router\ApiDoc\Annotation;
 
 use Attribute;
 use Closure;
