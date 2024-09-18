@@ -12,7 +12,7 @@
  */
 declare (strict_types=1);
 
-namespace Viswoole\Router;
+namespace Viswoole\Router\Route;
 
 use Closure;
 use Viswoole\Core\App;
