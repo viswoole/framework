@@ -39,6 +39,6 @@ class RouterService extends Provider
    */
   #[Override] public function register(): void
   {
-    $this->app->bind('router', RouterManager::class);
+    $this->app->bind('router', Router::class);
   }
 }
