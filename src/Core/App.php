@@ -26,6 +26,7 @@ use Viswoole\HttpServer\Contract\ResponseInterface;
 use Viswoole\HttpServer\HttpService;
 use Viswoole\Log\LogManager;
 use Viswoole\Log\LogService;
+use Viswoole\Router\Router;
 use Viswoole\Router\RouterManager;
 use Viswoole\Router\RouterService;
 
@@ -40,7 +41,7 @@ use Viswoole\Router\RouterService;
  * @property Server $server 应用控制器
  * @property CacheManager $cache 缓存管理器
  * @property Middleware $middleware 中间件管理器
- * @property RouterManager $router 路由管理器
+ * @property Router $router 路由管理器
  * @property ResponseInterface $response HTTP响应对象
  * @property RequestInterface $request HTTP请求对象
  */
