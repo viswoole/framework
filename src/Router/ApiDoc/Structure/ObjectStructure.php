@@ -28,11 +28,6 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 class ObjectStructure extends ClassTypeStructure
 {
   /**
-   * @var FieldStructure[] 属性列表
-   */
-  public array $properties = [];
-
-  /**
    * 构建对象结构
    *
    * @param string|object|array $classOrInstance 类名或实例，支持传入FieldStructure[]
@@ -40,7 +35,7 @@ class ObjectStructure extends ClassTypeStructure
    */
   public function __construct(string|object|array $classOrInstance, bool $parseProperties = false)
   {
-    parent::__construct('object');
+    parent::__construct(Types::Object);
     if (is_array($classOrInstance)) {
       $this->addProperty($classOrInstance);
     } else {
