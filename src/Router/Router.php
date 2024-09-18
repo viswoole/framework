@@ -510,7 +510,7 @@ class Router extends Collector
       // 不需要创建路由则跳过
       if (!$isCreate) continue;
       // 方法id
-      $methodId = Route::generateHashId($fullClass . $method->getName());
+      $methodId = RouteTool::generateHashId($fullClass . $method->getName());
       // 获取方法注解
       $methodAttributes = $method->getAttributes(RouteMapping::class);
       // 构建处理方法
