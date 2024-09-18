@@ -19,7 +19,6 @@ use InvalidArgumentException;
 use Viswoole\Core\App;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Middleware;
-use Viswoole\Router\Route;
 use Viswoole\Router\RouteTool;
 
 /**
@@ -202,7 +201,7 @@ abstract class BaseRoute
   private function generateId(): string
   {
     $id = implode('&', $this->paths);
-    return Route::generateHashId($id);
+    return RouteTool::generateHashId($id);
   }
 
   /**
