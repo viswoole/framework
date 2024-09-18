@@ -29,7 +29,8 @@ class BaseTypeStructure
   public string $name;
 
   /**
-   * @param string $type 基本类型[object|array|string|int|float|bool|null|File|mixed]
+   * @param string $type 基本类型 [object|array|string|int|float|bool|null|File|mixed]
+   * @see self::BASE_TYPE_LIST
    */
   public function __construct(public readonly string $type)
   {
@@ -42,24 +43,6 @@ class BaseTypeStructure
   }
 
   /**
-   * 转换为数组
-   *
-   * @param bool $recursion 递归
-   * @return array
-   */
-  public function toArray(bool $recursion = true): array
-  {
-    if (!$recursion) {
-      return $this->jsonSerialize();
-    } else {
-      return json_decode(
-        json_encode($this->jsonSerialize(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        $recursion
-      );
-    }
-  }
-
-  /**
    * 获取类型
    *
    * @return string
@@ -67,6 +50,16 @@ class BaseTypeStructure
   public function getType(): string
   {
     return $this->type;
+  }
+
+  /**
+   * 获取类型名称
+   *
+   * @return string
+   */
+  public function getName(): string
+  {
+    return $this->name;
   }
 
   /**
