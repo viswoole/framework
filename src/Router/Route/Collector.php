@@ -83,9 +83,9 @@ abstract class Collector
   public function recordRouteItem(BaseRoute $route): void
   {
     if ($this->currentGroup === null) {
-      $id = $route['id'];
+      $id = $route->getId();
       if (isset($this->routes[$id])) {
-        $path = implode('|', $route['paths']);
+        $path = implode('|', $route->getPaths());
         throw new RuntimeException("Route id:$id already exists,path:$path");
       }
       $this->routes[$id] = $route;
