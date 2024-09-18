@@ -91,8 +91,9 @@ abstract class RouteConfig implements ArrayAccess
   {
     if (is_array($parentOption)) {
       $parentOption['sort'] = 0;
+      $parentOption['title'] = '';
+      $parentOption['description'] = '';
       $this->options = $parentOption;
-      $this->options['description'] = '';
     } else {
       $this->suffix(config('router.suffix', ['*']));
       $this->domain(config('router.domain', []));
