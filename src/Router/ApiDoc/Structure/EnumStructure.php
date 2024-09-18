@@ -25,18 +25,13 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 class EnumStructure extends ClassTypeStructure
 {
   /**
-   * @var array 枚举case列表
-   */
-  public readonly array $cases;
-
-  /**
    * 构建枚举结构
    *
    * @param string $enum
    */
   public function __construct(string $enum)
   {
-    parent::__construct('enum');
+    parent::__construct(Types::Enum);
     if (!enum_exists($enum)) {
       throw new InvalidArgumentException('not a enum class');
     }
@@ -45,7 +40,7 @@ class EnumStructure extends ClassTypeStructure
     $this->name = $reflector->getShortName();
     $docComment = $reflector->getDocComment() ?: '';
     $this->description = DocCommentTool::extractDocTitle($docComment);
-    $this->cases = array_map(function ($case) {
+    $this->properties = array_map(function ($case) {
       return $case->name;
     }, $reflector->getCases());
   }
