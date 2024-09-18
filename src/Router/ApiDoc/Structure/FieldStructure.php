@@ -26,9 +26,9 @@ use ReflectionUnionType;
 class FieldStructure
 {
   /**
-   * @var BaseTypeStructure[] 参数类型列表
+   * @var array<string, BaseTypeStructure> 参数类型列表
    */
-  public array $types;
+  public array $types = [];
 
   /**
    * 参数结构描述
@@ -49,11 +49,16 @@ class FieldStructure
   )
   {
     if (is_string($type)) {
-      $this->types = [new BaseTypeStructure($type)];
+      $type = new BaseTypeStructure($type);
+      $this->types[$type->getName()] = $type;
     } elseif ($type instanceof BaseTypeStructure) {
-      $this->types = [$type];
+      $this->types[$type->getName()] = $type;
     } elseif (is_array($type)) {
-      $this->types = $type;
+      foreach ($type as $typeItem) {
+        if ($typeItem instanceof BaseTypeStructure) {
+          $this->types[$typeItem->getName()] = $typeItem;
+        }
+      }
     } else {
       $this->types = $this->parseTypes($type);
     }
@@ -70,20 +75,23 @@ class FieldStructure
   ): array
   {
     if (is_null($type)) {
-      return [new BaseTypeStructure('mixed')];
+      return ['mixed' => new BaseTypeStructure('mixed')];
     }
     if ($type instanceof ReflectionIntersectionType) {
-      $types = [new ObjectStructure([])];
+      $types = [new BaseTypeStructure('object')];
     } elseif ($type instanceof ReflectionUnionType) {
-      $types = array_map(function (ReflectionNamedType|ReflectionIntersectionType $typeItem) {
+      $types = [];
+      foreach ($type->getTypes() as $typeItem) {
         if ($typeItem instanceof ReflectionIntersectionType) {
-          return new ObjectStructure([]);
+          $type = new BaseTypeStructure('object');
         } else {
-          return $this->parseNamedType($typeItem);
+          $type = $this->parseNamedType($typeItem);
         }
-      }, $type->getTypes());
+        $types[$type->name] = $type;
+      }
     } else {
-      $types = [$this->parseNamedType($type)];
+      $type = $this->parseNamedType($type);
+      $types[$type->name] = $type;
     }
     return $types;
   }
