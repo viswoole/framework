@@ -10,24 +10,30 @@
  *  | Author: ZhuChongLin <8210856@qq.com>
  *  +----------------------------------------------------------------------
  */
+
 declare (strict_types=1);
 
-namespace Viswoole\Router;
+namespace Viswoole\Router\Route;
 
 use InvalidArgumentException;
 
 /**
- * 路由线路
+ * 路由项
  */
-class RouteItem extends RouteConfig
+class RouteItem extends BaseRoute
 {
+  protected string $type = 'item';
+
   /**
-   * @inheritDoc
+   * @param string|array $paths 路由访问路径
+   * @param callable|string|array $handler 路由处理函数
+   * @param BaseRoute|null $parentOption 父级路由配置
+   * @param string|null $id
    */
   public function __construct(
     array|string          $paths,
     callable|array|string $handler,
-    array                 $parentOption = null,
+    BaseRoute             $parentOption = null,
     string                $id = null
   )
   {
@@ -35,13 +41,5 @@ class RouteItem extends RouteConfig
       throw new InvalidArgumentException('route item paths is empty');
     }
     parent::__construct($paths, $handler, $parentOption, $id);
-  }
-
-  /**
-   * @inheritDoc
-   */
-  public function _register(RouteCollector $collector): void
-  {
-    $collector->registerRouteItem($this);
   }
 }
