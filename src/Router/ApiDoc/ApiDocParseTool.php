@@ -116,7 +116,7 @@ class ApiDocParseTool
    *   author: string,
    *   meta: array,
    *   status: array{
-   *    id: string,
+   *    value: string,
    *    label: string,
    *    color: string,
    *   },
@@ -141,7 +141,7 @@ class ApiDocParseTool
       'author' => $route->getAuthor(),
       'meta' => $route->getMeta(),
       'status' => [
-        'id' => $route->getStatus()->value,
+        'value' => $route->getStatus()->value,
         'label' => $route->getStatus()->getLabel(),
         'color' => $route->getStatus()->getColor()
       ]
