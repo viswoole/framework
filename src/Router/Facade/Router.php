@@ -38,6 +38,7 @@ use Viswoole\Router\Route\Route;
  * @method static void miss(Closure $handler, array|string $method = '*') miss路由（在未匹配到路由的时候生效）
  * @method static void server(string $serverName, Closure $closure) 服务路由定义
  * @method static Route|Group getRoute(string $idOrCiteLink) 获取路由分组或路由对象，需传入路由id或完整引用链路
+ * @method static Route[]|Group[] getRoutes() 获取所有路由列表
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Router\\Facade\\Router
  */
