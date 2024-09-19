@@ -529,6 +529,8 @@ class Router extends Collector
         if ($callback) $callback($pattern);
         if ($params) $params = array_merge($params, $pattern);
       }
+      // 绑定到容器
+      bind(RouteItem::class, $route);
       return $this->middleware->process(function () use ($route, $params) {
         return invoke($route->getHandler(), $params ?? []);
       }, $route->getMiddlewares());
