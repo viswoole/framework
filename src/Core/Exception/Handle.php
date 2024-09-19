@@ -18,6 +18,9 @@ namespace Viswoole\Core\Exception;
 use Throwable;
 use Viswoole\Log\LogManager;
 
+/**
+ * 异常处理基类
+ */
 class Handle
 {
   /**
@@ -27,6 +30,9 @@ class Handle
     ValidateException::class
   ];
 
+  /**
+   * @param LogManager $log
+   */
   public function __construct(protected readonly LogManager $log)
   {
   }
@@ -55,7 +61,7 @@ class Handle
         'code' => $e->getCode(),
         'file' => $e->getFile(),
         'line' => $e->getLine(),
-        'trace' => $e->getTrace(),
+        'trace' => $e->getTraceAsString(),
       ];
       // 记录异常到日志
       $this->log->error($e->getMessage(), $data);
