@@ -75,14 +75,15 @@ class Handle extends \Viswoole\Core\Exception\Handle
       $statusCode = Status::BAD_REQUEST;
     } elseif (isDebug()) {
       $message = $e->getMessage();
-      $trace = $e->getTrace();
+      $trace = $e->getTraceAsString();
     } else {
       $message = 'Internal Server Error';
     }
-    $this->response->status($statusCode)->json([
+    $data = [
       'code' => $e->getCode(),
-      'message' => $message,
-      'data' => $trace
-    ])->send();
+      'message' => $message
+    ];
+    if ($trace) $data['trace'] = $trace;
+    $this->response->status($statusCode)->json($data)->send();
   }
 }
