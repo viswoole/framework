@@ -153,6 +153,8 @@ class Action
         } else {
           Output::success("向{$server_name}服务进程($pid)发送SIGTERM信号成功", 0);
         }
+      } else {
+        Output::warning("{$server_name}服务未运行", 0);
       }
     }
   }
