@@ -30,8 +30,8 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 use Viswoole\Router\Exception\RouteNotFoundException;
 use Viswoole\Router\Route\BaseRoute;
 use Viswoole\Router\Route\Collector;
-use Viswoole\Router\Route\RouteGroup;
-use Viswoole\Router\Route\RouteItem;
+use Viswoole\Router\Route\Group;
+use Viswoole\Router\Route\Route;
 
 /**
  * 路由收集器
@@ -181,7 +181,7 @@ class Router extends Collector
    *
    * @param string $file 控制器文件
    * @param string $rootPath 根目录
-   * @return array{server:string|null,route:RouteGroup}|null
+   * @return array{server:string|null,route:Group}|null
    */
   private function parseController(string $file, string $rootPath): ?array
   {
@@ -215,7 +215,7 @@ class Router extends Collector
     // 类完全名称md5值作为路由分组名称
     if (!$controller->id) $controller->id = RouteTool::generateHashId($fullClass);
     /**
-     * @var RouteGroup $group 路由分组实例
+     * @var Group $group 路由分组实例
      */
     $group = $controller->create([]);
     // 类的全部方法
@@ -229,10 +229,10 @@ class Router extends Collector
    *
    * @param ReflectionMethod[] $methods 方法列表
    * @param bool $isAutoRoute 是否自动路由
-   * @param RouteGroup $group
+   * @param Group $group
    * @return void
    */
-  private function parseMethod(array $methods, bool $isAutoRoute, RouteGroup $group): void
+  private function parseMethod(array $methods, bool $isAutoRoute, Group $group): void
   {
     if (empty($methods)) return;
     $class = $methods[0]->getDeclaringClass()->getName();
@@ -259,7 +259,7 @@ class Router extends Collector
       if (empty($methodAttributes)) {  // 自动路由
         if (!$isAutoRoute) continue;
         // 创建新的路由项
-        $routeItem = new RouteItem($method->getName(), $handler, $group, id: $methodId);
+        $routeItem = new Route($method->getName(), $handler, $group, id: $methodId);
         // 设置标题
         $routeItem->setTitle(DocCommentTool::extractDocTitle($methodDocComment));
       } else {
@@ -300,7 +300,7 @@ class Router extends Collector
       if ($parent = $item->getParentId()) {
         // 处理自定义父级路由依赖
         $routeGroup = $this->getRoute($parent);
-        if ($routeGroup instanceof RouteGroup) {
+        if ($routeGroup instanceof Group) {
           $routeGroup->addItem($item);
           unset($this->routes[$key]);
           continue;
@@ -327,7 +327,7 @@ class Router extends Collector
       for ($i = 1; $i < count($citeLink); $i++) {
         $key = $citeLink[$i];
         if (!$route) throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
-        if (!$route instanceof RouteGroup) throw new InvalidArgumentException(
+        if (!$route instanceof Group) throw new InvalidArgumentException(
           "路由链路引用错误{$idOrCiteLink}： {$key}必须是组路由|控制器注解路由"
         );
         $route = $route->getItem($key);
@@ -342,12 +342,12 @@ class Router extends Collector
   /**
    * 注册路由
    *
-   * @param RouteGroup|RouteItem $route
+   * @param Group|Route $route
    * @return void
    */
-  private function register(RouteGroup|RouteItem $route): void
+  private function register(Group|Route $route): void
   {
-    if ($route instanceof RouteGroup) {
+    if ($route instanceof Group) {
       $this->currentGroup = $route;
       foreach ($route->getItem() as $item) {
         $this->register($item);
@@ -489,7 +489,7 @@ class Router extends Collector
     if (!$this->config->get('router.case_sensitive', false)) $path = strtolower($path);
     $ext = $PathAndExt[1] ?? '';
     $pattern = [];
-    /** @var RouteItem $route 路由 */
+    /** @var Route $route 路由 */
     $route = null;
     //判断是否存在静态路由
     if (isset($this->staticRoute[$path])) {
@@ -530,7 +530,7 @@ class Router extends Collector
         if ($params) $params = array_merge($params, $pattern);
       }
       // 绑定到容器
-      bind(RouteItem::class, $route);
+      bind(Route::class, $route);
       return $this->middleware->process(function () use ($route, $params) {
         return invoke($route->getHandler(), $params ?? []);
       }, $route->getMiddlewares());
