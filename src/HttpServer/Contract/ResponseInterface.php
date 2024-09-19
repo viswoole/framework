@@ -129,7 +129,7 @@ interface ResponseInterface
   public function write(string $data): ResponseInterface;
 
   /**
-   * 发送响应(别名方法send)，对象销毁底层会自动进行end
+   * 发送响应，对象销毁底层会自动进行end
    *
    * @access public
    * @param string|null $content
