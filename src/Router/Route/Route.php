@@ -23,7 +23,6 @@ use Viswoole\Router\ApiDoc\Status;
  */
 class Route extends BaseRoute
 {
-  protected string $type = 'item';
   /**
    * @var Status 状态
    */

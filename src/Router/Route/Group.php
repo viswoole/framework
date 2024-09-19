@@ -22,7 +22,6 @@ use Closure;
  */
 class Group extends BaseRoute
 {
-  protected string $type = 'group';
   /**
    * @var Route[]|static[] 分组、域名路由存储items
    */

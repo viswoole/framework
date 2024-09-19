@@ -29,10 +29,6 @@ abstract class BaseRoute
   use ApiDoc;
 
   /**
-   * @var string 类型，可选值item|group
-   */
-  protected string $type;
-  /**
    * @var mixed 处理函数
    */
   protected mixed $handler;
