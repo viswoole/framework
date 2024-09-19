@@ -55,12 +55,14 @@ class Returned
    * @param array|string $data 支持传入数组或者字符串
    * @param int $statusCode 状态码，默认为200
    * @param string $type 响应类型，默认为application/json
+   * @param int $sort 排序，默认为0,值越大越靠前
    */
   public function __construct(
     public string $title,
     array|string  $data,
     public int    $statusCode = 200,
-    public string $type = self::TYPE_JSON
+    public string $type = self::TYPE_JSON,
+    public int    $sort = 0
   )
   {
     if (is_array($data)) {
