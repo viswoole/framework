@@ -49,6 +49,10 @@ class Router extends Collector
    * @var bool 缓存路由
    */
   private bool $cache;
+  /**
+   * @var bool 初始化
+   */
+  private bool $init = false;
 
   /**
    * @param Event $event
@@ -63,12 +67,13 @@ class Router extends Collector
   {
     App::factory()->bind(self::class, $this);
     // 触发路由初始化事件，其他模块可以监听该事件注册路由
-    $this->event->emit('RouteInit');
+    $this->event->emit('RouterInit');
     $this->cache = $config->get('router.cache.enable', false);
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
     $this->parseRoute();
-    $this->event->emit('RouteLoaded');
+    $this->init = true;
+    $this->event->emit('RouterInitialized');
   }
 
   /**
