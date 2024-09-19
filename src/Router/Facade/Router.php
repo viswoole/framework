@@ -26,7 +26,7 @@ use Viswoole\Router\Route\Route;
  *
  * @method static mixed dispatch(string $path, string $method, string $domain, ?array $params = null, ?callable $callback = null) 匹配路由，返回路由实例
  * @method static Route get(array|string $paths, callable|array|string $handler) 定义一个GET方式访问的路由
- * @method static Route add(array|string $paths, callable|array|string $handler, string $method) 添加路由
+ * @method static Route addRoute(array|string $paths, callable|array|string $handler, string $method) 添加路由
  * @method static Route post(array|string $paths, callable|array|string $handler) 定义一个POST方式访问的路由
  * @method static Route put(array|string $paths, callable|array|string $handler) 定义一个PUT方式访问的路由
  * @method static Route delete(array|string $paths, callable|array|string $handler) 定义一个DELETE方式访问的路由
