@@ -24,8 +24,8 @@ use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Event;
 use Viswoole\Core\Middleware;
-use Viswoole\Router\Annotation\AutoRouteController;
-use Viswoole\Router\Annotation\RouteController;
+use Viswoole\Router\Annotation\AutoController;
+use Viswoole\Router\Annotation\Controller;
 use Viswoole\Router\Annotation\RouteMapping;
 use Viswoole\Router\ApiDoc\Annotation\Returned;
 use Viswoole\Router\ApiDoc\ApiDocParseTool;
@@ -238,11 +238,11 @@ class Router extends Collector
     }
     // 获取路由注解属性
     $classAttributes = $refClass->getAttributes(
-      RouteController::class, ReflectionAttribute::IS_INSTANCEOF
+      Controller::class, ReflectionAttribute::IS_INSTANCEOF
     );
     // 没有路由控制器注解属性则不解析
     if (empty($classAttributes)) return null;
-    /** @var RouteController|AutoRouteController $controller 控制器路由注解实例 */
+    /** @var Controller|AutoController $controller 控制器路由注解实例 */
     $controller = $classAttributes[0]->newInstance();
     // 服务名称
     $serverName = $controller->server ?? SERVER_NAME;
@@ -253,7 +253,7 @@ class Router extends Collector
       $controller->title = DocCommentTool::extractDocTitle($refClass->getDocComment() ?: '');
     }
     /** 是否为自动路由 */
-    $isAutoRoute = $controller instanceof AutoRouteController;
+    $isAutoRoute = $controller instanceof AutoController;
     // 如果类路由注解的paths设置为null则默认为类名称
     if ($controller->prefix === null) $controller->prefix = $className;
     // 类完全名称md5值作为路由分组名称
