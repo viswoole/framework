@@ -15,9 +15,11 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
+use InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
+use RuntimeException;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Event;
@@ -25,7 +27,10 @@ use Viswoole\Core\Middleware;
 use Viswoole\Router\Annotation\AutoRouteController;
 use Viswoole\Router\Annotation\RouteController;
 use Viswoole\Router\Annotation\RouteMapping;
+use Viswoole\Router\ApiDoc\Annotation\Returned;
+use Viswoole\Router\ApiDoc\ApiDocParseTool;
 use Viswoole\Router\ApiDoc\DocCommentTool;
+use Viswoole\Router\ApiDoc\Structure\FieldStructure;
 use Viswoole\Router\Exception\RouteNotFoundException;
 use Viswoole\Router\Route\BaseRoute;
 use Viswoole\Router\Route\Collector;
@@ -50,9 +55,13 @@ class Router extends Collector
    */
   private bool $cache;
   /**
+   * @var bool 是否生成api文档
+   */
+  private bool $enableApiDoc;
+  /**
    * @var bool 初始化
    */
-  private bool $init = false;
+  private bool $init;
 
   /**
    * @param Event $event
@@ -66,14 +75,67 @@ class Router extends Collector
   )
   {
     App::factory()->bind(self::class, $this);
+    // 是否缓存路由
+    $this->cache = $config->get('router.cache.enable', false);
+    // 是否生成api文档
+    $this->enableApiDoc = $config->get('router.api_doc.enable', false);
+    if ($this->enableApiDoc) {
+      $this->verifyGlobalParams('router.api_doc.body');
+      $this->verifyGlobalParams('router.api_doc.header');
+      $this->verifyGlobalParams('router.api_doc.query');
+      $this->verifyGlobalReturned();
+    }
     // 触发路由初始化事件，其他模块可以监听该事件注册路由
     $this->event->emit('RouterInit');
-    $this->cache = $config->get('router.cache.enable', false);
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
     $this->parseRoute();
     $this->init = true;
     $this->event->emit('RouterInitialized');
+  }
+
+  /**
+   * 验证全局参数，并返回新的参数列表
+   *
+   * @param string $name
+   * @return void
+   */
+  private function verifyGlobalParams(string $name): void
+  {
+    $params = $this->config->get($name, []);
+    if (empty($params)) return;
+    if (!is_array($params)) {
+      throw new InvalidArgumentException("$name 配置错误，必须是数组类型");
+    }
+    $newParams = [];
+    $class = FieldStructure::class;
+    foreach ($params as $index => $field) {
+      if ($field instanceof FieldStructure) {
+        $newParams[$field->name] = $field;
+      } else {
+        throw new InvalidArgumentException("$name($index)必须是{$class}实例");
+      }
+    }
+    $this->config->set($name, $newParams);
+  }
+
+  /**
+   * 获取全局返回值列表
+   *
+   * @return void
+   */
+  private function verifyGlobalReturned(): void
+  {
+    $globalReturned = config('router.api_doc.returned', []);
+    if (!is_array($globalReturned)) {
+      throw new InvalidArgumentException('router.api_doc.returned 配置错误，必须是数组类型');
+    }
+    $class = Returned::class;
+    foreach ($globalReturned as $item) {
+      if (!$item instanceof Returned) {
+        throw new InvalidArgumentException("router.api_doc.returned 配置错误，必须是{$class}实例");
+      }
+    }
   }
 
   /**
@@ -440,6 +502,17 @@ class Router extends Collector
   }
 
   /**
+   * 判断是否启动了api文档解析功能
+   *
+   * @access public
+   * @return bool
+   */
+  public function isEnableApiDoc(): bool
+  {
+    return $this->enableApiDoc;
+  }
+
+  /**
    * 匹配路由，返回路由实例
    *
    * @access public
@@ -544,5 +617,20 @@ class Router extends Collector
     ) {
       throw new RouteNotFoundException($message);
     }
+  }
+
+  /**
+   * 获取路由文档
+   *
+   * @return array{count: int,routes: array} 路由数量和路由列表
+   * @throws RuntimeException 路由正在初始化
+   * @see ApiDocParseTool::generateGroup() 分组结构
+   * @see ApiDocParseTool::generateRoute() 路由结构
+   */
+  public function getApiDoc(): array
+  {
+    if (!$this->enableApiDoc) return ['count' => 0, 'routes' => []];
+    if (!isset($this->init)) throw new RuntimeException('路由正在初始化，请稍后再试');
+    return ApiDocParseTool::parse($this->getRoutes());
   }
 }
