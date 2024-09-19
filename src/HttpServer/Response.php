@@ -72,7 +72,9 @@ class Response implements ResponseInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function status(int $http_status_code, string $reasonPhrase = ''
+  #[Override] public function status(
+    int    $http_status_code,
+    string $reasonPhrase = ''
   ): ResponseInterface
   {
     // 检查状态码是否有效
