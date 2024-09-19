@@ -20,6 +20,7 @@ use InvalidArgumentException;
 use Override;
 use RuntimeException;
 use Swoole\Http\Response as swooleResponse;
+use Viswoole\Core\Console\Output;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
 /**
@@ -53,7 +54,7 @@ class Response implements ResponseInterface
    */
   protected int $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
   /**
-   * @var bool 是否把消息输出到控制台，建议在调试阶段使用
+   * @var bool 是否把消息输出到控制台，仅建议在调试阶段使用
    */
   protected bool $echoToConsole = false;
 
@@ -211,6 +212,16 @@ class Response implements ResponseInterface
   {
     if ($this->isWritable()) {
       if (is_null($content)) $content = $this->content;
+      if ($this->echoToConsole) {
+        // 请求时间
+        $request_time = \Viswoole\HttpServer\Facade\Request::getServer('request_time_float');
+        // 获取当前时间
+        $current_time_float = microtime(true);
+        // 计算耗时
+        $elapsed_time = $current_time_float - $request_time;
+        // 输出到控制台
+        Output::dump($content, "响应内容:耗时{$elapsed_time}秒");
+      }
       return $this->swooleResponse->end($content);
     } else {
       return false;
