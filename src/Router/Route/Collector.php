@@ -134,6 +134,7 @@ abstract class Collector
   /**
    * 定义一个HEAD方式访问的路由
    *
+   * @access public
    * @param string|array $paths
    * @param string|array|callable $handler
    * @return Route
@@ -158,6 +159,7 @@ abstract class Collector
   /**
    * 定义一个PATCH方式访问的路由
    *
+   * @access public
    * @param string|array $paths
    * @param string|array|callable $handler
    * @return Route
@@ -259,5 +261,15 @@ abstract class Collector
       return $this->routes[$idOrCiteLink]
         ?? throw new InvalidArgumentException("路由不存在：$idOrCiteLink");
     }
+  }
+
+  /**
+   * 获取路由列表
+   *
+   * @return Group[]|Route[]
+   */
+  public function getRoutes(): array
+  {
+    return $this->routes;
   }
 }
