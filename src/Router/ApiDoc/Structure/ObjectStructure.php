@@ -33,7 +33,11 @@ class ObjectStructure extends ClassTypeStructure
    * @param string|object|array $classOrInstance 类名或实例，支持传入FieldStructure[]
    * @param bool $parseProperties 是否解析公开属性
    */
-  public function __construct(string|object|array $classOrInstance, bool $parseProperties = false)
+  public function __construct(
+    string|object|array $classOrInstance,
+    bool                $parseProperties = false,
+    array               &$dependMap = [],
+  )
   {
     parent::__construct(Types::Object);
     if (is_array($classOrInstance)) {
@@ -49,15 +53,16 @@ class ObjectStructure extends ClassTypeStructure
       $this->description = DocCommentTool::extractDocTitle($reflector->getDocComment() ?: '');
       $this->namespace = $reflector->getNamespaceName();
       $this->name = $reflector->getShortName();
+      $dependMap[$reflector->getName()] = $this->name;
       if (!$parseProperties) {
         // ReflectionParameter[] 获取构造函数参数
         $parameters = $reflector->getConstructor()?->getParameters();
         if (empty($parameters)) return;
         $docComment = $reflector->getConstructor()?->getDocComment() ?: '';
-        $this->parseParams($parameters, $docComment);
+        $this->parseParams($parameters, $docComment, $dependMap);
       } else {
         $properties = $reflector->getProperties(ReflectionProperty::IS_PUBLIC);
-        $this->parseProperties($properties);
+        $this->parseProperties($properties, $dependMap);
       }
     }
   }
@@ -87,9 +92,14 @@ class ObjectStructure extends ClassTypeStructure
    *
    * @param ReflectionParameter[] $parameters 参数列表
    * @param string $docComment 构造函数文档注释
+   * @param array $dependMap
    * @return void
    */
-  private function parseParams(array $parameters, string $docComment): void
+  private function parseParams(
+    array  $parameters,
+    string $docComment,
+    array  &$dependMap
+  ): void
   {
     foreach ($parameters as $parameter) {
       $name = $parameter->getName();
@@ -98,7 +108,8 @@ class ObjectStructure extends ClassTypeStructure
         DocCommentTool::extractParamDoc($docComment, $name),
         $parameter->allowsNull(),
         $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null,
-        $parameter->getType()
+        $parameter->getType(),
+        $dependMap
       );
       $this->properties[] = $item;
     }
@@ -108,9 +119,10 @@ class ObjectStructure extends ClassTypeStructure
    * 解析类构造参数
    *
    * @param ReflectionProperty[] $properties 参数列表
+   * @param array $dependMap
    * @return void
    */
-  private function parseProperties(array $properties): void
+  private function parseProperties(array $properties, array &$dependMap): void
   {
     foreach ($properties as $item) {
       $name = $item->getName();
@@ -120,7 +132,8 @@ class ObjectStructure extends ClassTypeStructure
         DocCommentTool::extractPropertyDoc($item->getDocComment() ?: ''),
         $type->allowsNull(),
         $item->getDefaultValue(),
-        $type
+        $type,
+        $dependMap
       );
       $this->properties[] = $item;
     }
