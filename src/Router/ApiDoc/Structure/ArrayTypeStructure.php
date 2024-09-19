@@ -18,14 +18,14 @@ namespace Viswoole\Router\ApiDoc\Structure;
 /**
  * 数组结构描述
  */
-class ArrayTypeStructure extends BaseTypeStructure
+class ArrayTypeStructure extends TypeStructure
 {
   /**
    * 构建数组结构
    *
-   * @param BaseTypeStructure ...$items 数组元素结构
+   * @param TypeStructure ...$items 数组元素结构
    */
-  public function __construct(BaseTypeStructure ...$items)
+  public function __construct(TypeStructure ...$items)
   {
     parent::__construct(Types::Array);
     $this->addItem(...$items);
@@ -35,10 +35,10 @@ class ArrayTypeStructure extends BaseTypeStructure
    * 追加数组元素结构
    *
    * @access public
-   * @param BaseTypeStructure ...$items
+   * @param TypeStructure ...$items
    * @return void
    */
-  public function addItem(BaseTypeStructure ...$items): void
+  public function addItem(TypeStructure ...$items): void
   {
     $this->properties = array_merge($this->properties, $items);
     $this->buildName();
