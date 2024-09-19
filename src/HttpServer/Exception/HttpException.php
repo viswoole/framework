@@ -32,6 +32,13 @@ class HttpException extends RuntimeException
    */
   private array $headers;
 
+  /**
+   * @param string $message 异常提示信息
+   * @param int $code 异常代码
+   * @param int $httpCode 状态码
+   * @param Throwable|null $previous 上一个异常
+   * @param array $headers 响应头
+   */
   public function __construct(
     string    $message = 'error',
     int       $code = -1,
