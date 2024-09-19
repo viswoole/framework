@@ -163,7 +163,7 @@ class Router extends Collector
     // 列出指定路径中的文件和目录
     $controllers = $this->getAllPhpFiles($directory);
     foreach ($controllers as $controller) {
-      [$fullClass] = $this->getNamespace($controller, $rootPath);
+      [$fullClass] = RouteTool::getNamespace($controller, $rootPath);
       $hash = null;
       // 获取路由缓存
       if ($this->cache) {
@@ -205,7 +205,6 @@ class Router extends Collector
       while (false !== ($entry = readdir($handle))) {
         if ($entry != '.' && $entry != '..') {
           $path = $dir . '/' . $entry;
-
           // 如果是目录，递归调用该函数
           if (is_dir($path)) {
             $phpFiles = array_merge($phpFiles, $this->getAllPhpFiles($path));
@@ -215,31 +214,10 @@ class Router extends Collector
           }
         }
       }
-
       // 关闭目录句柄
       closedir($handle);
     }
-
     return $phpFiles;
-  }
-
-  /**
-   * 获取控制器完全限定名称
-   *
-   * @param string $controller
-   * @param string $rootPath
-   * @return array{0:string,1:string} [0=>完全限定名称,1=>类名称]
-   */
-  private function getNamespace(string $controller, string $rootPath): array
-  {
-    // 获得类名称
-    $className = basename($controller, '.php');
-    // 获得命名空间
-    $classNamespace = str_replace($rootPath, '', $controller);
-    $classNamespace = preg_replace('#^app/#', 'App/', dirname($classNamespace));
-    $classNamespace = str_replace('/', '\\', $classNamespace);
-    // 类完全限定名称Class::class
-    return [$classNamespace . '\\' . $className, $className];
   }
 
   /**
@@ -251,7 +229,7 @@ class Router extends Collector
    */
   private function parseController(string $file, string $rootPath): ?array
   {
-    [$fullClass] = $this->getNamespace($file, $rootPath);
+    [$fullClass] = RouteTool::getNamespace($file, $rootPath);
     if (class_exists($fullClass)) {
       $refClass = new ReflectionClass($fullClass);
       $className = $refClass->getShortName();
@@ -502,6 +480,41 @@ class Router extends Collector
   }
 
   /**
+   * 获取路由文档
+   *
+   * @access public
+   * @return array{count: int,routes: array} 路由数量和路由列表
+   * @throws RuntimeException 路由正在初始化
+   * @see ApiDocParseTool::generateGroup() 分组结构
+   * @see ApiDocParseTool::generateRoute() 路由结构
+   */
+  public function getApiList(): array
+  {
+    if (!$this->enableApiDoc) return ['count' => 0, 'routes' => []];
+    if (!isset($this->init)) throw new RuntimeException('路由正在初始化，请稍后再试');
+    return ApiDocParseTool::parse($this->getRoutes());
+  }
+
+  /**
+   * 获取API文档的详情，包含请求参数，接口返回值
+   *
+   * @access public
+   * @param string $citeLink 路由线路的引用链接
+   * @return array
+   * @throws InvalidArgumentException 路由不存在
+   * @see Route::getReturned() 响应组件结构详情
+   * @see Route::getParams() 参数结构详情
+   */
+  public function getApiDetail(string $citeLink): array
+  {
+    $route = $this->getRoute($citeLink);
+    return [
+      'params' => $route->getParams(),
+      'returned' => $route->getReturned()
+    ];
+  }
+
+  /**
    * 判断是否启动了api文档解析功能
    *
    * @access public
@@ -617,20 +630,5 @@ class Router extends Collector
     ) {
       throw new RouteNotFoundException($message);
     }
-  }
-
-  /**
-   * 获取路由文档
-   *
-   * @return array{count: int,routes: array} 路由数量和路由列表
-   * @throws RuntimeException 路由正在初始化
-   * @see ApiDocParseTool::generateGroup() 分组结构
-   * @see ApiDocParseTool::generateRoute() 路由结构
-   */
-  public function getApiDoc(): array
-  {
-    if (!$this->enableApiDoc) return ['count' => 0, 'routes' => []];
-    if (!isset($this->init)) throw new RuntimeException('路由正在初始化，请稍后再试');
-    return ApiDocParseTool::parse($this->getRoutes());
   }
 }
