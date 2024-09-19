@@ -25,27 +25,27 @@ use Viswoole\Core\Facade\Server;
 abstract class Collector
 {
   /**
-   * @var array{string:RouteMiss} miss路由404
+   * @var array{string:Miss} miss路由404
    */
   protected array $missRoutes = [];
 
   /**
-   * @var RouteItem[]|RouteGroup[] 路由列表
+   * @var Route[]|Group[] 路由列表
    */
   protected array $routes = [];
   /**
-   * @var RouteGroup|null 正在注册的路由组
+   * @var Group|null 正在注册的路由组
    */
-  protected ?RouteGroup $currentGroup = null;
+  protected ?Group $currentGroup = null;
 
   /**
    * 定义一个GET方式访问的路由
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function get(string|array $paths, string|array|callable $handler): RouteItem
+  public function get(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'GET');
   }
@@ -56,15 +56,15 @@ abstract class Collector
    * @param string|array $paths
    * @param string|array|callable $handler
    * @param string ...$method
-   * @return RouteItem
+   * @return Route
    */
   public function add(
     string|array          $paths,
     string|array|callable $handler,
     string                ...$method,
-  ): RouteItem
+  ): Route
   {
-    $route = new RouteItem(
+    $route = new Route(
       $paths,
       $handler,
       $this->currentGroup,
@@ -99,9 +99,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function post(string|array $paths, string|array|callable $handler): RouteItem
+  public function post(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'POST');
   }
@@ -111,9 +111,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function put(string|array $paths, string|array|callable $handler): RouteItem
+  public function put(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'PUT');
   }
@@ -123,9 +123,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function delete(string|array $paths, string|array|callable $handler): RouteItem
+  public function delete(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'DELETE');
   }
@@ -135,9 +135,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function head(string|array $paths, string|array|callable $handler): RouteItem
+  public function head(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'HEAD');
   }
@@ -147,9 +147,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function options(string|array $paths, string|array|callable $handler): RouteItem
+  public function options(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'OPTIONS');
   }
@@ -159,9 +159,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function patch(string|array $paths, string|array|callable $handler): RouteItem
+  public function patch(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, 'PATCH');
   }
@@ -171,9 +171,9 @@ abstract class Collector
    *
    * @param string|array $paths
    * @param string|array|callable $handler
-   * @return RouteItem
+   * @return Route
    */
-  public function any(string|array $paths, string|array|callable $handler): RouteItem
+  public function any(string|array $paths, string|array|callable $handler): Route
   {
     return $this->add($paths, $handler, '*');
   }
@@ -185,11 +185,11 @@ abstract class Collector
    * @param string|array $prefix 前缀
    * @param Closure $closure 闭包
    * @param string $id 非注解路由，系统无法生成唯一且不变的id，需手动指定id
-   * @return RouteGroup
+   * @return Group
    */
-  public function group(string|array $prefix, Closure $closure, string $id): RouteGroup
+  public function group(string|array $prefix, Closure $closure, string $id): Group
   {
-    $route = new RouteGroup($prefix, $closure, $this->currentGroup, id: $id);
+    $route = new Group($prefix, $closure, $this->currentGroup, id: $id);
     // 判断是否存在路由分组，如果存在则添加到当前分组
     if ($this->currentGroup === null) {
       $this->routes[] = $route;
@@ -213,7 +213,7 @@ abstract class Collector
   {
     if (!is_array($method)) $method = [$method];
     foreach ($method as $item) {
-      $this->missRoutes[$item] = new RouteMiss($handler);
+      $this->missRoutes[$item] = new Miss($handler);
     }
   }
 
