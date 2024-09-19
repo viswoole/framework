@@ -15,7 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer\Contract;
 
-use JsonSerializable;
 use RuntimeException;
 use Swoole\Http\Response as swooleResponse;
 
@@ -171,10 +170,10 @@ interface ResponseInterface
    * 任意格式的json响应
    *
    * @access public
-   * @param array|JsonSerializable $data
+   * @param mixed $data 任意可虚拟化的数据
    * @return ResponseInterface
    */
-  public function json(array|JsonSerializable $data): ResponseInterface;
+  public function json(mixed $data): ResponseInterface;
 
   /**
    * 检索所有消息头的值。
