@@ -13,7 +13,7 @@
 
 declare (strict_types=1);
 
-namespace Viswoole\Router\ApiDoc\Structure;
+namespace Viswoole\Router\ApiDoc;
 
 use Closure;
 use ReflectionAttribute;
@@ -23,69 +23,74 @@ use ReflectionMethod;
 use ReflectionParameter;
 use RuntimeException;
 use Viswoole\Router\ApiDoc\Annotation\Returned;
-use Viswoole\Router\ApiDoc\DocCommentTool;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BaseSourceInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BodyParamInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\FileParamInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\HeaderParamInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\QueryParamInterface;
+use Viswoole\Router\ApiDoc\Structure\ArrayTypeStructure;
+use Viswoole\Router\ApiDoc\Structure\FieldStructure;
+use Viswoole\Router\ApiDoc\Structure\Types;
+use Viswoole\Router\ApiDoc\Structure\TypeStructure;
 
 /**
- * 请求参数结构
+ * 请求参数与响应结构解析工具
  */
-class ApiStructure
+class ParamParseTool
 {
-  /**
-   * @var string 作者
-   */
-  public string $author;
-  /**
-   * @var string 更新时间
-   */
-  public string $date;
-  /**
-   * @var FieldStructure[] body请求参数
-   */
-  public array $body = [];
-  /**
-   * @var FieldStructure[] GET查询参数
-   */
-  public array $query = [];
-  /**
-   * @var FieldStructure[] 请求头参数
-   */
-  public array $header = [];
-  /**
-   * @var Returned[] 返回值列表
-   */
-  public array $returned = [];
-
   /**
    * 解析请求处理函数
    *
-   * @param callable|array $handle 请求处理函数
+   * @param callable|array $handler
+   * @return array{params:array{body:array<string,FieldStructure>, header:array<string,FieldStructure>, query:array<string,FieldStructure>}, returned:Returned[]}
    */
-  public function __construct(callable|array $handle)
+  public static function parse(callable|array $handler): array
   {
-    $reflector = $this->toReflector($handle);
+    $globalBody = config('router.api_doc.body', []);
+    $globalHeader = config('router.api_doc.header', []);
+    $globalQuery = config('router.api_doc.query', []);
+    $globalReturned = config('router.api_doc.returned', []);
+    $reflector = self::toReflector($handler);
     // 参数列表
     $parameters = $reflector->getParameters();
     // 文档注释
     $docComment = $reflector->getDocComment() ?: '';
-    // 作者
-    $this->author = DocCommentTool::extractAuthor($docComment);
-    // 更新时间
-    $this->date = DocCommentTool::extractDate($docComment);
     // 解析参数结构
     foreach ($parameters as $parameter) {
-      $this->parseParamField($parameter, $docComment);
+      $params = self::parseParamField($parameter, $docComment);
+      if (is_null($params)) continue;
+      foreach ($params as $source => $fields) {
+        switch ($source) {
+          case 'body':
+            $globalBody = array_merge($globalBody, $fields);
+            break;
+          case 'query':
+            $globalQuery = array_merge($globalQuery, $fields);
+            break;
+          case 'header':
+            $globalHeader = array_merge($globalHeader, $fields);
+            break;
+        }
+      }
     }
     // 获取返回值注解属性
     $returnedAttributes = $reflector->getAttributes(Returned::class);
     // 解析返回值
     foreach ($returnedAttributes as $item) {
-      $this->returned[] = $item->newInstance();
+      $globalReturned[] = $item->newInstance();
     }
+    // 排序
+    usort($globalReturned, function (Returned $a, Returned $b) {
+      return $b->sort <=> $a->sort;
+    });
+    return [
+      'params' => [
+        'body' => $globalBody,// body参数
+        'header' => $globalHeader,// header参数
+        'query' => $globalQuery, // query参数
+      ],
+      'returned' => $globalReturned // 返回值列表
+    ];
   }
 
   /**
@@ -94,7 +99,7 @@ class ApiStructure
    * @param array|callable $callable
    * @return ReflectionMethod|ReflectionFunction
    */
-  private function toReflector(array|callable $callable): ReflectionMethod|ReflectionFunction
+  private static function toReflector(array|callable $callable): ReflectionMethod|ReflectionFunction
   {
     try {
       if ($callable instanceof Closure) {
@@ -119,18 +124,18 @@ class ApiStructure
    *
    * @param ReflectionParameter $parameter
    * @param string $docComment
-   * @return void
+   * @return array{body:FieldStructure[], query:FieldStructure[], header:FieldStructure[]}|null
    */
-  private function parseParamField(
+  private static function parseParamField(
     ReflectionParameter $parameter,
     string              $docComment
-  ): void
+  ): ?array
   {
     $preInjects = $parameter->getAttributes(
       BaseSourceInterface::class, ReflectionAttribute::IS_INSTANCEOF
     );
     // 如果没有注解 则直接返回
-    if (empty($preInjects)) return;
+    if (empty($preInjects)) return null;
     // 参数名称
     $name = $parameter->getName();
     // 参数描述
@@ -141,25 +146,29 @@ class ApiStructure
     $default = $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null;
     // 参数类型
     $type = $parameter->getType();
+    $params = [];
     foreach ($preInjects as $inject) {
       $instance = $inject->newInstance();
       // 参数来源
-      $source = $this->parseParamSource($instance);
+      $source = self::parseParamSource($instance);
       if ($source === 'file') {
         $source = 'body';
         $typeString = (string)$type;
         $type = [];
         // 如果类型当中包含了数组，则视为要求上传多个文件
         if (str_contains($typeString, 'array')) {
-          $type[] = new ArrayTypeStructure(new BaseTypeStructure(Types::File));
+          $type[] = new ArrayTypeStructure(new TypeStructure(Types::File));
         }
         if (empty($type) || str_contains($typeString, 'File')) {
           // 否则视为上传单个文件
-          $type[] = new BaseTypeStructure(Types::File);
+          $type[] = new TypeStructure(Types::File);
         }
       }
-      $this->{$source}[] = new FieldStructure($name, $description, $allowNull, $default, $type);
+      $params[$source][$name] = new FieldStructure(
+        $name, $description, $allowNull, $default, $type
+      );
     }
+    return $params;
   }
 
   /**
@@ -168,7 +177,7 @@ class ApiStructure
    * @param BaseSourceInterface $instance
    * @return string
    */
-  private function parseParamSource(BaseSourceInterface $instance): string
+  private static function parseParamSource(BaseSourceInterface $instance): string
   {
     $sources = [
       'query' => QueryParamInterface::class,
