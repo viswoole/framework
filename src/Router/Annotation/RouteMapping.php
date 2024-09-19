@@ -30,7 +30,7 @@ class RouteMapping extends RouteAnnotation
   /**
    * 构建路由线路
    *
-   * @param array|string $paths 路径匹配前缀，默认为控制器类名
+   * @param array|string|null $paths 路径匹配前缀，默认为控制器类名
    * @param string|null $id id
    * @param string|null $parentId 父id，必须是分组路由id
    * @param string[]|string|null $method 路由方法，默认继承全局设定的方法
@@ -50,7 +50,7 @@ class RouteMapping extends RouteAnnotation
    * @param Status $status 接口状态，默认为Viswoole\Router\ApiDoc\Status::DEVELOPMENT 开发中
    */
   public function __construct(
-    array|string      $paths,
+    array|string      $paths = null,
     ?string           $id = null,
     ?string           $parentId = null,
     null|array|string $method = null,
