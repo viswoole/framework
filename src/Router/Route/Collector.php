@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\Route;
 
 use Closure;
+use InvalidArgumentException;
 use RuntimeException;
 use Viswoole\Core\Facade\Server;
 
@@ -229,6 +230,34 @@ abstract class Collector
     // 如果是是当前正在运行的服务，则加载路由
     if (strtolower($serverName) === strtolower(Server::getName())) {
       $closure();
+    }
+  }
+
+  /**
+   * 获取路由对象
+   *
+   * @param string $idOrCiteLink 路由id或完整引用链路
+   * @return Route|Group
+   */
+  public function getRoute(string $idOrCiteLink): Route|Group
+  {
+    if (str_contains($idOrCiteLink, '.')) {
+      $citeLink = explode('.', $idOrCiteLink);
+      $key = $citeLink[0];
+      $route = $this->routes[$key]
+        ?? throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
+      for ($i = 1; $i < count($citeLink); $i++) {
+        $key = $citeLink[$i];
+        if (!$route) throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
+        if (!$route instanceof Group) throw new InvalidArgumentException(
+          "路由链路引用错误{$idOrCiteLink}： {$key}必须是组路由|控制器注解路由"
+        );
+        $route = $route->getItem($key);
+      }
+      return $route;
+    } else {
+      return $this->routes[$idOrCiteLink]
+        ?? throw new InvalidArgumentException("路由不存在：$idOrCiteLink");
     }
   }
 }
