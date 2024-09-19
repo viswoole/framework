@@ -64,6 +64,28 @@ class Route extends BaseRoute
   }
 
   /**
+   * 获取所有标签
+   *
+   * @return array 标签数组
+   */
+  public function getTags(): array
+  {
+    return $this->tags;
+  }
+
+  /**
+   * 设置所有标签
+   *
+   * @param array $tag 标签数组
+   * @return $this
+   */
+  public function setTags(string ...$tag): static
+  {
+    $this->tags = $tag;
+    return $this;
+  }
+
+  /**
    * 获取创建时间
    *
    * @return string 创建时间
@@ -108,28 +130,6 @@ class Route extends BaseRoute
   }
 
   /**
-   * 获取状态
-   *
-   * @return Status 状态
-   */
-  public function getStatus(): Status
-  {
-    return $this->status;
-  }
-
-  /**
-   * 设置状态
-   *
-   * @param Status $status 状态
-   * @return $this
-   */
-  public function setStatus(Status $status): static
-  {
-    $this->status = $status;
-    return $this;
-  }
-
-  /**
    * 获取作者
    *
    * @return string 作者
@@ -152,24 +152,24 @@ class Route extends BaseRoute
   }
 
   /**
-   * 获取所有标签
+   * 获取状态
    *
-   * @return array 标签数组
+   * @return Status 状态
    */
-  public function getTags(): array
+  public function getStatus(): Status
   {
-    return $this->tags;
+    return $this->status;
   }
 
   /**
-   * 设置所有标签
+   * 设置状态
    *
-   * @param array $tag 标签数组
+   * @param Status $status 状态
    * @return $this
    */
-  public function setTags(string ...$tag): static
+  public function setStatus(Status $status): static
   {
-    $this->tags = $tag;
+    $this->status = $status;
     return $this;
   }
 }
