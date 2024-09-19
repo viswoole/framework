@@ -26,7 +26,7 @@ use ReflectionUnionType;
 class FieldStructure
 {
   /**
-   * @var array<string, BaseTypeStructure> 参数类型列表
+   * @var array<string, TypeStructure> 参数类型列表
    */
   public array $types = [];
 
@@ -37,32 +37,34 @@ class FieldStructure
    * @param string $description 描述
    * @param bool $allowNull 是否允许为null
    * @param mixed $default 默认值
-   * @param ReflectionType|BaseTypeStructure|array|Types|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组或基本类型
+   * @param ReflectionType|TypeStructure|array|Types|null $type 参数类型,支持传入反射类型、类型结构、类型结构数组或基本类型
+   * @param array $dependMap [类完全名称=>类名] 引用对象依赖映射
    */
   public function __construct(
-    public string                                     $name,
-    public string                                     $description,
-    public bool                                       $allowNull,
-    public mixed                                      $default,
-    null|ReflectionType|BaseTypeStructure|array|Types $type
+    public string                                 $name,
+    public string                                 $description,
+    public bool                                   $allowNull,
+    public mixed                                  $default,
+    null|ReflectionType|TypeStructure|array|Types $type,
+    array                                         &$dependMap = [],
   )
   {
     if ($type instanceof Types) {
-      $type = new BaseTypeStructure($type);
+      $type = new TypeStructure($type);
       $this->types[$type->getName()] = $type;
-    } elseif ($type instanceof BaseTypeStructure) {
+    } elseif ($type instanceof TypeStructure) {
       $this->types[$type->getName()] = $type;
     } elseif (is_array($type)) {
       foreach ($type as $typeItem) {
-        if ($typeItem instanceof BaseTypeStructure) {
+        if ($typeItem instanceof TypeStructure) {
           $this->types[$typeItem->getName()] = $typeItem;
         } elseif ($typeItem instanceof Types) {
-          $typeItem = new BaseTypeStructure($typeItem);
+          $typeItem = new TypeStructure($typeItem);
           $this->types[$typeItem->getName()] = $typeItem;
         }
       }
     } else {
-      $this->types = $this->parseTypes($type);
+      $this->types = $this->parseTypes($type, $dependMap);
     }
   }
 
@@ -70,29 +72,31 @@ class FieldStructure
    * 解析类型
    *
    * @param ReflectionIntersectionType|ReflectionNamedType|ReflectionUnionType|null $type
-   * @return BaseTypeStructure[]
+   * @param array<string,string> $dependMap 对象依赖映射[完整命名=>类型名称]
+   * @return TypeStructure[]
    */
   private function parseTypes(
-    null|ReflectionIntersectionType|ReflectionNamedType|ReflectionUnionType $type
+    null|ReflectionIntersectionType|ReflectionNamedType|ReflectionUnionType $type,
+    array                                                                   &$dependMap,
   ): array
   {
     if (is_null($type)) {
-      return ['mixed' => new BaseTypeStructure()];
+      return ['mixed' => new TypeStructure()];
     }
     if ($type instanceof ReflectionIntersectionType) {
-      $types = [new BaseTypeStructure(Types::Object)];
+      $types = [new TypeStructure(Types::Object)];
     } elseif ($type instanceof ReflectionUnionType) {
       $types = [];
       foreach ($type->getTypes() as $typeItem) {
         if ($typeItem instanceof ReflectionIntersectionType) {
-          $type = new BaseTypeStructure(Types::Object);
+          $type = new TypeStructure(Types::Object);
         } else {
-          $type = $this->parseNamedType($typeItem);
+          $type = $this->parseNamedType($typeItem, $dependMap);
         }
         $types[$type->name] = $type;
       }
     } else {
-      $type = $this->parseNamedType($type);
+      $type = $this->parseNamedType($type, $dependMap);
       $types[$type->name] = $type;
     }
     return $types;
@@ -102,9 +106,13 @@ class FieldStructure
    * 解析命名类型
    *
    * @param ReflectionNamedType $type
-   * @return BaseTypeStructure
+   * @param array $dependMap
+   * @return TypeStructure
    */
-  private function parseNamedType(ReflectionNamedType $type): BaseTypeStructure
+  private function parseNamedType(
+    ReflectionNamedType $type,
+    array               &$dependMap,
+  ): TypeStructure
   {
     $isBuiltin = $type->isBuiltin();
     $name = $type->getName();
@@ -113,16 +121,21 @@ class FieldStructure
       if (enum_exists($name)) {
         return new EnumStructure($name);
       } else {
-        return new ObjectStructure($name);
+        // 引用对象
+        if (array_key_exists($name, $dependMap)) {
+          return new TypeStructure(Types::Recursion, $dependMap[$name]);
+        } else {
+          return new ObjectStructure($name, dependMap: $dependMap);
+        }
       }
     } else {
       return match ($name) {
-        'bool', 'false', 'true' => new BaseTypeStructure(Types::Bool),
-        'float' => new BaseTypeStructure(Types::Float),
-        'int' => new BaseTypeStructure(Types::Int),
-        'null' => new BaseTypeStructure(Types::Null),
-        'string' => new BaseTypeStructure(Types::String),
-        default => new BaseTypeStructure(Types::Mixed),
+        'bool', 'false', 'true' => new TypeStructure(Types::Bool),
+        'float' => new TypeStructure(Types::Float),
+        'int' => new TypeStructure(Types::Int),
+        'null' => new TypeStructure(Types::Null),
+        'string' => new TypeStructure(Types::String),
+        default => new TypeStructure(Types::Mixed),
       };
     }
   }
