@@ -119,7 +119,23 @@ class Action
    */
   public static function getStatus(string $server_name): bool
   {
-    return is_int(self::getServerPid($server_name));
+    return self::checkPidStatus(self::getServerPid($server_name));
+  }
+
+  /**
+   * 判断pid是否正在运行
+   *
+   * @param int $pid
+   * @return bool
+   */
+  private static function checkPidStatus(int|false|string $pid): bool
+  {
+    if (false === $pid) return false;
+    if (is_numeric($pid)) {
+      return Process::kill((int)$pid, 0);
+    } else {
+      return false;
+    }
   }
 
   /**
@@ -136,22 +152,29 @@ class Action
       $files = glob($pid_dir . '/*.pid');
       foreach ($files as $file) {
         $pid = file_get_contents($file);
-        $status = Process::kill((int)$pid, SIGTERM);
-        $server_name = basename($file, '.pid');
-        if (!$status) {
-          Output::error("向{$server_name}服务进程($pid)发送SIGTERM信号失败", 0);
+        if (self::checkPidStatus($pid)) {
+          $status = Process::kill((int)$pid, SIGTERM);
+          $server_name = basename($file, '.pid');
+          if (!$status) {
+            Output::error("向{$server_name}服务主进程($pid)发送SIGTERM信号失败", 0);
+          } else {
+            Output::success("向{$server_name}服务主进程($pid)发送SIGTERM信号成功", 0);
+          }
         } else {
-          Output::success("向{$server_name}服务进程($pid)发送SIGTERM信号成功", 0);
+          // 删除掉无效的pid文件
+          unlink($file);
         }
       }
     } else {
       $pid = self::getServerPid($server_name);
-      if ($pid) {
+      if (self::checkPidStatus($pid)) {
+        // 发送SIGINT信号
+        Process::kill($pid, SIGINT);
         $status = Process::kill($pid, SIGTERM);
         if (!$status) {
-          Output::error("向{$server_name}服务进程($pid)发送SIGTERM信号失败", 0);
+          Output::error("向{$server_name}服务主进程($pid)发送SIGTERM信号失败", 0);
         } else {
-          Output::success("向{$server_name}服务进程($pid)发送SIGTERM信号成功", 0);
+          Output::success("向{$server_name}服务主进程($pid)发送SIGTERM信号成功", 0);
         }
       } else {
         Output::warning("{$server_name}服务未运行", 0);
