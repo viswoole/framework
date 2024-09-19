@@ -20,7 +20,7 @@ use Viswoole\Core\App;
 /**
  * 路由未匹配处理
  */
-readonly class RouteMiss
+readonly class Miss
 {
   /**
    * @param Closure $handler
