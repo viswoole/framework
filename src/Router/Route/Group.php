@@ -20,11 +20,11 @@ use Closure;
 /**
  * 路由组
  */
-class RouteGroup extends BaseRoute
+class Group extends BaseRoute
 {
   protected string $type = 'group';
   /**
-   * @var RouteItem[]|static[] 分组、域名路由存储items
+   * @var Route[]|static[] 分组、域名路由存储items
    */
   private array $children = [];
 
@@ -32,9 +32,9 @@ class RouteGroup extends BaseRoute
    * 获取子路由
    *
    * @param string|null $id 路由id,不传时返回所有子路由
-   * @return array|RouteItem|RouteGroup|null
+   * @return array|Route|Group|null
    */
-  public function getItem(string $id = null): null|array|RouteItem|RouteGroup
+  public function getItem(string $id = null): null|array|Route|Group
   {
     if ($this->handler instanceof Closure) {
       call_user_func($this->handler);
