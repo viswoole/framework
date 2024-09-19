@@ -18,14 +18,14 @@ namespace Viswoole\Router\ApiDoc\Structure;
 /**
  * 结构声明基类
  */
-class BaseTypeStructure
+class TypeStructure
 {
   /**
    * @var string 结构名称
    */
   public string $name;
   /**
-   * @var BaseTypeStructure[]|string[] 类型额外属性列表
+   * @var TypeStructure[]|string[] 类型额外属性列表
    */
   public array $properties = [];
   /**
@@ -37,7 +37,10 @@ class BaseTypeStructure
    * @param Types $type 基本类型
    * @param string|null $name 类型名称
    */
-  public function __construct(Types $type = Types::Mixed, string $name = null)
+  public function __construct(
+    Types  $type = Types::Mixed,
+    string $name = null
+  )
   {
     $type = strtolower($type->name);
     $this->type = $type;
