@@ -18,7 +18,7 @@ namespace Viswoole\Router\ApiDoc\Structure;
 /**
  * 类结构声明
  */
-abstract class ClassTypeStructure extends BaseTypeStructure
+abstract class ClassTypeStructure extends TypeStructure
 {
   /**
    * @var string 命名空间
