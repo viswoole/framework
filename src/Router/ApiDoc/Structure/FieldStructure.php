@@ -42,10 +42,10 @@ class FieldStructure
    */
   public function __construct(
     public string                                 $name,
-    public string                                 $description,
-    public bool                                   $allowNull,
-    public mixed                                  $default,
-    null|ReflectionType|TypeStructure|array|Types $type,
+    public string                                 $description = '',
+    public bool                                   $allowNull = false,
+    public mixed                                  $default = null,
+    null|ReflectionType|TypeStructure|array|Types $type = Types::Mixed,
     array                                         &$dependMap = [],
   )
   {
