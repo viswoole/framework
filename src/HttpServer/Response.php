@@ -268,7 +268,11 @@ class Response implements ResponseInterface
   #[Override] public function json(mixed $data): ResponseInterface
   {
     $this->setContentType('application/json');
-    $this->setContent(json_encode($data, $this->jsonFlags));
+    $data = json_encode($data, $this->jsonFlags);
+    if (json_last_error() !== JSON_ERROR_NONE) {
+      throw new RuntimeException('JSON响应数据编码失败，请检查数据是否正确。');
+    }
+    $this->setContent($data);
     return $this;
   }
 
