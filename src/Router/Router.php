@@ -487,13 +487,15 @@ class Router extends Collector
       }
     }
     try {
-      if (is_null($route)) throw new RouteNotFoundException('路由未定义');
+      if (is_null($route)) throw new RouteNotFoundException('routing resource not found');
       // 判断请求方法
-      $this->checkOption($route->getMethod(), strtoupper($method));
+      $this->checkOption(
+        $route->getMethod(), strtoupper($method), "request method '$method' is not allowed"
+      );
       // 判断域名
-      $this->checkOption($route->getDomain(), $domain);
+      $this->checkOption($route->getDomain(), $domain, "request domain '$domain' is not allowed");
       // 判断伪静态后缀
-      $this->checkOption($route->getSuffix(), $ext);
+      $this->checkOption($route->getSuffix(), $ext, "request suffix '$ext' is not allowed");
       // 合并参数
       if (!empty($pattern)) {
         if ($callback) $callback($pattern);
@@ -523,17 +525,19 @@ class Router extends Collector
    *
    * @param array $option
    * @param string $value
+   * @param string $message
    */
   private function checkOption(
     array  $option,
-    string $value
+    string $value,
+    string $message
   ): void
   {
     if (
       !in_array('*', $option)
       && !in_array($value, $option)
     ) {
-      throw new RouteNotFoundException('路由匹配失败');
+      throw new RouteNotFoundException($message);
     }
   }
 }
