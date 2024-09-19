@@ -45,16 +45,21 @@ class Action
     if ($pid) {
       if ($forceStart) {
         $i = 0;
-        while ($i++ <= 5) {
+        while ($i++ < 5) {
           $pid = self::getServerPid($server_name);
           if (!$pid) {
             App::factory()->make('server', [$server_name])->start($daemonize);
-          } else {
+          } elseif (Process::kill($pid, 0)) {
+            Output::warning("{$server_name}服务正在运行中，正在尝试关闭中，请稍后。$i", 0);
             Process::kill($pid, SIGTERM);
             sleep(1);
+          } else {
+            App::factory()->make('server', [$server_name])->start($daemonize);
           }
         }
-        throw new ServerException("{$server_name}服务强制重启失败。");
+        throw new ServerException(
+          "{$server_name}服务强制重启失败，无法kill {$pid}进程，请手动kill进程。"
+        );
       } else {
         throw new ServerException("{$server_name}服务已经在运行中，请勿重复启动。");
       }
