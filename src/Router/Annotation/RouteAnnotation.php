@@ -15,8 +15,8 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\Annotation;
 
-use Viswoole\Router\Route\RouteGroup;
-use Viswoole\Router\Route\RouteItem;
+use Viswoole\Router\Route\Group;
+use Viswoole\Router\Route\Route;
 
 /**
  * 路由注解基类
@@ -70,18 +70,18 @@ abstract class RouteAnnotation
    * 创建路由实例
    *
    * @param string|array|callable $handler
-   * @param RouteGroup|null $routeGroup 路由组实例
-   * @return RouteItem|RouteGroup
+   * @param Group|null $routeGroup 路由组实例
+   * @return Route|Group
    */
   public function create(
     string|array|callable $handler,
-    RouteGroup            $routeGroup = null
-  ): RouteItem|RouteGroup
+    Group                 $routeGroup = null
+  ): Route|Group
   {
     if ($this->type === 'group') {
-      $route = new RouteGroup($this->prefix, $handler, $routeGroup, id: $this->id);
+      $route = new Group($this->prefix, $handler, $routeGroup, id: $this->id);
     } else {
-      $route = new RouteItem($this->prefix, $handler, $routeGroup, id: $this->id);
+      $route = new Route($this->prefix, $handler, $routeGroup, id: $this->id);
     }
     if (!empty($this->parentId)) $route->setParentId($this->parentId);
     if (!empty($this->method)) $route->setMethod($this->method);
