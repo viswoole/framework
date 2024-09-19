@@ -146,6 +146,13 @@ class File extends Drive
       $logString = $this->json
         ? json_encode($logRecord, $this->json_flags)
         : LogManager::formatLogDataToString($this->logFormat, $logRecord);
+      if (false === $logString && json_last_error() !== JSON_ERROR_NONE) {
+        $msg = '无法序列化context：' . json_last_error_msg();
+        // 抛出异常
+        trigger_error($msg, E_USER_WARNING);
+        $logRecord['context'] = $msg;
+        $logString = json_encode($logRecord, $this->json_flags);
+      }
       $logDir = $this->getLogDir($level);
       // 获取日志文件夹下所有日志文件
       $logFiles = glob("$logDir/*.log");
