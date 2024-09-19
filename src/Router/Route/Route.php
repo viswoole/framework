@@ -21,7 +21,7 @@ use Viswoole\Router\ApiDoc\Status;
 /**
  * 路由项
  */
-class RouteItem extends BaseRoute
+class Route extends BaseRoute
 {
   protected string $type = 'item';
   /**
