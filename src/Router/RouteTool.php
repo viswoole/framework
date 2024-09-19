@@ -13,7 +13,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
-use Viswoole\Router\Route\RouteGroup;
+use Viswoole\Router\Route\Group;
 
 /**
  * 文档解析工具
@@ -29,7 +29,7 @@ class RouteTool
    *
    * @param string $controller 控制器类完全名称，包含命名空间
    * @param string $hash 类文件哈希值，如果不匹配，则返回null
-   * @return null|array{server: string|null, route: RouteGroup}
+   * @return null|array{server: string|null, route: Group}
    */
   public static function getCache(string $controller, string $hash): mixed
   {
@@ -111,14 +111,14 @@ class RouteTool
    * @param string $controller 控制器类完全名称，包含命名空间
    * @param string $hash 类文件哈希值
    * @param string|null $server 服务名称
-   * @param RouteGroup $groupRoute 路由组
+   * @param Group $groupRoute 路由组
    * @return void
    */
   public static function setCache(
-    string     $controller,
-    string     $hash,
-    ?string    $server,
-    RouteGroup $groupRoute
+    string  $controller,
+    string  $hash,
+    ?string $server,
+    Group   $groupRoute
   ): void
   {
     $file = self::generateCacheFileName($controller);
