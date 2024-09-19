@@ -35,12 +35,13 @@ class BaseTypeStructure
 
   /**
    * @param Types $type 基本类型
+   * @param string|null $name 类型名称
    */
-  public function __construct(Types $type = Types::Mixed)
+  public function __construct(Types $type = Types::Mixed, string $name = null)
   {
     $type = strtolower($type->name);
     $this->type = $type;
-    $this->name = $type;
+    $this->name = $name ?? $this->type;
   }
 
   /**
