@@ -172,4 +172,24 @@ class RouteTool
   {
     return preg_match('/\{[^}]+\??}/', $str) === 1;
   }
+
+  /**
+   * 获取控制器完全限定名称
+   *
+   * @param string $controller
+   * @param string $rootPath
+   * @return array{0:string,1:string} [0=>完全限定名称,1=>类名称]
+   */
+  public static function getNamespace(string $controller, string $rootPath): array
+  {
+    // 获得类名称
+    $className = basename($controller, '.php');
+    // 获得命名空间
+    $classNamespace = str_replace($rootPath, '', $controller);
+    $classNamespace = preg_replace('#^app/#', 'App/', dirname($classNamespace));
+    $classNamespace = str_replace('/', '\\', $classNamespace);
+    // 类完全限定名称Class::class
+    return [$classNamespace . '\\' . $className, $className];
+  }
+
 }
