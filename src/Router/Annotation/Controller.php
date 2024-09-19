@@ -20,7 +20,7 @@ use Attribute;
  * 路由分组，Controller注解
  */
 #[Attribute(Attribute::TARGET_CLASS)]
-class RouteController extends RouteAnnotation
+class Controller extends RouteAnnotation
 {
   protected string $type = 'group';
 }
