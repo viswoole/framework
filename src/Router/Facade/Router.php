@@ -40,6 +40,8 @@ use Viswoole\Router\Route\Route;
  * @method static Route|Group getRoute(string $idOrCiteLink) 获取路由分组或路由对象，需传入路由id或完整引用链路
  * @method static array getRoutes() 获取所有路由列表
  * @method static bool isEnableApiDoc() 判断是否启用API文档解析功能
+ * @method static array getApiList() 获取api列表，包含分组、路由
+ * @method static array getApiDetail(string $citeLink) 通过完整引用链路获取api详情，返回路由请求参数、响应参数
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Router\\Facade\\Router
  */
