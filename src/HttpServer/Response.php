@@ -17,7 +17,6 @@ namespace Viswoole\HttpServer;
 
 use BadMethodCallException;
 use InvalidArgumentException;
-use JsonSerializable;
 use Override;
 use RuntimeException;
 use Swoole\Http\Response as swooleResponse;
@@ -266,7 +265,7 @@ class Response implements ResponseInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function json(array|JsonSerializable $data): ResponseInterface
+  #[Override] public function json(mixed $data): ResponseInterface
   {
     $this->setContentType('application/json');
     $this->setContent(json_encode($data, $this->jsonFlags));
