@@ -163,7 +163,8 @@ class LogManager
       foreach ($sortedData as $key => $value) {
         $value = is_string($value)
           ? $value
-          : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+          : (json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            ?: '无法序列化context：' . json_last_error_msg());
         $newStr = str_replace("%$key", (string)$value, $newStr);
       }
     } else {
