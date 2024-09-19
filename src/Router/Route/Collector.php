@@ -48,7 +48,7 @@ abstract class Collector
    */
   public function get(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'GET');
+    return $this->addRoute($paths, $handler, 'GET');
   }
 
   /**
@@ -59,7 +59,7 @@ abstract class Collector
    * @param string ...$method
    * @return Route
    */
-  public function add(
+  public function addRoute(
     string|array          $paths,
     string|array|callable $handler,
     string                ...$method,
@@ -104,7 +104,7 @@ abstract class Collector
    */
   public function post(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'POST');
+    return $this->addRoute($paths, $handler, 'POST');
   }
 
   /**
@@ -145,7 +145,7 @@ abstract class Collector
    */
   public function put(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'PUT');
+    return $this->addRoute($paths, $handler, 'PUT');
   }
 
   /**
@@ -157,7 +157,7 @@ abstract class Collector
    */
   public function delete(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'DELETE');
+    return $this->addRoute($paths, $handler, 'DELETE');
   }
 
   /**
@@ -170,7 +170,7 @@ abstract class Collector
    */
   public function head(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'HEAD');
+    return $this->addRoute($paths, $handler, 'HEAD');
   }
 
   /**
@@ -182,7 +182,7 @@ abstract class Collector
    */
   public function options(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'OPTIONS');
+    return $this->addRoute($paths, $handler, 'OPTIONS');
   }
 
   /**
@@ -195,7 +195,7 @@ abstract class Collector
    */
   public function patch(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, 'PATCH');
+    return $this->addRoute($paths, $handler, 'PATCH');
   }
 
   /**
@@ -207,7 +207,7 @@ abstract class Collector
    */
   public function any(string|array $paths, string|array|callable $handler): Route
   {
-    return $this->add($paths, $handler, '*');
+    return $this->addRoute($paths, $handler, '*');
   }
 
   /**
