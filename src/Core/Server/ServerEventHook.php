@@ -52,7 +52,7 @@ class ServerEventHook
   }
 
   /**
-   * 获取需要hook的事件列表，用于注册到swoole服务中(该方法在由Server自动调用)
+   * 获取需要hook的事件列表，用于注册到swoole服务中(该方法由Server自动调用)
    *
    * @return array<string,callable> 事件列表
    */
