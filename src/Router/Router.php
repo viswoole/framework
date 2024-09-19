@@ -15,7 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
-use InvalidArgumentException;
 use ReflectionAttribute;
 use ReflectionClass;
 use ReflectionMethod;
@@ -307,35 +306,6 @@ class Router extends Collector
         }
       }
       $this->register($item);
-    }
-  }
-
-  /**
-   * 获取路由对象
-   *
-   * @param string $idOrCiteLink
-   * @return BaseRoute
-   * @throws InvalidArgumentException
-   */
-  private function getRoute(string $idOrCiteLink): BaseRoute
-  {
-    if (str_contains($idOrCiteLink, '.')) {
-      $citeLink = explode('.', $idOrCiteLink);
-      $key = $citeLink[0];
-      $route = $this->routes[$key]
-        ?? throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
-      for ($i = 1; $i < count($citeLink); $i++) {
-        $key = $citeLink[$i];
-        if (!$route) throw new InvalidArgumentException("路由链路引用错误{$idOrCiteLink}： $key");
-        if (!$route instanceof Group) throw new InvalidArgumentException(
-          "路由链路引用错误{$idOrCiteLink}： {$key}必须是组路由|控制器注解路由"
-        );
-        $route = $route->getItem($key);
-      }
-      return $route;
-    } else {
-      return $this->routes[$idOrCiteLink]
-        ?? throw new InvalidArgumentException("路由不存在：$idOrCiteLink");
     }
   }
 
