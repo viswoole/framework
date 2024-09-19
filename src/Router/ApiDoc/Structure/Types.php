@@ -29,5 +29,6 @@ enum Types
   case File;
   case Array;
   case Object;
+  case Recursion;
   case Enum;
 }
