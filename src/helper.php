@@ -209,3 +209,16 @@ if (!function_exists('invoke')) {
     return App::factory()->invoke($callable, $params);
   }
 }
+if (!function_exists('bind')) {
+  /**
+   * 绑定接口或实现到容器
+   *
+   * @param string $abstract 标识或接口
+   * @param object|string $concrete 实例或类名
+   * @return void
+   */
+  function bind(string $abstract, object|string $concrete): void
+  {
+    App::factory()->bind($abstract, $concrete);
+  }
+}
