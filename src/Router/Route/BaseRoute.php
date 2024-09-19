@@ -106,10 +106,10 @@ abstract class BaseRoute
     $this->paths = $paths;
     // 路由正则
     $this->patterns = $pattern;
-    // 处理函数
-    $this->handler = $this->verifyHandler($handler);
     // 生成路由id
     $this->id = $id ?? $this->generateId();
+    // 处理函数
+    $this->handler = $this->verifyHandler($handler);
   }
 
   /**
@@ -198,6 +198,17 @@ abstract class BaseRoute
   }
 
   /**
+   * 生成唯一id
+   *
+   * @return string
+   */
+  private function generateId(): string
+  {
+    $id = implode('&', $this->paths);
+    return RouteTool::generateHashId($id);
+  }
+
+  /**
    * 验证路由处理程序
    *
    * @param callable|string|array $handler
@@ -213,17 +224,6 @@ abstract class BaseRoute
     }
     // [类=>方法] | 闭包
     return $handler;
-  }
-
-  /**
-   * 生成唯一id
-   *
-   * @return string
-   */
-  private function generateId(): string
-  {
-    $id = implode('&', $this->paths);
-    return RouteTool::generateHashId($id);
   }
 
   /**
