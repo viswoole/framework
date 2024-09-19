@@ -92,15 +92,18 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    *   // 这里可以对UserService对象进行操作
    * })
    * ```
+   *
    * @access public
    * @param string $abstract 类名,可传入*代表所有
    * @param Closure $callback 事件回调
-   * @return void
+   * @return string 返回钩子唯一哈希标识
    */
-  public function addHook(string $abstract, Closure $callback): void
+  public function addHook(string $abstract, Closure $callback): string
   {
     $key = $abstract;
-    $this->invokeCallback[$key][] = $callback;
+    $id = md5($abstract . spl_object_id($callback));
+    $this->invokeCallback[$key][$id] = $callback;
+    return $id;
   }
 
   /**
@@ -108,17 +111,16 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    *
    * @access public
    * @param string $abstract 类标识或类名
-   * @param Closure|null $callback 回调函数
+   * @param string|null $id
    * @return void
    */
-  public function removeHook(string $abstract, Closure $callback = null): void
+  public function removeHook(string $abstract, string $id = null): void
   {
     if (isset($this->invokeCallback[$abstract])) {
-      if (is_null($callback)) {
+      if (is_null($id)) {
         unset($this->invokeCallback[$abstract]);
       } else {
-        $index = array_search($callback, $this->invokeCallback[$abstract]);
-        if ($index !== false) unset($this->invokeCallback[$abstract][$index]);
+        unset($this->invokeCallback[$abstract][$id]);
       }
     }
   }
@@ -584,13 +586,13 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    *
    * Example:
    * ```
-   *  $container->bind(ExampleInterface::class, ExampleClass::class);
+   *  $app->bind(ExampleInterface::class, ExampleClass::class);
    * ```
    * @param string $abstract 接口|类名
-   * @param string|object|null $concrete 实现类|实例|闭包
+   * @param string|object $concrete 实现类|实例|闭包
    * @return void
    */
-  public function bind(string $abstract, string|object $concrete = null): void
+  public function bind(string $abstract, string|object $concrete): void
   {
     if (is_string($concrete) && !class_exists($concrete)) {
       throw new TypeError(
