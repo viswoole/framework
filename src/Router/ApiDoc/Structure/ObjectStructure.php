@@ -52,8 +52,13 @@ class ObjectStructure extends ClassTypeStructure
       }
       $this->description = DocCommentTool::extractDocTitle($reflector->getDocComment() ?: '');
       $this->namespace = $reflector->getNamespaceName();
-      $this->name = $reflector->getShortName();
-      $dependMap[$reflector->getName()] = $this->name;
+      $name = $reflector->getShortName();
+      // 如果存在同名对象，则使用全类名作为名称
+      if (in_array($name, array_values($dependMap))) {
+        $name = str_replace('\\', '.', $reflector->getName());
+      }
+      $this->name = $name;
+      $dependMap[$reflector->getName()] = $name;
       if (!$parseProperties) {
         // ReflectionParameter[] 获取构造函数参数
         $parameters = $reflector->getConstructor()?->getParameters();
