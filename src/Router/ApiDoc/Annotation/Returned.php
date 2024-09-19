@@ -20,10 +20,10 @@ use Closure;
 use UnitEnum;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Router\ApiDoc\Structure\ArrayTypeStructure;
-use Viswoole\Router\ApiDoc\Structure\BaseTypeStructure;
 use Viswoole\Router\ApiDoc\Structure\FieldStructure;
 use Viswoole\Router\ApiDoc\Structure\ObjectStructure;
 use Viswoole\Router\ApiDoc\Structure\Types;
+use Viswoole\Router\ApiDoc\Structure\TypeStructure;
 
 /**
  * 返回值注解
@@ -46,9 +46,9 @@ class Returned
    */
   public array|string $data;
   /**
-   * @var BaseTypeStructure data结构
+   * @var TypeStructure data结构
    */
-  public BaseTypeStructure $structure;
+  public TypeStructure $structure;
 
   /**
    * @param string $title 标题
@@ -76,7 +76,7 @@ class Returned
       }
     } else {
       $this->data = $data;
-      $this->structure = new BaseTypeStructure(Types::String);
+      $this->structure = new TypeStructure(Types::String);
     }
   }
 
@@ -84,7 +84,7 @@ class Returned
    * 解析值类型
    *
    * @param mixed $value
-   * @return array{0:mixed,1:BaseTypeStructure}
+   * @return array{0:mixed,1:TypeStructure}
    */
   private function parseValueType(mixed $value): array
   {
@@ -98,12 +98,12 @@ class Returned
     $type = gettype($value);
     // 内置类型
     if (array_key_exists($type, $builtin)) {
-      return [$value, new BaseTypeStructure($builtin[$type])];
+      return [$value, new TypeStructure($builtin[$type])];
     }
     switch ($type) {
       case 'array':
         if (empty($value)) {
-          return [$value, new ArrayTypeStructure(new BaseTypeStructure(Types::Mixed))];
+          return [$value, new ArrayTypeStructure(new TypeStructure(Types::Mixed))];
         }
         if (Arr::isIndexArray($value)) {
           $items = [];
@@ -122,15 +122,15 @@ class Returned
         }
       case 'object':
         if ($value instanceof Closure) {
-          return ['Closure', new BaseTypeStructure(Types::Mixed)];
+          return ['Closure', new TypeStructure(Types::Mixed)];
         }
         if ($value instanceof UnitEnum) {
-          return [$value->name, new BaseTypeStructure(Types::String)];
+          return [$value->name, new TypeStructure(Types::String)];
         }
-        return [$value, new ObjectStructure($value, true)];
+        return [$value, new ObjectStructure($value, parseProperties: true)];
       default:
         // 未知类型 或 资源类型
-        return ['unknown', new BaseTypeStructure(Types::Mixed)];
+        return ['unknown', new TypeStructure(Types::Mixed)];
     }
   }
 
