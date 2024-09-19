@@ -16,8 +16,8 @@ namespace Viswoole\Router\Annotation;
 
 use Attribute;
 use Viswoole\Router\ApiDoc\Status;
-use Viswoole\Router\Route\RouteGroup;
-use Viswoole\Router\Route\RouteItem;
+use Viswoole\Router\Route\Group;
+use Viswoole\Router\Route\Route;
 
 /**
  * 路由线路
@@ -90,7 +90,7 @@ class RouteMapping extends RouteAnnotation
   /**
    * @inheritDoc
    */
-  public function create(string|array|callable $handler, RouteGroup $routeGroup = null): RouteItem
+  public function create(string|array|callable $handler, Group $routeGroup = null): Route
   {
     $route = parent::create($handler, $routeGroup);
     $route->setAuthor($this->author);
