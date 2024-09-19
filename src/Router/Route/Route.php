@@ -16,7 +16,11 @@ declare (strict_types=1);
 namespace Viswoole\Router\Route;
 
 use InvalidArgumentException;
+use Viswoole\Router\ApiDoc\Annotation\Returned;
+use Viswoole\Router\ApiDoc\ParamParseTool;
 use Viswoole\Router\ApiDoc\Status;
+use Viswoole\Router\ApiDoc\Structure\FieldStructure;
+use Viswoole\Router\Facade\Router;
 
 /**
  * 路由项
@@ -43,6 +47,14 @@ class Route extends BaseRoute
    * @var string 更新时间
    */
   private string $updatedAt = '';
+  /**
+   * @var array{body:array<string,FieldStructure>, header:array<string,FieldStructure>, query:array<string,FieldStructure>} 请求参数结构
+   */
+  private array $params = [];
+  /**
+   * @var Returned[] 响应结构
+   */
+  private array $returned = [];
 
   /**
    * @param string|array $paths 路由访问路径
@@ -61,6 +73,31 @@ class Route extends BaseRoute
       throw new InvalidArgumentException('route item paths is empty');
     }
     parent::__construct($paths, $handler, $parentOption, $id);
+    if (Router::isEnableApiDoc()) {
+      $result = ParamParseTool::parse($this->handler);
+      $this->params = $result['params'];
+      $this->returned = $result['returned'];
+    }
+  }
+
+  /**
+   * 参数结构
+   *
+   * @return array{body:array<string,FieldStructure>, header:array<string,FieldStructure>, query:array<string,FieldStructure>}
+   */
+  public function getParams(): array
+  {
+    return $this->params;
+  }
+
+  /**
+   * 响应组件
+   *
+   * @return Returned[]
+   */
+  public function getReturned(): array
+  {
+    return $this->returned;
   }
 
   /**
