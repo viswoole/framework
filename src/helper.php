@@ -222,3 +222,27 @@ if (!function_exists('bind')) {
     App::factory()->bind($abstract, $concrete);
   }
 }
+if (!function_exists('make')) {
+  /**
+   * 创建实例
+   *
+   * @param string $abstract 标识或接口
+   * @param array $params 构造函数参数
+   * @return mixed
+   */
+  function make(string $abstract, array $params = []): mixed
+  {
+    return App::factory()->make($abstract, $params);
+  }
+}
+if (!function_exists('getVersion')) {
+  /**
+   * 获取当前版本号
+   *
+   * @return string
+   */
+  function getVersion(): string
+  {
+    return App::factory()->getVersion();
+  }
+}
