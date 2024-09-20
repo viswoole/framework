@@ -33,8 +33,8 @@ use Viswoole\Core\Server\ServerEventHook;
  *
  * @link https://wiki.swoole.com/zh-cn/#/server/methods
  *
- * @method Port|\false listen(string $host, int $port, int $sock_type)
- * @method Port|\false addlistener(string $host, int $port, int $sock_type)
+ * @method Port|false listen(string $host, int $port, int $sock_type)
+ * @method Port|false addlistener(string $host, int $port, int $sock_type)
  * @method bool on(string $event_name, callable $callback)
  * @method Closure|array|string|null getCallback(string $event_name)
  * @method bool set(array $settings)
@@ -75,6 +75,8 @@ use Viswoole\Core\Server\ServerEventHook;
  * @method array stats()
  * @method Socket|false getSocket(int $port = 0)
  * @method bool bind(int $fd, int $uid)
+ *
+ * @see SwooleServer
  */
 class Server
 {
@@ -163,7 +165,7 @@ class Server
   /**
    * 加载服务配置
    *
-   * @return array
+   * @return array{construct: array, options: array,events: array,exception_handle: string,type:string}
    * @throws ServerNotFoundException 服务未找到
    * @throws Exception
    */
@@ -281,6 +283,8 @@ class Server
   }
 
   /**
+   * 转发调用至Swoole\Server实例
+   *
    * @param string $name
    * @param array $arguments
    * @return mixed
@@ -292,6 +296,8 @@ class Server
 
   /**
    * 获取Swoole\Server原型实例
+   *
+   * 必须在服务创建完成之后才能调用此方法
    *
    * @access public
    * @return SwooleServer
