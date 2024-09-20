@@ -16,8 +16,10 @@ declare (strict_types=1);
 namespace Viswoole\Log\Drives;
 
 use Override;
+use Swoole\Server;
 use Swoole\Timer;
-use Viswoole\Core\Coroutine;
+use Viswoole\Core\Facade\Event;
+use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Log\Drive;
 use Viswoole\Log\LogManager;
 
@@ -47,11 +49,8 @@ class File extends Drive
     protected string $log_dir = BASE_PATH . '/runtime/logs',
   )
   {
-    if (Coroutine::isCoroutine()) {
-      $this->startDailyTimer();
-    } else {
-      $this->clearExpireLog();
-    }
+    $this->startDailyTimer();
+    $this->clearExpireLog();
   }
 
   /**
@@ -61,16 +60,23 @@ class File extends Drive
    */
   private function startDailyTimer(): void
   {
-    // 计算距离下一个午夜的秒数
-    $now = time();
-    $nextMidnight = strtotime('tomorrow');
-    $secondsUntilMidnight = $nextMidnight - $now;
-    // 启动Swoole定时器，在距离午夜的秒数之后执行 deleteExpiredLogs 方法
-    Timer::after($secondsUntilMidnight * 1000, function () {
-      $this->clearExpireLog();
-      // 之后每隔一天（86400 秒）再次执行 deleteExpiredLogs 方法
-      Timer::tick(86400 * 1000, function () {
+    ServerEventHook::addEvent('start', function (Server $server) {
+      // 计算距离下一个午夜的秒数
+      $now = time();
+      $nextMidnight = strtotime('tomorrow');
+      $secondsUntilMidnight = $nextMidnight - $now;
+      // 启动Swoole定时器，在距离午夜的秒数之后执行 deleteExpiredLogs 方法
+      $afterId = Timer::after($secondsUntilMidnight * 1000, function () use (&$tickId) {
         $this->clearExpireLog();
+        // 之后每隔一天（86400 秒）再次执行 deleteExpiredLogs 方法
+        $tickId = Timer::tick(86400 * 1000, function () {
+          $this->clearExpireLog();
+        });
+      });
+      // 监听服务关闭之前的事件，清理定时器
+      Event::on('ServerShutdownBefore', function () use (&$afterId, &$tickId, $server) {
+        if (is_int($afterId)) Timer::clear($afterId);
+        if (is_int($tickId)) Timer::clear($tickId);
       });
     });
   }
