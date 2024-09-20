@@ -17,6 +17,7 @@ namespace Viswoole\Router;
 
 use Override;
 use Viswoole\Core\Service\Provider;
+use Viswoole\Router\Commands\ClearCache;
 
 /**
  * 路由服务注册
@@ -40,5 +41,6 @@ class RouterService extends Provider
   #[Override] public function register(): void
   {
     $this->app->bind('router', Router::class);
+    $this->app->console->addCommand(new ClearCache);
   }
 }
