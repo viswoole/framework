@@ -87,7 +87,7 @@ class ServerEventHook
     $handlers = self::$handles[$event] ?? null;
     if (!is_null($handlers)) {
       foreach ($handlers as $handler) {
-        call_user_func_array($handler, $args);
+        invoke($handler, $args);
       }
     }
   }
@@ -149,5 +149,6 @@ class ServerEventHook
         );
       }
     });
+    Event::emit('ServerStartAfter');
   }
 }
