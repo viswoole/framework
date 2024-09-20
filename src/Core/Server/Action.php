@@ -46,25 +46,26 @@ class Action
       if ($forceStart) {
         $status = false;
         $i = 0;
+        Output::system("{$server_name}服务正在运行中，正在尝试关闭，请等待...", 'WARNING');
         while ($i++ < 5) {
           if (!self::checkPidStatus($pid)) {
             $status = true;
             break;
           } else {
-            Output::warning("{$server_name}服务正在运行中，正在尝试关闭中($i)，请稍后。", 0);
             Process::kill($pid, SIGINT);
             sleep(1);
           }
         }
         // 判断是否强制关闭服务成功
-        if (!$status) {
+        if ($status) {
+          App::factory()->make('server', [$server_name])->start($daemonize);
+        } else {
           throw new ServerException(
-            "{$server_name}服务强制重启失败，无法kill {$pid}进程，请手动kill进程。"
+            "⚠️ {$server_name}服务强制重启失败，无法kill {$pid}进程，请手动kill进程。"
           );
         }
-        App::factory()->make('server', [$server_name])->start($daemonize);
       } else {
-        throw new ServerException("{$server_name}服务已经在运行中，请勿重复启动。");
+        throw new ServerException("⚠️ {$server_name}服务正在运行中，请勿重复启动。");
       }
     } else {
       App::factory()->make('server', [$server_name])->start($daemonize);
@@ -116,7 +117,7 @@ class Action
   /**
    * 判断pid是否正在运行
    *
-   * @param int $pid
+   * @param int|false|string $pid
    * @return bool
    */
   private static function checkPidStatus(int|false|string $pid): bool
@@ -147,25 +148,30 @@ class Action
    * @access public
    * @param string|null $server_name
    * @return void
+   * @throws ServerException
    */
   public static function close(string $server_name = null): void
   {
     if (empty($server_name)) {
       $pid_dir = self::getPidStore(null);
       $files = glob($pid_dir . '/*.pid');
-      foreach ($files as $file) {
-        $pid = file_get_contents($file);
-        if (self::checkPidStatus($pid)) {
-          $status = Process::kill((int)$pid, SIGINT);
-          $server_name = basename($file, '.pid');
-          if (!$status) {
-            Output::error("向{$server_name}服务主进程($pid)发送SIGINT信号失败", 0);
+      if (empty($files)) {
+        Output::system('🈚️ 没有找到任何服务进程', 'WARNING');
+      } else {
+        foreach ($files as $file) {
+          $pid = file_get_contents($file);
+          if (self::checkPidStatus($pid)) {
+            $status = Process::kill((int)$pid, SIGINT);
+            $server_name = basename($file, '.pid');
+            if (!$status) {
+              throw new ServerException("❌ 向{$server_name}服务主进程($pid)发送SIGINT信号失败");
+            } else {
+              Output::system("✅ 向{$server_name}服务主进程($pid)发送SIGINT信号成功");
+            }
           } else {
-            Output::success("向{$server_name}服务主进程($pid)发送SIGINT信号成功", 0);
+            // 删除掉无效的pid文件
+            unlink($file);
           }
-        } else {
-          // 删除掉无效的pid文件
-          unlink($file);
         }
       }
     } else {
@@ -176,12 +182,12 @@ class Action
         // 所以采用SIGINT信号替代SIGTERM信号，已在服务启动事件中监听了SIGINT，并调用Server::shutdown。
         $status = Process::kill($pid, SIGINT);
         if (!$status) {
-          Output::error("向{$server_name}服务主进程($pid)发送SIGINT信号失败", 0);
+          throw new ServerException("❌ 向{$server_name}服务主进程($pid)发送SIGINT信号失败");
         } else {
-          Output::success("向{$server_name}服务主进程($pid)发送SIGINT信号成功", 0);
+          Output::system("✅ 向{$server_name}服务主进程($pid)发送SIGINT信号成功");
         }
       } else {
-        Output::warning("{$server_name}服务未运行", 0);
+        Output::system("🈚️ {$server_name}服务未运行", 'WARNING');
       }
     }
   }
@@ -200,7 +206,9 @@ class Action
     $pid = self::getServerPid($server_name);
     if ($pid) {
       $status = Process::kill($pid, $only_reload_task_worker ? SIGUSR2 : SIGUSR1);
-      if (!$status) throw new ServerException("{$server_name}服务重启失败");
+      if (!$status) {
+        throw new ServerException("❌ {$server_name}服务重启失败");
+      }
     }
   }
 }
