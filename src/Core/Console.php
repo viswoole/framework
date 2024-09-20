@@ -15,7 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
-use RuntimeException;
+use InvalidArgumentException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Viswoole\Core\Console\Commands\CommandDiscover;
@@ -59,27 +59,28 @@ class Console extends Application
     $dependentCommands = is_file($depPath) ? require $depPath : [];
     // 合并
     $config = array_merge($this->defaultCommands, $config, $dependentCommands);
-    foreach ($config as $class) {
-      if (!class_exists($class)) throw new RuntimeException("$class 命令处理类不存在");
-      if (is_subclass_of($class, Command::class)) {
-        $this->addCommand(invoke($class));
-      } else {
-        throw new RuntimeException(
-          "$class 不是可用的命令行处理程序，命令处理类必须继承自 " . Command::class
-        );
-      }
-    }
+    foreach ($config as $class) $this->addCommand($class);
   }
 
   /**
    * 添加一个命令行处理程序
    *
    * @access public
-   * @param Command $command
+   * @param Command|string $command
    * @return Command|null
+   * @throws InvalidArgumentException 传入的参数不是命令处理类
    */
-  public function addCommand(Command $command): ?Command
+  public function addCommand(Command|string $command): ?Command
   {
+    if (is_string($command)) {
+      if (!class_exists($command)) {
+        throw new InvalidArgumentException("无法找到 $command 命令处理类");
+      }
+      $command = invoke($command);
+    }
+    if (!$command instanceof Command) {
+      throw new InvalidArgumentException('注册的命令处理类必须继承自 ' . Command::class);
+    }
     return $this->add($command);
   }
 }
