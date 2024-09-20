@@ -105,7 +105,7 @@ class ServerEventHook
     // 服务名称
     $SERVER_NAME = SERVER_NAME;
     echo_log(
-      "✅ 服务已安全关闭($SERVER_NAME:$pid)",
+      "🚫 服务已安全关闭($SERVER_NAME:$pid)",
       'SYSTEM',
       color    : Output::LABEL_COLOR['DEBUG'],
       backtrace: 0
@@ -132,7 +132,7 @@ class ServerEventHook
     // 监听SIGINT信号，将服务安全关闭，以释放资源
     Process::signal(SIGINT, function () use ($server, $SERVER_NAME, $pid) {
       echo_log(
-        "🛑 捕获到停止信号，正在释放资源...($SERVER_NAME:$pid)",
+        "🛑 捕获到中断信号SIGINT，正在释放资源...($SERVER_NAME:$pid)",
         'SYSTEM',
         color    : Output::LABEL_COLOR['WARNING'],
         backtrace: 0
