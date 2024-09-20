@@ -80,6 +80,7 @@ class Group extends BaseRoute
    */
   protected function verifyHandler(callable|array|string $handler): callable|array
   {
+    // 空数组主要是为了兼容缓存序列化，仅在注解路由解析时使用空数组做为占位符
     if (empty($handler)) return [];
     return parent::verifyHandler($handler);
   }
