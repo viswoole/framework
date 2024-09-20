@@ -9,7 +9,7 @@ use Swoole\Constant;
 use Swoole\Http\Server as httpServer;
 use Swoole\Server as SwooleServer;
 use Viswoole\Core\Console\Output;
-use Viswoole\HttpServer\Exception\Handle as HttpExceptionHandle;
+use Viswoole\HttpServer\Exception\HttpExceptionHandle;
 use Viswoole\HttpServer\HttpEventHandle;
 
 return [
@@ -83,7 +83,7 @@ return [
   'events' => [
     Constant::EVENT_START => function (SwooleServer $server): void {
       $serverName = SERVER_NAME;
-      Output::echo("$serverName 服务启动 进程PID:" . $server->master_pid, 'NOTICE', backtrace: 0);
+      Output::echo("$serverName 服务启动主进程PID:" . $server->master_pid, 'NOTICE', backtrace: 0);
     },
     Constant::EVENT_SHUTDOWN => function (): void {
       $serverName = SERVER_NAME;
