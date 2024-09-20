@@ -26,6 +26,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Throwable;
 
+/**
+ * Facade类IdealHelper注释优化
+ */
 #[AsCommand(
   name       : 'optimize:facade',
   description: 'Build facade ide helper.',
@@ -33,6 +36,9 @@ use Throwable;
 )]
 class Facade extends Command
 {
+  /**
+   * @inheritDoc
+   */
   #[Override] protected function configure(): void
   {
     $this->addArgument(
@@ -42,6 +48,9 @@ class Facade extends Command
     );
   }
 
+  /**
+   * @inheritDoc
+   */
   #[Override] protected function execute(InputInterface $input, OutputInterface $output): int
   {
     // 需要优化的facade类
