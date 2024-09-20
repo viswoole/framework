@@ -17,7 +17,6 @@ namespace Viswoole\Core;
 
 use InvalidArgumentException;
 use ReflectionClass;
-use ReflectionException;
 
 /**
  * 事件管理器
@@ -25,24 +24,9 @@ use ReflectionException;
 class Event
 {
   /**
-   * example
-   * --------------------------------------------------
-   * ```
-   * [
-   *  'event'=>[
-   *      'limit'=>0,
-   *      'emit' =>0,
-   *      'handle'=>[
-   *          class,
-   *          method
-   *      ],
-   *  ]
-   * ]
-   * ```
    * @var array 监听器
    */
   private array $listens = [];
-  private array $events = [];
 
   /**
    * 触发事件
@@ -104,17 +88,11 @@ class Event
    */
   public function off(string $event, string $id = null): void
   {
-    if (str_contains($event, '.')) {
-      [$event, $id] = explode($event, '.', 2);
-      $this->off($event, $id);
-    } else {
-      $event = strtolower($event);
-      if (isset($this->listens[$event])) {
-        if (is_null($id)) {
-          unset($this->listens[$event]);
-        } else {
-          unset($this->listens[$event][$id]);
-        }
+    if (isset($this->listens[$event])) {
+      if (is_null($id)) {
+        unset($this->listens[$event]);
+      } else {
+        unset($this->listens[$event][$id]);
       }
     }
   }
@@ -126,7 +104,7 @@ class Event
    */
   public function getEvents(): array
   {
-    return $this->events;
+    return array_keys($this->listens);
   }
 
   /**
@@ -158,57 +136,55 @@ class Event
    * Event::off('user.login');
    * ```
    *
-   * @param string $event 事件名称（名称中不能包含`.`），不区分大小写
-   * @param callable|string $handle 处理方法或类
+   * @param string $event 不区分大小写的事件名称，不能包含`.`
+   * @param callable|string $handle 任意可调用的回调，也可以是类名，如：UserEvents::class
    * @param int $limit 监听次数，0为不限制。
-   * @return string|array 返回注入的事件id
+   * @return string|array 返回事件监听器id，仅用于删除监听器
    */
   public function on(string $event, callable|string $handle, int $limit = 0): string|array
   {
     if (str_contains($event, '.')) {
-      throw new InvalidArgumentException('Event name cannot contain "."');
+      throw new InvalidArgumentException('事件名称不能包含"."');
     }
-    $event = strtolower(trim($event));
-    if (!is_callable($handle)) {
-      try {
-        $eventList = [];
-        $refClass = new ReflectionClass($handle);
-        // 获取类的方法
-        $methods = $refClass->getMethods();
-        foreach ($methods as $method) {
-          if ($method->isPublic()) {
-            if ($method->isStatic()) {
-              $handle = $refClass->getName() . '::' . $method->getName();
-            } else {
-              $handle = [
-                $handle,
-                $method->getName()
-              ];
-            }
-            $methodName = strtolower($method->getName());
-            $eventList[] = $methodName;
-            $this->events[] = $event . '.' . $methodName;
-            $this->listens[$event][$methodName] = [
-              'limit' => $limit,
-              'count' => 0,
-              'handle' => $handle
-            ];
-          }
-        }
-        return $eventList;
-      } catch (ReflectionException $e) {
-        $message = $e->getMessage();
-        throw new InvalidArgumentException("Invalid handle: $handle , $message");
-      }
-    } else {
+    if (is_callable($handle)) {
+      $event = strtolower(trim($event));
       $id = md5(uniqid($event . '_' . microtime(true), true));
-      $this->events[] = $event;
       $this->listens[$event][$id] = [
         'limit' => $limit,
         'count' => 0,
         'handle' => $handle
       ];
       return $id;
+    } elseif (class_exists($event)) {
+      $eventList = [];
+      $refClass = new ReflectionClass($event);
+      $event = strtolower($refClass->getShortName());
+      // 获取类的方法
+      $methods = $refClass->getMethods();
+      $this->events[] = $event;
+      foreach ($methods as $method) {
+        if (
+          !$method->isPublic()
+          || $method->isAbstract()
+          || $method->isConstructor()
+          || $method->isDestructor()
+        ) continue;
+        if ($method->isStatic()) {
+          $handle = $refClass->getName() . '::' . $method->getName();
+        } else {
+          $handle = [$handle, $method->getName()];
+        }
+        $id = strtolower($method->getName());
+        $eventList[] = $id;
+        $this->listens[$event][$id] = [
+          'limit' => $limit,
+          'count' => 0,
+          'handle' => $handle
+        ];
+      }
+      return $eventList;
+    } else {
+      throw new InvalidArgumentException('$handle参数必须是任意可调用回调或完整类名称');
     }
   }
 
