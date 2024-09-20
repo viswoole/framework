@@ -162,9 +162,9 @@ class Router extends Collector
     $directory = $rootPath . 'app/Controller';
     // 列出指定路径中的文件和目录
     $controllers = RouterTool::getAllFiles($directory);
+    $hash = null;
     foreach ($controllers as $controller) {
       [$fullClass] = RouterTool::getNamespace($controller, $rootPath);
-      $hash = null;
       // 获取路由缓存
       if ($this->cache) {
         // 类文件哈希值
@@ -178,9 +178,9 @@ class Router extends Collector
       // 没有缓存，则解析路由
       $routeGroup = $this->parseController($controller, $rootPath);
       // 如果没有解析到路由则跳过
-      if (empty($routeInfo)) continue;
+      if (empty($routeGroup)) continue;
       // 记录路由
-      $this->recordRouteItem($routeInfo['route']);
+      $this->recordRouteItem($routeGroup);
       // 如果hash不为null则缓存路由
       if (!$hash) continue;
       RouterTool::setCache(SERVER_NAME, $fullClass, $hash, $routeGroup);
