@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Exception;
 
 use Throwable;
+use Viswoole\Core\Exception\Handle;
 use Viswoole\Core\Exception\ValidateException;
 use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
@@ -26,7 +27,7 @@ use Viswoole\Router\Exception\RouteNotFoundException;
 /**
  * 异常处理类
  */
-class Handle extends \Viswoole\Core\Exception\Handle
+class HttpExceptionHandle extends Handle
 {
   /**
    * @var array 忽略的异常
