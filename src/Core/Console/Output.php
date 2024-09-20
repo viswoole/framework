@@ -62,6 +62,81 @@ class Output
   ];
 
   /**
+   * 系统输出的日志
+   *
+   * @param string $message
+   * @param string $color
+   * @param int $backtrace
+   * @return void
+   */
+  public static function system(
+    string $message,
+    string $color = 'SUCCESS',
+    int    $backtrace = 0
+  ): void
+  {
+    self::echo($message, 'SYSTEM', $color, $backtrace);
+  }
+
+  /**
+   * 输出一条文本信息
+   *
+   * @param string|int $message 要输出的内容
+   * @param string $label 标签
+   * @param string|null $color 转义颜色,如果标签未映射颜色，且传入null，则使用默认颜色
+   * @param int $backtrace 1为输出调用源，0为不输出
+   * @return void
+   */
+  public static function echo(
+    string|int $message,
+    string     $label = 'INFO',
+    ?string    $color = null,
+    int        $backtrace = 1
+  ): void
+  {
+    if ($backtrace !== 0) {
+      $trace = ' - ' . self::getTrace($backtrace);
+    } else {
+      $trace = '';
+    }
+    $date = date('c');
+    $label = strtoupper($label);
+    if (array_key_exists($label, self::LABEL_COLOR) && !$color) {
+      $color = self::LABEL_COLOR[$label];
+    } elseif ($color) {
+      $console_color_pattern = '/^(\033)\[[0-9;]+m$/';
+      $isColor = preg_match($console_color_pattern, $color);
+      if (!$isColor) {
+        if (array_key_exists($color, self::LABEL_COLOR)) {
+          $color = self::LABEL_COLOR[$color];
+        } elseif (array_key_exists($color, self::COLORS)) {
+          $color = self::COLORS[$color];
+        } else {
+          $color = self::COLORS['DEFAULT'];
+        }
+      }
+    } else {
+      $color = self::COLORS['DEFAULT'];
+    }
+    echo "{$color}[$date][$label]: $message$trace" . PHP_EOL . self::COLORS['DEFAULT'];
+  }
+
+  /**
+   * 获取来源
+   *
+   * @param int $backtrace
+   * @return string
+   */
+  private static function getTrace(int $backtrace): string
+  {
+    $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $backtrace + 1);
+    $caller = end($trace);
+    $filename = $caller['file'];
+    $line = $caller['line'];
+    return 'in ' . $filename . ':' . $line;
+  }
+
+  /**
    * 打印变量
    *
    * @access public
@@ -106,21 +181,6 @@ class Output
   }
 
   /**
-   * 获取来源
-   *
-   * @param int $backtrace
-   * @return string
-   */
-  private static function getTrace(int $backtrace): string
-  {
-    $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, $backtrace + 1);
-    $caller = end($trace);
-    $filename = $caller['file'];
-    $line = $caller['line'];
-    return 'in ' . $filename . ':' . $line;
-  }
-
-  /**
    * @param string $name
    * @param array $arguments
    * @return void
@@ -134,40 +194,5 @@ class Output
     } else {
       throw new Exception("Call to undefined method $name");
     }
-  }
-
-  /**
-   * 输出一条文本信息
-   *
-   * @param string|int $message 要输出的内容
-   * @param string $label 标签
-   * @param string|null $color 转义颜色,如果标签未映射颜色，且传入null，则使用默认颜色
-   * @param int $backtrace 1为输出调用源，0为不输出
-   * @return void
-   */
-  public static function echo(
-    string|int $message,
-    string     $label = 'INFO',
-    ?string    $color = null,
-    int        $backtrace = 1
-  ): void
-  {
-    if ($backtrace !== 0) {
-      $trace = ' - ' . self::getTrace($backtrace);
-    } else {
-      $trace = '';
-    }
-    $date = date('c');
-    $label = strtoupper($label);
-    if (array_key_exists($label, self::LABEL_COLOR) && !$color) {
-      $color = self::LABEL_COLOR[$label];
-    } elseif ($color) {
-      $console_color_pattern = '/^(\033)\[[0-9;]+m$/';
-      $isColor = preg_match($console_color_pattern, $color);
-      $color = $isColor ? $color : self::COLORS['DEFAULT'];
-    } else {
-      $color = self::COLORS['DEFAULT'];
-    }
-    echo "{$color}[$date][$label]: $message$trace" . PHP_EOL . self::COLORS['DEFAULT'];
   }
 }
