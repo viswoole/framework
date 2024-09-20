@@ -149,6 +149,6 @@ class ServerEventHook
         );
       }
     });
-    Event::emit('ServerStartAfter');
+    Event::emit('AfterStartServer');
   }
 }
