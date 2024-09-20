@@ -29,8 +29,8 @@ class RouterService extends Provider
    */
   #[Override] public function boot(): void
   {
-    // 监听服务启动之前
-    $this->app->event->on('ServerCreate', function () {
+    // 监听服务创建前事件
+    $this->app->event->on('ServerCreateBefore', function () {
       $this->app->make('router');
     });
   }
