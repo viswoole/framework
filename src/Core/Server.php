@@ -150,16 +150,18 @@ class Server
    */
   public function __construct(string $server_name, protected Event $event)
   {
+    bind(self::class, $this);
     $server_name = strtolower($server_name);
     /**
      * 当前正在运行的服务名称
      */
     define('SERVER_NAME', $server_name);
     $this->serverName = $server_name;
-    $this->event->emit('ServerCreateBefore', [$this]);
+    $this->event->emit('CreateServerBefore', [$this]);
     $this->getConfig();
-    $this->createSwooleServer();
-    $this->event->emit('ServerCreated', [$this]);
+    $this->server = $this->createSwooleServer();
+    bind(SwooleServer::class, $this->server);
+    $this->event->emit('CreatedServerAfter', [$this]);
   }
 
   /**
@@ -221,9 +223,9 @@ class Server
   /**
    * 创建swoole服务
    *
-   * @return void
+   * @return SwooleServer
    */
-  protected function createSwooleServer(): void
+  protected function createSwooleServer(): SwooleServer
   {
     /**
      * @var SwooleServer $server
@@ -236,7 +238,7 @@ class Server
     foreach ($events as $event_name => $handler) {
       $server->on($event_name, $handler);
     }
-    $this->server = $server;
+    return $server;
   }
 
   /**
@@ -274,7 +276,7 @@ class Server
     if ($this->isStart) throw new ServerException("{$serverName}服务已在运行中，请勿重复启动服务。");
     $this->isStart = true;
     // 触发ServerStart事件
-    $this->event->emit('ServerStartBefore', [$this]);
+    $this->event->emit('StartServerBefore', [$this]);
     // 进程守护
     if ($daemonize) $this->server->set([Constant::OPTION_DAEMONIZE => $daemonize]);
     $result = $this->server->start();
