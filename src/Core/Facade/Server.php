@@ -29,10 +29,10 @@ use Viswoole\Core\Facade;
  *
  * @method static array getConfig() 获取服务配置
  * @method static string getName() 获取当前运行的服务名称
- * @method static \Swoole\Server getServer() 获取服务实例
- * @method static \Swoole\Server isStart() 获取服务实例
- * @method static Port|\false listen(string $host, int $port, int $sock_type)
- * @method static Port|\false addlistener(string $host, int $port, int $sock_type)
+ * @method static \Swoole\Server getServer() 获取\Swoole\Server服务实例
+ * @method static bool isStart() 判断服务是否启动
+ * @method static Port|false listen(string $host, int $port, int $sock_type)
+ * @method static Port|false addlistener(string $host, int $port, int $sock_type)
  * @method static bool on(string $event_name, callable $callback)
  * @method static Closure|array|string|null getCallback(string $event_name)
  * @method static bool set(array $settings)
