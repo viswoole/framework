@@ -41,14 +41,9 @@ class Console extends Application
     VendorPublish::class
   ];
 
-  /**
-   * @param App $app
-   */
-  public function __construct(
-    private readonly App $app,
-  )
+  public function __construct()
   {
-    parent::__construct('viswoole', $this->app->getVersion());
+    parent::__construct('viswoole', getVersion());
     $this->loadCommand();
   }
 
@@ -67,7 +62,7 @@ class Console extends Application
     foreach ($config as $class) {
       if (!class_exists($class)) throw new RuntimeException("$class 命令处理类不存在");
       if (is_subclass_of($class, Command::class)) {
-        $this->addCommand($this->app->invokeClass($class));
+        $this->addCommand(invoke($class));
       } else {
         throw new RuntimeException(
           "$class 不是可用的命令行处理程序，命令处理类必须继承自 " . Command::class
