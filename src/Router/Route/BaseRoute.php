@@ -19,7 +19,7 @@ use InvalidArgumentException;
 use Viswoole\Core\App;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Middleware;
-use Viswoole\Router\RouteTool;
+use Viswoole\Router\RouterTool;
 
 /**
  * 路由基类
@@ -183,12 +183,12 @@ abstract class BaseRoute
     unset($path);
     $pattern = [];
     foreach ($paths as $path) {
-      if (RouteTool::isVariable($path)) {
+      if (RouterTool::isVariable($path)) {
         $segments = explode('/', trim($path, '/'));
         foreach ($segments as $segment) {
           if (empty($segment)) continue;
-          if (RouteTool::isVariable($segment)) {
-            $name = RouteTool::extractVariableName($segment);
+          if (RouterTool::isVariable($segment)) {
+            $name = RouterTool::extractVariableName($segment);
             $pattern[$name] = $this->patterns[$name] ?? $default_pattern_regex;
           }
         }
@@ -205,7 +205,7 @@ abstract class BaseRoute
   private function generateId(): string
   {
     $id = implode('&', $this->paths);
-    return RouteTool::generateHashId($id);
+    return RouterTool::generateHashId($id);
   }
 
   /**
