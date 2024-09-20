@@ -16,116 +16,162 @@ namespace Viswoole\Router;
 use Viswoole\Router\Route\Group;
 
 /**
- * 文档解析工具
+ * 路由器工具类
  *
- * 用于将路由配置转换为成文档结构
+ * 存放了一些工具方法
  */
-class RouteTool
+class RouterTool
 {
-  private static string $cachePath;
-
   /**
    * 获取缓存
    *
+   * @param string $server 服务名称
    * @param string $controller 控制器类完全名称，包含命名空间
    * @param string $hash 类文件哈希值，如果不匹配，则返回null
-   * @return null|array{server: string|null, route: Group}
+   * @return null|Group
    */
-  public static function getCache(string $controller, string $hash): mixed
+  public static function getCache(string $server, string $controller, string $hash): ?Group
   {
-    $file = self::generateCacheFileName($controller);
+    $file = self::generateCacheFileName($server, $controller);
     if (!file_exists($file)) return null;
     $content = file_get_contents($file);
     if (!$content) return null;
     $cacheData = unserialize(file_get_contents($file));
     if (!is_array($cacheData)) return null;
     if (($cacheData['hash'] ?? null) !== $hash) {
-      self::remove($controller);
+      unlink($file);
       return null;
     }
-    return $cacheData['data'] ?? null;
+    return $cacheData['route'] ?? null;
   }
 
   /**
    * 生成控制器缓存文件名称
    *
+   * @param string $server
    * @param string $controller
    * @return string
    */
-  private static function generateCacheFileName(string $controller): string
+  private static function generateCacheFileName(string $server, string $controller): string
   {
-    return self::getCachePath()
-      . DIRECTORY_SEPARATOR
-      . str_replace('\\', '_', $controller)
-      . '.cache';
+    return self::getCachePath($server) . DIRECTORY_SEPARATOR . str_replace(
+        '\\', '_', $controller
+      ) . '.cache';
   }
 
   /**
    * 获取缓存路径
    *
+   * @param string|null $server
    * @return string
    */
-  public static function getCachePath(): string
+  public static function getCachePath(?string $server): string
   {
-    if (!isset(self::$cachePath)) {
-      $dir = config('router.cache.path', BASE_PATH . '/runtime/route');
-      $dir = rtrim($dir, '/');
-      if (!is_dir($dir)) {
-        mkdir($dir, 0755);
-      }
-      self::$cachePath = $dir;
+    $dir = config('router.cache.path');
+    if (!is_string($dir)) {
+      $dir = BASE_PATH . DIRECTORY_SEPARATOR . 'runtime' . DIRECTORY_SEPARATOR . 'route';
+    } else {
+      $dir = rtrim(trim($dir), '/');
     }
-    return self::$cachePath;
-  }
-
-  /**
-   * 删除某个类的缓存路由表
-   *
-   * @param string $controller
-   * @return void
-   */
-  public static function remove(string $controller): void
-  {
-    $file = self::generateCacheFileName($controller);
-    if (file_exists($file)) unlink($file);
+    if ($server) $dir .= DIRECTORY_SEPARATOR . $server;
+    if (!is_dir($dir)) {
+      mkdir($dir, 0755);
+    }
+    return $dir;
   }
 
   /**
    * 清除所有缓存
    *
+   * @param string|null $server 服务名称
    * @return void
    */
-  public static function clear(): void
+  public static function clear(?string $server): void
   {
-    $dir = self::getCachePath();
+    $dir = self::getCachePath($server);
     if (!is_dir($dir)) return;
-    foreach (scandir($dir) as $file) {
+    self::deleteDirectory($dir);
+  }
+
+  /**
+   * 递归删除目录及其内容
+   *
+   * @param string $dir 目录路径
+   * @return void
+   */
+  private static function deleteDirectory(string $dir): void
+  {
+    if (!is_dir($dir)) return;
+    $files = scandir($dir);
+    foreach ($files as $file) {
       if ($file === '.' || $file === '..') continue;
-      unlink($dir . '/' . $file);
+      $path = $dir . '/' . $file;
+      if (is_dir($path)) {
+        self::deleteDirectory($path);
+      } else {
+        unlink($path);
+      }
     }
+    rmdir($dir);
+  }
+
+  /**
+   * 获取目录下所有指定后缀的文件
+   *
+   * @param string $dir 文件目录
+   * @param string $ext 文件后缀
+   * @param bool $recursion 是否递归子目录
+   * @return array
+   */
+  public static function getAllFiles(
+    string $dir, string $ext = 'php',
+    bool   $recursion = true
+  ): array
+  {
+    $phpFiles = [];
+    // 打开目录
+    if ($handle = opendir($dir)) {
+      $dir = rtrim($dir, DIRECTORY_SEPARATOR);
+      // 逐个检查目录中的条目
+      while (false !== ($entry = readdir($handle))) {
+        if ($entry != '.' && $entry != '..') {
+          $path = $dir . '/' . $entry;
+          // 如果是目录，递归调用该函数
+          if (is_dir($path)) {
+            // 如果递归获取子目录 则继续递归
+            if ($recursion) {
+              $phpFiles = array_merge($phpFiles, self::getAllFiles($path, $ext));
+            }
+          } elseif (pathinfo($path, PATHINFO_EXTENSION) == $ext) {
+            // 如果是.php文件，添加到结果数组中
+            $phpFiles[] = $path;
+          }
+        }
+      }
+      // 关闭目录句柄
+      closedir($handle);
+    }
+    return $phpFiles;
   }
 
   /**
    * 缓存到文件
    *
+   * @param string $server 服务名称
    * @param string $controller 控制器类完全名称，包含命名空间
    * @param string $hash 类文件哈希值
-   * @param string|null $server 服务名称
    * @param Group $groupRoute 路由组
    * @return void
    */
   public static function setCache(
-    string  $controller,
-    string  $hash,
-    ?string $server,
-    Group   $groupRoute
+    string $server,
+    string $controller,
+    string $hash,
+    Group  $groupRoute
   ): void
   {
-    $file = self::generateCacheFileName($controller);
-    file_put_contents(
-      $file,
-      serialize(['hash' => $hash, 'data' => ['server' => $server, 'route' => $groupRoute]])
-    );
+    $file = self::generateCacheFileName($server, $controller);
+    file_put_contents($file, serialize(['hash' => $hash, 'route' => $groupRoute]));
   }
 
   /**
