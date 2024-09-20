@@ -78,7 +78,10 @@ abstract class Drive extends Collector implements DriveInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function mixed(string $level, Stringable|string $message, array $context = []
+  #[Override] public function mixed(
+    string            $level,
+    Stringable|string $message,
+    array             $context = []
   ): void
   {
     $this->record($level, $message, $context);
