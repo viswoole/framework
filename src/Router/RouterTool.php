@@ -84,35 +84,38 @@ class RouterTool
    * 清除所有缓存
    *
    * @param string|null $server 服务名称
-   * @return void
+   * @return int
    */
-  public static function clear(?string $server): void
+  public static function clear(?string $server): int
   {
     $dir = self::getCachePath($server);
-    if (!is_dir($dir)) return;
-    self::deleteDirectory($dir);
+    if (!is_dir($dir)) return 0;
+    return self::deleteDirectory($dir);
   }
 
   /**
    * 递归删除目录及其内容
    *
    * @param string $dir 目录路径
-   * @return void
+   * @return int
    */
-  private static function deleteDirectory(string $dir): void
+  private static function deleteDirectory(string $dir): int
   {
-    if (!is_dir($dir)) return;
+    $count = 0;
+    if (!is_dir($dir)) return $count;
     $files = scandir($dir);
     foreach ($files as $file) {
       if ($file === '.' || $file === '..') continue;
       $path = $dir . '/' . $file;
       if (is_dir($path)) {
-        self::deleteDirectory($path);
+        $count += self::deleteDirectory($path);
       } else {
+        $count++;
         unlink($path);
       }
     }
     rmdir($dir);
+    return $count;
   }
 
   /**
