@@ -35,6 +35,11 @@ use Viswoole\Core\Server\Action as ServerAction;
 )]
 class ServerStart extends Command
 {
+  /**
+   * Configures the current command.
+   *
+   * @return void
+   */
   protected function configure(): void
   {
     $this->addArgument(
@@ -57,6 +62,9 @@ class ServerStart extends Command
     );
   }
 
+  /**
+   * @inheritDoc
+   */
   protected function execute(InputInterface $input, OutputInterface $output): int
   {
     $service = $input->getArgument('service');
