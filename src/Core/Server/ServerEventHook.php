@@ -17,6 +17,7 @@ namespace Viswoole\Core\Server;
 
 use Swoole\Process;
 use Swoole\Server;
+use Viswoole\Core\Console\Output;
 use Viswoole\Core\Facade\Event;
 
 /**
@@ -29,6 +30,7 @@ class ServerEventHook
    */
   protected static array $handles = [
     'start' => [[ServerEventHook::class, 'onStart']],
+    'shutdown' => [[ServerEventHook::class, 'onShutdown']],
   ];
 
   /**
@@ -91,6 +93,26 @@ class ServerEventHook
   }
 
   /**
+   * 监听服务关闭事件
+   *
+   * @param Server $server
+   * @return void
+   */
+  private static function onShutdown(Server $server): void
+  {
+    // 主进程id
+    $pid = $server->getMasterPid();
+    // 服务名称
+    $SERVER_NAME = SERVER_NAME;
+    echo_log(
+      "✅ 服务已安全关闭($SERVER_NAME:$pid)",
+      'SYSTEM',
+      color    : Output::LABEL_COLOR['DEBUG'],
+      backtrace: 0
+    );
+  }
+
+  /**
    * 监听服务启动代理信号
    *
    * @param Server $server 服务实例
@@ -98,12 +120,34 @@ class ServerEventHook
    */
   private static function onStart(Server $server): void
   {
+    $pid = $server->getMasterPid();
+    // 服务名称
+    $SERVER_NAME = SERVER_NAME;
+    echo_log(
+      "🚀 服务已启动，正在运行...($SERVER_NAME:$pid)",
+      'SYSTEM',
+      color    : Output::LABEL_COLOR['SUCCESS'],
+      backtrace: 0
+    );
     // 监听SIGINT信号，将服务安全关闭，以释放资源
-    Process::signal(SIGINT, function () use ($server) {
-      echo_log('监听到服务关闭信号SIGINT，准备关闭服务...', 'SYSTEM', backtrace: 0);
+    Process::signal(SIGINT, function () use ($server, $SERVER_NAME, $pid) {
+      echo_log(
+        "🛑 捕获到停止信号，正在释放资源...($SERVER_NAME:$pid)",
+        'SYSTEM',
+        color    : Output::LABEL_COLOR['WARNING'],
+        backtrace: 0
+      );
       Event::emit('ServerShutdownBefore');
       // 关闭服务
-      $server->shutdown();
+      $result = $server->shutdown();
+      if (!$result) {
+        echo_log(
+          "❌ 服务关闭失败，请检查服务状态！($SERVER_NAME:$pid)",
+          'SYSTEM',
+          color    : Output::LABEL_COLOR['ERROR'],
+          backtrace: 0
+        );
+      }
     });
   }
 }
