@@ -154,9 +154,10 @@ class Server
      */
     define('SERVER_NAME', $server_name);
     $this->serverName = $server_name;
+    $this->event->emit('ServerCreateBefore', [$this]);
     $this->getConfig();
     $this->createSwooleServer();
-    $this->event->emit('ServerCreate', [$this]);
+    $this->event->emit('ServerCreated', [$this]);
   }
 
   /**
@@ -271,7 +272,7 @@ class Server
     if ($this->isStart) throw new ServerException("{$serverName}服务已在运行中，请勿重复启动服务。");
     $this->isStart = true;
     // 触发ServerStart事件
-    $this->event->emit('ServerStart', [$this]);
+    $this->event->emit('ServerStartBefore', [$this]);
     // 进程守护
     if ($daemonize) $this->server->set([Constant::OPTION_DAEMONIZE => $daemonize]);
     $result = $this->server->start();
