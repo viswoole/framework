@@ -15,6 +15,10 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Server;
 
+use Swoole\Process;
+use Swoole\Server;
+use Viswoole\Core\Facade\Event;
+
 /**
  * SwooleServer事件hook
  */
@@ -23,7 +27,9 @@ class ServerEventHook
   /**
    * @var array<string,callable[]> 事件处理
    */
-  protected static array $handles = [];
+  protected static array $handles = [
+    'start' => [[ServerEventHook::class, 'onStart']],
+  ];
 
   /**
    * 批量添加事件处理
@@ -82,5 +88,22 @@ class ServerEventHook
         call_user_func_array($handler, $args);
       }
     }
+  }
+
+  /**
+   * 监听服务启动代理信号
+   *
+   * @param Server $server 服务实例
+   * @return void
+   */
+  private static function onStart(Server $server): void
+  {
+    // 监听SIGINT信号，将服务安全关闭，以释放资源
+    Process::signal(SIGINT, function () use ($server) {
+      echo_log('监听到服务关闭信号SIGINT，准备关闭服务...', 'SYSTEM', backtrace: 0);
+      Event::emit('ServerShutdownBefore');
+      // 关闭服务
+      $server->shutdown();
+    });
   }
 }
