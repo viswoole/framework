@@ -161,63 +161,30 @@ class Router extends Collector
     $rootPath = getRootPath() . DIRECTORY_SEPARATOR;
     $directory = $rootPath . 'app/Controller';
     // 列出指定路径中的文件和目录
-    $controllers = $this->getAllPhpFiles($directory);
+    $controllers = RouterTool::getAllFiles($directory);
     foreach ($controllers as $controller) {
-      [$fullClass] = RouteTool::getNamespace($controller, $rootPath);
+      [$fullClass] = RouterTool::getNamespace($controller, $rootPath);
       $hash = null;
       // 获取路由缓存
       if ($this->cache) {
         // 类文件哈希值
         $hash = hash_file('md5', $controller);
-        $cacheRouteInfo = RouteTool::getCache(SERVER_NAME . $fullClass, $hash);
-        if (is_array($cacheRouteInfo)) {
-          $this->recordRouteItem($cacheRouteInfo['route']);
+        $cacheGroup = RouterTool::getCache(SERVER_NAME, $fullClass, $hash);
+        if ($cacheGroup) {
+          $this->recordRouteItem($cacheGroup);
           continue;
         }
       }
       // 没有缓存，则解析路由
-      $routeInfo = $this->parseController($controller, $rootPath);
+      $routeGroup = $this->parseController($controller, $rootPath);
       // 如果没有解析到路由则跳过
       if (empty($routeInfo)) continue;
       // 记录路由
       $this->recordRouteItem($routeInfo['route']);
       // 如果hash不为null则缓存路由
       if (!$hash) continue;
-      RouteTool::setCache(
-        SERVER_NAME . $fullClass, $hash, $routeInfo['server'], $routeInfo['route']
-      );
+      RouterTool::setCache(SERVER_NAME, $fullClass, $hash, $routeGroup);
     }
-  }
-
-  /**
-   * 获取所有php文件
-   *
-   * @param string $dir
-   * @return array
-   */
-  private function getAllPhpFiles(string $dir): array
-  {
-    $phpFiles = [];
-    // 打开目录
-    if ($handle = opendir($dir)) {
-      $dir = rtrim($dir, DIRECTORY_SEPARATOR);
-      // 逐个检查目录中的条目
-      while (false !== ($entry = readdir($handle))) {
-        if ($entry != '.' && $entry != '..') {
-          $path = $dir . '/' . $entry;
-          // 如果是目录，递归调用该函数
-          if (is_dir($path)) {
-            $phpFiles = array_merge($phpFiles, $this->getAllPhpFiles($path));
-          } elseif (pathinfo($path, PATHINFO_EXTENSION) == 'php') {
-            // 如果是.php文件，添加到结果数组中
-            $phpFiles[] = $path;
-          }
-        }
-      }
-      // 关闭目录句柄
-      closedir($handle);
-    }
-    return $phpFiles;
   }
 
   /**
@@ -225,11 +192,11 @@ class Router extends Collector
    *
    * @param string $file 控制器文件
    * @param string $rootPath 根目录
-   * @return array{server:string|null,route:Group}|null
+   * @return Group|null
    */
-  private function parseController(string $file, string $rootPath): ?array
+  private function parseController(string $file, string $rootPath): ?Group
   {
-    [$fullClass] = RouteTool::getNamespace($file, $rootPath);
+    [$fullClass] = RouterTool::getNamespace($file, $rootPath);
     if (class_exists($fullClass)) {
       $refClass = new ReflectionClass($fullClass);
       $className = $refClass->getShortName();
@@ -257,7 +224,7 @@ class Router extends Collector
     // 如果类路由注解的paths设置为null则默认为类名称
     if ($controller->prefix === null) $controller->prefix = $className;
     // 类完全名称md5值作为路由分组名称
-    if (!$controller->id) $controller->id = RouteTool::generateHashId($fullClass);
+    if (!$controller->id) $controller->id = RouterTool::generateHashId($fullClass);
     /**
      * @var Group $group 路由分组实例
      */
@@ -265,7 +232,7 @@ class Router extends Collector
     // 类的全部方法
     $methods = $refClass->getMethods();
     if (!empty($methods)) $this->parseMethod($methods, $isAutoRoute, $group);
-    return ['server' => $serverName, 'route' => $group];
+    return $group;
   }
 
   /**
@@ -290,7 +257,7 @@ class Router extends Collector
       if (!$isCreate) continue;
       $methodName = $method->getName();
       // 路由id
-      $methodId = RouteTool::generateHashId($class . '::' . $methodName);
+      $methodId = RouterTool::generateHashId($class . '::' . $methodName);
       // 获取方法注解
       $methodAttributes = $method->getAttributes(RouteMapping::class);
       // 方法文档注释
@@ -383,7 +350,7 @@ class Router extends Collector
    */
   private function insertRoute(string $path, string $routeIndex): void
   {
-    if (RouteTool::isVariable($path)) {
+    if (RouterTool::isVariable($path)) {
       $urlSegments = explode('/', $path);
       $urlSegments = array_filter($urlSegments, function ($value) {
         return $value !== '';
@@ -409,11 +376,11 @@ class Router extends Collector
     $regexPattern = '';
     foreach ($segments as $segment) {
       //判断是否为变量字段
-      if (RouteTool::isVariable($segment)) {
+      if (RouterTool::isVariable($segment)) {
         //判断是否为可选变量
-        $isRequire = RouteTool::isOptionalVariable($segment);
+        $isRequire = RouterTool::isOptionalVariable($segment);
         //提取变量名称
-        $segment = RouteTool::extractVariableName($segment);
+        $segment = RouterTool::extractVariableName($segment);
         //删除结尾斜杠
         if ($isRequire) $regexPattern = rtrim($regexPattern, '/');
         // 设置规则
@@ -445,7 +412,7 @@ class Router extends Collector
     $len = count($urlSegments);
     foreach ($urlSegments as $rule) {
       if (empty($rule)) continue;
-      if (RouteTool::isOptionalVariable($rule)) $len--;
+      if (RouterTool::isOptionalVariable($rule)) $len--;
     }
     $path = implode('/', $urlSegments);
     if (isset($this->dynamicRoute["segment_$len"][$regex])) {
