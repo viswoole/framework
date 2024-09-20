@@ -75,7 +75,7 @@ class RouterTool
     }
     if ($server) $dir .= DIRECTORY_SEPARATOR . $server;
     if (!is_dir($dir)) {
-      mkdir($dir, 0755);
+      mkdir($dir, 0755, true);
     }
     return $dir;
   }
