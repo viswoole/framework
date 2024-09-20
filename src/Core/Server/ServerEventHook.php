@@ -103,10 +103,10 @@ class ServerEventHook
     // 主进程id
     $pid = $server->getMasterPid();
     // 服务名称
-    $SERVER_NAME = SERVER_NAME;
+    $SERVER_NAME = strtoupper(SERVER_NAME);
     echo_log(
-      "🚫 服务已安全关闭($SERVER_NAME:$pid)",
-      'SYSTEM',
+      "🚫 服务已安全关闭($pid)",
+      $SERVER_NAME,
       color    : Output::LABEL_COLOR['DEBUG'],
       backtrace: 0
     );
@@ -122,18 +122,18 @@ class ServerEventHook
   {
     $pid = $server->getMasterPid();
     // 服务名称
-    $SERVER_NAME = SERVER_NAME;
+    $SERVER_NAME = strtoupper(SERVER_NAME);
     echo_log(
-      "🚀 服务已启动，正在运行...($SERVER_NAME:$pid)",
-      'SYSTEM',
+      "🚀 服务已启动，正在运行...($pid)",
+      $SERVER_NAME,
       color    : Output::LABEL_COLOR['SUCCESS'],
       backtrace: 0
     );
     // 监听SIGINT信号，将服务安全关闭，以释放资源
     Process::signal(SIGINT, function () use ($server, $SERVER_NAME, $pid) {
       echo_log(
-        "🛑 捕获到中断信号SIGINT，正在释放资源...($SERVER_NAME:$pid)",
-        'SYSTEM',
+        "🛑 捕获到中断信号SIGINT，正在释放资源...($pid)",
+        $SERVER_NAME,
         color    : Output::LABEL_COLOR['WARNING'],
         backtrace: 0
       );
@@ -142,8 +142,8 @@ class ServerEventHook
       $result = $server->shutdown();
       if (!$result) {
         echo_log(
-          "❌ 服务关闭失败，请检查服务状态！($SERVER_NAME:$pid)",
-          'SYSTEM',
+          "❌ 服务关闭失败，请检查服务状态！($pid)",
+          $SERVER_NAME,
           color    : Output::LABEL_COLOR['ERROR'],
           backtrace: 0
         );
