@@ -61,7 +61,7 @@ class DbManager
    */
   public function __construct(Config $config, protected LogManager $logManager)
   {
-    $channels = $config->get('database.channel', []);
+    $channels = $config->get('database.channels', []);
     if (!empty($channels)) {
       $this->defaultChannel = $config->get('database.default', array_key_first($channels));
       foreach ($channels as $key => $driver) $this->addChannel($key, $driver);
@@ -257,6 +257,7 @@ class DbManager
    * @param string $name
    * @param array $arguments
    * @return mixed
+   * @throws DbException
    */
   public function __call(string $name, array $arguments)
   {
@@ -273,9 +274,13 @@ class DbManager
    * @access public
    * @param string|null $name 通道名称
    * @return Channel
+   * @throws DbException 没有数据库通道
    */
   public function channel(string $name = null): Channel
   {
+    if (empty($this->channels)) {
+      throw new DbException('数据库通道列表为空，请先配置数据库通道。', -1);
+    }
     $name = $name ?? $this->defaultChannel;
     if (!$this->hasChannel($name)) {
       throw new InvalidArgumentException('数据库通道 ' . $name . ' 不存在');
