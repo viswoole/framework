@@ -27,21 +27,23 @@ class Context
    * 将上下文从指定协程容器拷贝到当前容器
    *
    * @param int $fromCoroutineId 要复制的协程容器id
-   * @param array $keys 要复制的记录键
+   * @param array $keys 要复制的记录键,为空则复制所有上下文
+   * @param bool $merge 是否合并到当前上下文，默认为false，即不保留当前协程上下文
    */
-  public static function copy(int $fromCoroutineId, array $keys = []): void
+  public static function copy(int $fromCoroutineId, array $keys = [], bool $merge = false): void
   {
     $from = Coroutine::getContext($fromCoroutineId);
-
     if ($from === null) throw new RuntimeException('协程上下文未找到，或已经销毁。');
-
     $current = Coroutine::getContext();
-
-    $map = $keys ? array_intersect_key(
-      $from->getArrayCopy(), array_flip($keys)
-    ) : $from->getArrayCopy();
-
-    $current->exchangeArray($map);
+    $map = empty($keys)
+      ? $from->getArrayCopy()
+      : array_intersect_key($from->getArrayCopy(), array_flip($keys));
+    // 如果需要合并当前上下文的内容
+    if ($merge) {
+      $current->exchangeArray(array_merge($current->getArrayCopy(), $map));
+    } else {
+      $current->exchangeArray($map);
+    }
   }
 
   /**
