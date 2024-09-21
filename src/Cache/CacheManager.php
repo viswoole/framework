@@ -93,6 +93,9 @@ class CacheManager
         );
       }
       $options = $driver['options'] ?? [];
+      if (!is_array($options)) {
+        throw new CacheErrorException($name . '缓存驱动配置错误，options需为数组');
+      }
       $driver = new $driver['driver'](...$options);
     }
     if (!$driver instanceof CacheDriverInterface) {
