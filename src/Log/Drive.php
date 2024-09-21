@@ -47,10 +47,13 @@ abstract class Drive extends Collector implements DriveInterface
   private function getRecorder(): Recorder
   {
     $key = $this->getContextName();
-    if (!Context::has($key)) {
-      Context::set($key, new Recorder($this));
+    if (Context::has($key)) {
+      $recorder = Context::get($key);
+    } else {
+      $recorder = new Recorder($this);
+      Context::set($key, $recorder);
     }
-    return Context::get($key);
+    return $recorder;
   }
 
   /**
