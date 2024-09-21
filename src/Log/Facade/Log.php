@@ -39,6 +39,7 @@ use Viswoole\Log\LogManager;
  * @method static array getRecord() 获取缓存日志
  * @method static DriveInterface channel(string $name) 设置日志通道
  * @method static bool hasChannel(string $name) 判断通道是否存在
+ * @method static void addChannel(string $name, DriveInterface|string|array $channel) 添加通道
  */
 class Log extends Facade
 {
