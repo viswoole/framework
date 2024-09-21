@@ -79,7 +79,7 @@ class CacheManager
   /**
    * 添加缓存商店
    *
-   * @param string $name
+   * @param string $name 不区分大小写的缓存商店名称
    * @param CacheDriverInterface|string|array{driver:string,options:array{string:mixed}|object} $driver
    * @return void
    */
@@ -105,19 +105,19 @@ class CacheManager
         $name . '缓存驱动配置错误，驱动类需实现' . CacheDriverInterface::class . '接口'
       );
     }
-    $this->stores[$name] = $driver;
+    $this->stores[strtolower($name)] = $driver;
   }
 
   /**
    * 判断是否存在该缓存商店
    *
    * @access public
-   * @param string $name
+   * @param string $name 缓存商店名称，不区分大小写
    * @return bool
    */
   public function hasStore(string $name): bool
   {
-    return isset($this->stores[$name]);
+    return isset($this->stores[strtolower($name)]);
   }
 
   /**
@@ -141,10 +141,11 @@ class CacheManager
    */
   public function store(string $name = null): CacheDriverInterface
   {
-    if (empty($this->stores)) throw new CacheErrorException(
-      '缓存商店为空，请先配置缓存商店'
-    );
+    if (empty($this->stores)) {
+      throw new CacheErrorException('缓存商店为空，请先配置缓存商店');
+    }
     if (is_null($name)) $name = $this->defaultStore;
+    $name = strtolower($name);
     if (isset($this->stores[$name])) return $this->stores[$name];
     throw new CacheErrorException("缓存商店{$name}不存在");
   }
