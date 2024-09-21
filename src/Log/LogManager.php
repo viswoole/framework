@@ -93,7 +93,7 @@ class LogManager
    * 注意：该方法需在swoole服务器启动之前调用，在工作进程添加的通道不会同步到其他进程。
    *
    * @param string $name 通道名称
-   * @param DriveInterface|string|array{channel:string,options:array} $channel 驱动类
+   * @param DriveInterface|string|array{driver:string,options:array} $channel 驱动类
    * @return void
    * @throws LogException 配置错误
    */
@@ -105,14 +105,14 @@ class LogManager
       }
       $channel = invoke($channel);
     } elseif (is_array($channel)) {
-      if (!is_string($channel['channel']) || !class_exists($channel['channel'])) {
+      if (!is_string($channel['driver']) || !class_exists($channel['driver'])) {
         throw new LogException("{$name}日志通道配置错误，通道类不存在", -1);
       }
       $options = $channel['options'] ?? [];
       if (!is_array($options)) {
         throw new LogException($name . '日志通道配置错误，options需为数组', -1);
       }
-      $channel = invoke($channel['channel'], $options);
+      $channel = invoke($channel['driver'], $options);
     }
     if (!$channel instanceof DriveInterface) {
       throw new LogException(
