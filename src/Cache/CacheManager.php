@@ -85,7 +85,10 @@ class CacheManager
    */
   public function addStore(string $name, CacheDriverInterface|string|array $driver): void
   {
-    if (is_string($driver) && class_exists($driver)) {
+    if (is_string($driver)) {
+      if (!class_exists($driver)) {
+        throw new CacheErrorException("{$name}缓存驱动配置错误，{$driver}不是一个有效的类");
+      }
       $driver = invoke($driver);
     } elseif (is_array($driver)) {
       if (!is_string($driver['driver']) || !class_exists($driver['driver'])) {
