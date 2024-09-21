@@ -23,6 +23,10 @@ use Throwable;
  */
 class RouteNotFoundException extends RuntimeException
 {
+  /**
+   * @param string $message 异常提示信息
+   * @param Throwable|null $previous
+   */
   public function __construct(
     string    $message = 'routing resource not found',
     Throwable $previous = null
