@@ -27,7 +27,7 @@ class Coroutine extends \Swoole\Coroutine
    */
   public static function id(): int
   {
-    return static::getuid();
+    return static::getCid();
   }
 
   /**
@@ -62,6 +62,6 @@ class Coroutine extends \Swoole\Coroutine
    */
   public static function isCoroutine(): bool
   {
-    return self::getuid() !== -1;
+    return self::getCid() !== -1;
   }
 }
