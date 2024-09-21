@@ -44,6 +44,7 @@ use Viswoole\Database\Raw;
  * @method static void saveDebugInfo(RunInfo $debugInfo) 保存调试信息
  * @method static bool debug() 是否开启debug
  * @method static int debugInfoSaveManner() 调试信息保存方式
+ * @method static void addChannel(string $name, Channel|string|array $channel) 添加通道
  *
  * 优化命令：php viswoole optimize:facade Viswoole\\Database\\Facade\\Db
  */
