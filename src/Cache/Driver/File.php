@@ -214,7 +214,6 @@ class File extends Driver
       }
     } else {
       $result = file_put_contents($filename, $data);
-      dump($filename);
     }
     clearstatcache();
     return (bool)$result;
