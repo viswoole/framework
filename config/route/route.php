@@ -14,7 +14,10 @@ Router::get('/', function (Request $request, Response $response) {
   return $response->send('<h1>Hello Viswoole. #' . rand(1000, 9999) . '</h1>');
 })->setTitle('Welcome');
 
-// 定义一个404路由
-Router::miss(function (Response $response) {
-  return $response->status(404)->json(['message' => 'Not Found']);
+// 定义路由匹配失败的处理器
+Router::miss(function (Request $request, Response $response) {
+  return $response->status(404)->json([
+    'message' => 'routing resource not found',
+    'code' => 404
+  ]);
 });
