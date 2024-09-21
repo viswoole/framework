@@ -16,13 +16,13 @@ declare (strict_types=1);
 namespace Viswoole\Log;
 
 use BadMethodCallException;
-use Exception;
 use InvalidArgumentException;
 use Stringable;
 use Viswoole\Core\Config;
 use Viswoole\Core\Facade;
 use Viswoole\Log\Contract\DriveInterface;
 use Viswoole\Log\Drives\File;
+use Viswoole\Log\Exception\LogException;
 
 /**
  * 日志管理器
@@ -55,7 +55,7 @@ class LogManager
    */
   private string $defaultChannel;
   /**
-   * @var array{string,string} 日志类型指定通道
+   * @var array<string,string> 日志类型指定通道
    */
   private array $type_channel;
   /**
@@ -64,24 +64,63 @@ class LogManager
   private bool $recordLogTraceSource;
 
   /**
-   * @throws Exception
+   * @throws LogException
    */
   public function __construct(Config $config)
   {
     $options = $config->get('log');
-    $this->channels = $options['channels'] ?? ['default' => new File()];
-    $this->defaultChannel = $options['default'] ?? 'default';
-    if (!$this->hasChannel($this->defaultChannel)) {
-      throw new Exception('default channel ' . $this->defaultChannel . ' not exists');
+    $channels = $options['channels'] ?? ['default' => new File()];
+    if (!empty($channels)) {
+      $this->defaultChannel = $options['default'] ?? array_key_first($channels);
+      // 添加到通道列表
+      foreach ($channels as $channelName => $channel) {
+        $this->addChannel($channelName, $channel);
+      }
     }
     $this->type_channel = $options['type_channel'] ?? [];
     $this->recordLogTraceSource = $options['trace_source'] ?? false;
     self::$toTheConsole = $options['console'] ?? true;
     foreach ($this->type_channel as $channel) {
       if (!$this->hasChannel($channel)) {
-        throw new Exception('type channel ' . $channel . ' not exists');
+        throw new LogException('type channel ' . $channel . ' not exists');
       }
     }
+  }
+
+  /**
+   * 添加一个日志通道
+   *
+   * 注意：该方法需在swoole服务器启动之前调用，在工作进程添加的通道不会同步到其他进程。
+   *
+   * @param string $name 通道名称
+   * @param DriveInterface|string|array{channel:string,options:array} $channel 驱动类
+   * @return void
+   * @throws LogException 配置错误
+   */
+  public function addChannel(string $name, DriveInterface|string|array $channel): void
+  {
+    if (is_string($channel)) {
+      if (!class_exists($channel)) {
+        throw new LogException("{$name}日志通道配置错误，{$channel}不是一个有效的类", -1);
+      }
+      $channel = invoke($channel);
+    } elseif (is_array($channel)) {
+      if (!is_string($channel['channel']) || !class_exists($channel['channel'])) {
+        throw new LogException("{$name}日志通道配置错误，通道类不存在", -1);
+      }
+      $options = $channel['options'] ?? [];
+      if (!is_array($options)) {
+        throw new LogException($name . '日志通道配置错误，options需为数组', -1);
+      }
+      $channel = invoke($channel['channel'], $options);
+    }
+    if (!$channel instanceof DriveInterface) {
+      throw new LogException(
+        $name . '日志通道配置错误，通道类必须实现' . DriveInterface::class . '接口或继承' . Drive::class,
+        -1
+      );
+    }
+    $this->channels[strtolower($name)] = $channel;
   }
 
   /**
@@ -95,11 +134,11 @@ class LogManager
   {
     if (is_array($channel)) {
       foreach ($channel as $item) {
-        if (!isset($this->channels[$item])) return false;
+        if (!isset($this->channels[strtolower($item)])) return false;
       }
       return true;
     }
-    return isset($this->channels[$channel]);
+    return isset($this->channels[strtolower($channel)]);
   }
 
   /**
@@ -265,15 +304,16 @@ class LogManager
   /**
    * 设置日志通道
    *
-   * @param string $channel 设置记录日志的通道
+   * @param string|null $channel 设置记录日志的通道
    * @return DriveInterface
-   * @throws InvalidArgumentException 如果日志通道不存在时会抛出错误
+   * @throws InvalidArgumentException 通道不存在
    */
-  public function channel(string $channel): DriveInterface
+  public function channel(?string $channel): DriveInterface
   {
+    $channel = $channel ?? $this->defaultChannel;
     if (!$this->hasChannel($channel)) {
       throw new InvalidArgumentException('log channel ' . $channel . ' not exists');
     }
-    return $this->channels[$channel];
+    return $this->channels[strtolower($channel)];
   }
 }
