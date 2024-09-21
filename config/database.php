@@ -1,16 +1,4 @@
 <?php
-/*
- *  +----------------------------------------------------------------------
- *  | Viswoole [基于swoole开发的高性能快速开发框架]
- *  +----------------------------------------------------------------------
- *  | Copyright (c) 2024 https://viswoole.com All rights reserved.
- *  +----------------------------------------------------------------------
- *  | Licensed ( http://www.apache.org/licenses/LICENSE-2.0 )
- *  +----------------------------------------------------------------------
- *  | Author: ZhuChongLin <8210856@qq.com>
- *  +----------------------------------------------------------------------
- */
-
 // +----------------------------------------------------------------------
 // | 数据库配置
 // +----------------------------------------------------------------------
@@ -29,13 +17,17 @@ return [
   'info_save_manner' => Db::DEBUG_SAVE_CONSOLE | Db::DEBUG_SAVE_LOGGER,
   // 通道列表
   'channels' => [
-    // 驱动类需继承Viswoole\Database\Channel
-    'default' => new PDOChannel(
-      host    : env('DATABASE_HOST', '127.0.0.1'),
-      port    : (int)env('DATABASE_PORT', 3306),
-      database: env('DATABASE_NAME', ''),
-      username: env('DATABASE_USER', 'root'),
-      password: env('DATABASE_PASSWORD', ''),
-    )
+    'default' => [
+      // 通道类，必须继承Viswoole\Database\Channel
+      'channel' => PDOChannel::class,
+      // PDOChannel通道构造参数
+      'options' => [
+        'host' => env('DATABASE_HOST', '127.0.0.1'),
+        'port' => (int)env('DATABASE_PORT', 3306),
+        'database' => env('DATABASE_NAME', ''),
+        'username' => env('DATABASE_USER', 'root'),
+        'password' => env('DATABASE_PASSWORD', '123456'),
+      ]
+    ]
   ]
 ];
