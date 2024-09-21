@@ -19,7 +19,6 @@ use Closure;
 use InvalidArgumentException;
 use Swoole\Table;
 use Throwable;
-use Viswoole\Core\Common\Str;
 use Viswoole\Core\Config;
 use Viswoole\Core\Console\Output;
 use Viswoole\Database\Exception\DbException;
@@ -58,24 +57,14 @@ class DbManager
   /**
    * @param Config $config 配置管理器
    * @param LogManager $logManager 日志管理器
-   * @throws DbException
-   * @throws DbException
-   * @throws DbException
+   * @throws DbException 配置错误
    */
   public function __construct(Config $config, protected LogManager $logManager)
   {
     $channels = $config->get('database.channel', []);
     if (!empty($channels)) {
       $this->defaultChannel = $config->get('database.default', array_key_first($channels));
-      foreach ($channels as $key => $driver) {
-        if (!$driver instanceof Channel) {
-          throw new DbException(
-            '数据库通道 ' . $key . ' 驱动类需继承' . Channel::class . '抽象类'
-          );
-        }
-        $key = Str::camelCaseToSnakeCase($key);
-        $this->channels[$key] = $driver;
-      }
+      foreach ($channels as $key => $driver) $this->addChannel($key, $driver);
     }
     $this->table = new Table(1);
     $this->table->column('debug', Table::TYPE_INT, 4);
@@ -90,6 +79,39 @@ class DbManager
       'debug' => $debug ? 1 : 0,
       'save' => $save,
     ]);
+  }
+
+  /**
+   * 添加一个数据库通道
+   *
+   * 注意：该方法需在swoole服务器启动之前调用，在工作进程添加的通道不会同步到其他进程。
+   *
+   * @param string $name 通道名称
+   * @param Channel|string|array{channel:string,options:array} $channel 驱动类
+   * @return void
+   * @throws DbException 配置错误
+   */
+  public function addChannel(string $name, Channel|string|array $channel): void
+  {
+    if (is_string($channel)) {
+      if (!class_exists($channel)) {
+        throw new DbException("{$name}数据库通道配置错误，{$channel}不是一个有效的类", -1);
+      }
+      $channel = invoke($channel);
+    } elseif (is_array($channel)) {
+      if (!is_string($channel['channel']) || !class_exists($channel['channel'])) {
+        throw new DbException("{$name}数据库通道配置错误，通道类不存在", -1);
+      }
+      $options = $channel['options'] ?? [];
+      if (!is_array($options)) {
+        throw new DbException($name . '数据库通道配置错误，options需为数组', -1);
+      }
+      $channel = invoke($channel['channel'], $options);
+    }
+    if (!$channel instanceof Channel) {
+      throw new DbException($name . '数据库通道配置错误，通道类需继承' . Channel::class, -1);
+    }
+    $this->channels[strtolower($name)] = $channel;
   }
 
   /**
@@ -258,7 +280,7 @@ class DbManager
     if (!$this->hasChannel($name)) {
       throw new InvalidArgumentException('数据库通道 ' . $name . ' 不存在');
     }
-    return $this->channels[Str::camelCaseToSnakeCase($name)];
+    return $this->channels[strtolower($name)];
   }
 
   /**
@@ -270,7 +292,7 @@ class DbManager
    */
   public function hasChannel(string $channel_name): bool
   {
-    return isset($this->channels[Str::camelCaseToSnakeCase($channel_name)]);
+    return isset($this->channels[strtolower($channel_name)]);
   }
 
   /**
