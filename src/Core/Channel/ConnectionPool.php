@@ -16,9 +16,11 @@ declare (strict_types=1);
 namespace Viswoole\Core\Channel;
 
 use Override;
+use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Viswoole\Core\Channel\Contract\ConnectionPoolInterface;
 use Viswoole\Core\Exception\ConnectionPoolException;
+use Viswoole\Core\Server\ServerEventHook;
 
 /**
  * Abstract ConnectionPool.
@@ -46,7 +48,12 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   )
   {
     $this->pool = new Channel($max_size);
-    if ($default_fill) $this->fill($default_fill);
+    if ($default_fill) {
+      // hook服务启动事件，填充连接池
+      ServerEventHook::addEvent('start', function () use ($default_fill) {
+        $this->fill($default_fill);
+      });
+    }
   }
 
   /**
@@ -54,10 +61,21 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function fill(int $size = null): void
   {
+    if (!$this->isCoroutine()) return;
     $size = $size === null ? $this->max_size : $size;
     while ($size > $this->length()) {
       $this->make();
     }
+  }
+
+  /**
+   * 判断是否在协程环境
+   *
+   * @return bool
+   */
+  private function isCoroutine(): bool
+  {
+    return Coroutine::getCid() > -1;
   }
 
   /**
@@ -76,6 +94,7 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   protected function make(): void
   {
     $connection = $this->createConnection();
+    if (!$this->isCoroutine()) return;
     $this->put($connection);
   }
 
@@ -91,6 +110,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function put(mixed $connection): void
   {
+    // 非协程环境不归还连接
+    if (!$this->isCoroutine()) return;
     // 判断返回连接是否为NULL 和 连接是否可用 可用则归还连接
     if ($connection !== null && $this->connectionDetection($connection)) {
       $result = $this->pool->push($connection);
@@ -125,6 +146,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function pop(float $timeout = -1): mixed
   {
+    // 如果非协程环境 则直接创建连接
+    if (!$this->isCoroutine()) return $this->createConnection();
     if ($this->isEmpty() && $this->length() < $this->max_size) $this->make();
     // 获取连接
     $connection = $this->pool->pop($timeout);
