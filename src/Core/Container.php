@@ -205,13 +205,13 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $instance = is_string($concrete)
       ? $this->invokeClass($concrete, $params)
       : $this->invokeFunction($concrete, $params);
-    $allowNewInstance = property_exists(
-      $instance, 'allowNewInstance'
-    ) ? $instance->allowNewInstance : false;
+    // 获取常量
+    $class = get_class($instance) . '::NOT_ALLOW_NEW_INSTANCE';
+    // 判断类是否设置了allowNewInstance常量
+    /** @noinspection PhpUnhandledExceptionInspection */
+    $allowNewInstance = defined($class) ? constant($class) : false;
     // 如果类没有设置allowNewInstance属性，或设置为false则缓存单实例
-    if (!$allowNewInstance) {
-      $this->setSingleInstance($abstract, $instance);
-    }
+    if (!$allowNewInstance) $this->setSingleInstance($abstract, $instance);
     return $instance;
   }
 
