@@ -252,7 +252,7 @@ class LogManager
       method_exists(Collector::class, $name)
       || in_array($name, ['write', 'record'])
     ) {
-      if ($name === 'mixed') {
+      if (in_array($name, ['write', 'record', 'mixed'])) {
         $level = $arguments[0];
         $arguments[2] = $this->buildTraceSource($arguments[2] ?? []);
       } else {
