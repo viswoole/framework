@@ -16,19 +16,32 @@ declare (strict_types=1);
 namespace Viswoole\Tests\Log\Facade;
 
 use PHPUnit\Framework\TestCase;
-use Viswoole\Core\App;
+use Viswoole\Log\Facade\Log;
 
+/**
+ * 日志测试
+ */
 class LogTest extends TestCase
 {
-
-  public function test()
+  /**
+   * 测试直接写入日志
+   *
+   * @return void
+   */
+  public function testWrite()
   {
-    try {
-      App::factory()->log->debug('test');
-    } catch (\Exception $e) {
-      echo_log($e->getMessage());
-      $this->fail();
-    }
-    $this->assertTrue(true);
+    Log::write('test', '测试写入日志');
+    static::assertTrue(true);
+  }
+
+  /**
+   * 测试记录日志
+   *
+   * @return void
+   */
+  public function testRecord()
+  {
+    Log::record('test', '测试写入日志', ['context' => 'context']);
+    static::assertTrue(true);
   }
 }
