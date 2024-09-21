@@ -15,11 +15,47 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use Override;
+use Swoole\Coroutine\Context;
+
 /**
- * 协程
+ * 协程代理类
+ *
+ * 扩展了\Swoole\Coroutine，添加了非协程环境下的兼容性
  */
 class Coroutine extends \Swoole\Coroutine
 {
+  /**
+   * @var Context 模拟协程上下文，兼容非协程环境
+   */
+  public static Context $mock_context;
+
+  /**
+   * 返回指定协程的 Context 对象。
+   *
+   * @param int $cid 如果未指定或指定为 0，则将使用当前协程的 ID。
+   * @return Context|null 非协程环境也会返回一个协程上下文对象，是虚拟的，兼容非协程上下文
+   */
+  #[Override] public static function getContext(int $cid = 0): ?Context
+  {
+    if (!self::isCoroutine()) {
+      return self::$mock_context ?? (self::$mock_context = new Context());
+    } else {
+      return parent::getContext($cid);
+    }
+  }
+
+  /**
+   * 判断是否在协程中运行
+   *
+   * @access public
+   * @return bool
+   */
+  public static function isCoroutine(): bool
+  {
+    return self::getCid() !== -1;
+  }
+
   /**
    * 获取当前协程id
    *
@@ -52,16 +88,5 @@ class Coroutine extends \Swoole\Coroutine
     if ($pcid === false || $pcid === -1) return $unableToFindReturnSelfId ? $cid : false;
     // 递归调用，查找顶级协程
     return static::getTopId($pcid);
-  }
-
-  /**
-   * 判断是否在协程中运行
-   *
-   * @access public
-   * @return bool
-   */
-  public static function isCoroutine(): bool
-  {
-    return self::getCid() !== -1;
   }
 }
