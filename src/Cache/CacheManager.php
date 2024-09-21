@@ -93,9 +93,7 @@ class CacheManager
         );
       }
       $options = $driver['options'] ?? [];
-      $driver = is_object($options)
-        ? new $driver['driver']($options)
-        : new $driver['driver'](...$options);
+      $driver = new $driver['driver'](...$options);
     }
     if (!$driver instanceof CacheDriverInterface) {
       throw new CacheErrorException(
