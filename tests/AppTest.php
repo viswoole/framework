@@ -19,10 +19,18 @@ use PHPUnit\Framework\TestCase;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 
+/**
+ * 测试容器
+ */
 class AppTest extends TestCase
 {
   protected App $app;
 
+  /**
+   * 测试从容器中获取依赖
+   *
+   * @return void
+   */
   public function testGet()
   {
     /** @var Config $config */
@@ -30,6 +38,11 @@ class AppTest extends TestCase
     self::assertInstanceOf(Config::class, $config);
   }
 
+  /**
+   * 测试反射调用函数
+   *
+   * @return void
+   */
   public function testInvokeFunction()
   {
     $fn = function (App $app, mixed $test) {
@@ -39,12 +52,22 @@ class AppTest extends TestCase
     self::assertEquals('test', $result);
   }
 
+  /**
+   * 测试创建一个依赖实例
+   *
+   * @return void
+   */
   public function testMake()
   {
     $config = $this->app->make('config');
     self::assertInstanceOf(Config::class, $config);
   }
 
+  /**
+   * 测试绑定一个依赖
+   *
+   * @return void
+   */
   public function testBind()
   {
     $this->app->bind('test', function (App $app) {
@@ -54,32 +77,52 @@ class AppTest extends TestCase
     self::assertInstanceOf(App::class, $test);
   }
 
+  /**
+   * 测试移除一个依赖钩子
+   *
+   * @return void
+   */
   public function testRemoveHook()
   {
-    $callback = function (MyTest $test, App $app) {
+    $callback = function (MyTest $test) {
       throw new \Exception('收到了MyTest类被反射解析的回调');
     };
-    $callback2 = function (MyTest $test, App $app) {
+    $callback2 = function (MyTest $test) {
       echo '收到了MyTest类被反射解析的回调2' . PHP_EOL;
     };
-    $this->app->addHook(MyTest::class, $callback);
+    $id = $this->app->addHook(MyTest::class, $callback);
     $this->app->addHook(MyTest::class, $callback2);
-    $this->app->removeHook(MyTest::class, $callback);
+    $this->app->removeHook(MyTest::class, $id);
     $this->testInvokeClass();
   }
 
+  /**
+   * 测试反射调用类
+   *
+   * @return void
+   */
   public function testInvokeClass()
   {
     $instance = $this->app->invokeClass(MyTest::class);
     self::assertInstanceOf(MyTest::class, $instance);
   }
 
+  /**
+   * 测试反射调用方法
+   *
+   * @return void
+   */
   public function testInvokeMethod()
   {
     $result = $this->app->invokeMethod([MyTest::class, 'test']);
     self::assertEquals('test', $result);
   }
 
+  /**
+   * 测试添加一个依赖钩子
+   *
+   * @return void
+   */
   public function testAddHook()
   {
     $this->app->addHook(MyTest::class, function (MyTest $test, App $app) {
@@ -89,12 +132,22 @@ class AppTest extends TestCase
     $this->testInvokeClass();
   }
 
+  /**
+   * 测试判断一个依赖是否存在
+   *
+   * @return void
+   */
   public function testHas()
   {
     $result = $this->app->has('config');
     self::assertTrue($result);
   }
 
+  /**
+   * 测试移除一个依赖
+   *
+   * @return void
+   */
   public function testRemove()
   {
     $this->app->bind('test', MyTest::class);
@@ -106,6 +159,9 @@ class AppTest extends TestCase
     self::assertFalse($result);
   }
 
+  /**
+   * @return void
+   */
   protected function setUp(): void
   {
     $this->app = App::factory();
