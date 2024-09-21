@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Tests\Cache;
 
 use PHPUnit\Framework\TestCase;
+use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Driver\File;
 
 /**
@@ -23,7 +24,7 @@ use Viswoole\Cache\Driver\File;
  */
 class FileTest extends TestCase
 {
-  protected File $cache;
+  protected CacheDriverInterface $cache;
 
   /**
    * 测试写入缓存数据
@@ -92,7 +93,7 @@ class FileTest extends TestCase
   public function testArray()
   {
     $this->cache->sAddArray('test', [1, 2, 3]);
-    static::assertEquals([1, 2, 3], $this->cache->get('test'));
+    static::assertEquals([1, 2, 3], $this->cache->getArray('test'));
     $this->cache->sAddArray('test', [4, 5, 6]);
     static::assertEquals([1, 2, 3, 4, 5, 6], $this->cache->getArray('test'));
     $this->cache->sRemoveArray('test', [4, 5, 6]);
@@ -146,9 +147,8 @@ class FileTest extends TestCase
   protected function setUp(): void
   {
     parent::setUp();
-    // 配置全局的根路径
-    define('BASE_PATH', dirname(realpath(__DIR__), 3));
-    $this->cache = new File();
+    $path = dirname(realpath(__DIR__), 3) . '/runtime/cache';
+    $this->cache = new File($path);
     $this->cache->clear();
   }
 }
