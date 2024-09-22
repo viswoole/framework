@@ -1,10 +1,6 @@
-<div style="text-align: center;margin-top:24px">
-  <img
-    alt="logo"
-    style="width: 300px;
-    margin: 0 auto"
-    src="https://viswoole.com/logo_empty_bg.png?d=1"
-  >
+<div align="center" style="text-align: center;margin-top:24px">
+<img alt="logo" style="width: 300px;" src="https://viswoole.com/logo_empty_bg.png?d=1">
+<br>
 
 一款基于[swoole](https://www.swoole.com/)开发的轻量级`PHP`框架
 
