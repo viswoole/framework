@@ -17,6 +17,7 @@ namespace Viswoole\Cache\Contract;
 
 use Closure;
 use DateTime;
+use Viswoole\Cache\Exception\CacheErrorException;
 
 /**
  * 缓存驱动接口
@@ -121,6 +122,7 @@ interface CacheDriverInterface
    * @param int $retry 等待尝试次数
    * @param int|float $sleep 等待休眠时间/秒 最小精度为毫秒（0.001 秒）
    * @return string 成功返回锁id 失败抛出系统繁忙错误
+   * @throws CacheErrorException 锁被占用
    */
   public function lock(
     string    $scene,
