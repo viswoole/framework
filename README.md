@@ -68,7 +68,7 @@ php viswoole close:server http
 内置了一个shell脚本`watch`，可以用来监听文件修改，实现热重载。
 
 ```bash
-php watch http # 唯一接收一个可选参数[serverName]
+/bin/sh watch http # 唯一接收一个可选参数[serverName]
 ```
 
 ## 参与开发
