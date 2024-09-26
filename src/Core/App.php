@@ -52,7 +52,7 @@ class App extends Container
    */
   protected static self $instance;
   /**
-   * @var array<string,string> 接口标识映射
+   * @var array<string,string|Closure> 接口标识映射
    */
   protected array $bindings = [
     'app' => App::class,
@@ -85,6 +85,10 @@ class App extends Container
   protected function __construct()
   {
     $this->startRunTime = time();
+    // 兼容swoole原生服务对象注入
+    $this->bindings[\Swoole\Server::class] = function () {
+      return $this->server->getServer();
+    };
     $this->_config = new Table(1);
     $this->_config->column('debug', Table::TYPE_INT, 4);
     $this->_config->create();
