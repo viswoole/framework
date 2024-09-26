@@ -31,7 +31,19 @@ class ServerEventHook
   protected static array $handles = [
     'start' => [[ServerEventHook::class, 'onStart']],
     'shutdown' => [[ServerEventHook::class, 'onShutdown']],
+    'beforeShutdown' => [[ServerEventHook::class, 'onBeforeShutdown']],
   ];
+
+  /**
+   * 服务关闭前事件
+   *
+   * @param Server $server
+   * @return void
+   */
+  public static function onBeforeShutdown(Server $server): void
+  {
+    Event::emit('ServerShutdownBefore', [$server]);
+  }
 
   /**
    * 批量添加事件处理
@@ -137,7 +149,6 @@ class ServerEventHook
         color    : Output::LABEL_COLOR['WARNING'],
         backtrace: 0
       );
-      Event::emit('ServerShutdownBefore');
       // 关闭服务
       $result = $server->shutdown();
       if (!$result) {
@@ -149,6 +160,6 @@ class ServerEventHook
         );
       }
     });
-    Event::emit('AfterStartServer');
+    Event::emit('AfterStartServer', [$server]);
   }
 }
