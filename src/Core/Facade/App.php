@@ -36,7 +36,7 @@ use Viswoole\Core\Facade;
  * @method static mixed invoke(callable|string|array $callable, array $params = []) 调用反射执行函数、匿名函数、以及类或方法，支持依赖注入。
  * @method static mixed invokeFunction(Closure|string $concrete, array $params = []) 反射调用函数
  * @method static object invokeClass(string $class, array $params = []) 调用反射创建类实例，支持依赖注入。
- * @method static mixed invokeMethod(array|string $method, array $params = []) 调用反射执行方法，支持依赖注入。
+ * @method static mixed invokeMethod(array|callable $method, array $params = []) 调用反射执行方法，支持依赖注入。
  * @method static string addHook(string $abstract, Closure $callback) 添加一个钩子，在解析类时触发，返回钩子id
  * @method static void removeHook(string $abstract, string $id = null) 删除解析钩子
  * @method static void bind(string $abstract, object|string|null $concrete) 绑定接口
