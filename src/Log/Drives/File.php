@@ -71,6 +71,7 @@ class File extends Drive
       $now = time();
       $nextMidnight = strtotime('tomorrow');
       $secondsUntilMidnight = $nextMidnight - $now;
+      $tickId = null;
       // 启动Swoole定时器，在距离午夜的秒数之后执行 deleteExpiredLogs 方法
       $afterId = Timer::after($secondsUntilMidnight * 1000, function () use (&$tickId) {
         $this->clearExpireLog();
