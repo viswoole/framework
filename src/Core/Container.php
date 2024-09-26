@@ -47,7 +47,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
 {
   protected string $CONTEXT_PREFIX = '__container_singleton_';
   /**
-   * @var array<string,string> 接口标识映射
+   * @var array<string,string|Closure> 接口标识映射
    */
   protected array $bindings = [];
   /**
