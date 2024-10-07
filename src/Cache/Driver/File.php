@@ -131,7 +131,11 @@ class File extends Driver
       $dir = $this->storage . DIRECTORY_SEPARATOR . $dir;
     }
     // 创建目录（如果不存在）
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    if (!is_dir($dir)) {
+      if (!@mkdir($dir, 0755, true)) {
+        throw new CacheErrorException('创建缓存目录失败：' . $dir);
+      }
+    }
     return str_ends_with($dir, DIRECTORY_SEPARATOR) ? $dir : $dir . DIRECTORY_SEPARATOR;
   }
 
