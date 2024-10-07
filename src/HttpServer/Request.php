@@ -107,11 +107,12 @@ class Request implements RequestInterface
   #[Override] public function getUri(): Uri
   {
     $host = explode(':', $this->getHeader('host'));
+    $port = $host[1] ?? null;
     return Uri::create(
       scheme  : $this->https() ? 'https' : 'http',
       userInfo: $this->getBasicAuthCredentials(),
       host    : $host[0],
-      port    : $host[1] ?? null,
+      port    : (int)($host[1] ?? 0) ?: null,
       path    : $this->target(),
       query   : $this->getServer('query_string', '')
     );
