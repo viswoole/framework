@@ -20,7 +20,7 @@
     "php": ">=8.3",
     "ext-swoole": ">=5.1",
     "ext-fileinfo": "*",
-    "symfony/console": ">=v6.3.4",
+    "symfony/console": "^v6.3.4",
     "ext-redis": "*",
     "ext-pdo": "*"
   },
