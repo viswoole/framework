@@ -246,13 +246,13 @@ class TaskManager
    * @param string $topic 要执行的任务主题
    * @param mixed $data 要传递给任务的数据
    * @param float $timeout 等待超时时间，单位秒
-   * @return mixed|false 如果任务执行成功返回任务结果，失败返回false（如果回调函数返回null也会返回false）
+   * @return string|false 如果任务执行成功返回任务结果，失败返回false（如果回调函数返回null也会返回false）
    */
   public function emitWait(
     string $topic,
     mixed  $data,
     float  $timeout = 0.5
-  ): mixed
+  ): string|false
   {
     $this->has($topic);
     $data = [
