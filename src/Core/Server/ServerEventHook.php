@@ -35,17 +35,6 @@ class ServerEventHook
   ];
 
   /**
-   * 服务关闭前事件
-   *
-   * @param Server $server
-   * @return void
-   */
-  public static function onBeforeShutdown(Server $server): void
-  {
-    Event::emit('ServerShutdownBefore', [$server]);
-  }
-
-  /**
    * 批量添加事件处理
    *
    * @param array<string,callable> $events 监听的事件
@@ -102,6 +91,18 @@ class ServerEventHook
         invoke($handler, $args);
       }
     }
+  }
+
+  /**
+   * 服务关闭前事件
+   *
+   * @param Server $server
+   * @return void
+   */
+  private static function onBeforeShutdown(Server $server): void
+  {
+    // 触发服务关闭前事件，允许用户在服务关闭前执行一些清理工作
+    Event::emit('ServerShutdownBefore', [$server]);
   }
 
   /**
