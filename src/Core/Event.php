@@ -161,7 +161,6 @@ class Event
       $event = strtolower($refClass->getShortName());
       // 获取类的方法
       $methods = $refClass->getMethods();
-      $this->events[] = $event;
       foreach ($methods as $method) {
         if (
           !$method->isPublic()
