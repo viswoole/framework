@@ -32,7 +32,7 @@ return [
         'sock_type' => SWOOLE_SOCK_TCP,
       ],
       'options' => [
-        // 上传文件最大尺寸 单位mb
+        // 上传文件最大尺寸 单位kb
         Constant::OPTION_UPLOAD_MAX_FILESIZE => 5 * 1024,
         // 启用HTTP2协议解析
         Constant::OPTION_OPEN_HTTP2_PROTOCOL => true,
