@@ -18,7 +18,7 @@ namespace Viswoole\Core\Console;
 use Exception;
 
 /**
- * 输出类，使用该类可轻松打印各种颜色的消息到控制台。
+ * 输出工具类，使用该类可轻松打印各种颜色的消息到控制台。
  *
  * @method static void success(string $message, int $backtrace = 1) 绿色
  * @method static void warning(string $message, int $backtrace = 1) 黄色
