@@ -88,6 +88,8 @@ class Event
    */
   public function off(string $event, string $id = null): void
   {
+    // 与 on/emit 保持一致，统一转换为小写
+    $event = strtolower(trim($event));
     if (isset($this->listens[$event])) {
       if (is_null($id)) {
         unset($this->listens[$event]);
