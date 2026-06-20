@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Service;
 
 use Override;
+use Viswoole\Core\Middleware;
 
 /**
  * 中间件服务
@@ -24,22 +25,18 @@ class MiddlewareService extends Provider
 {
 
   /**
-   * 该方法是在所有系统服务都绑定完毕过后调用，可以在此方法内注册路由，监听事件等
-   *
-   * @return void
+   * @inheritDoc
    */
   #[Override] public function boot(): void
   {
-    new \Viswoole\Core\Middleware($this->app);
+    $this->app->make('middleware');
   }
 
   /**
-   * 该方法会在服务注册时调用，在该方法内通过$this->app->bind('服务名', '服务类名');
-   *
-   * @return void
+   * @inheritDoc
    */
   #[Override] public function register(): void
   {
-    $this->app->bind('middleware', \Viswoole\Core\Middleware::class);
+    $this->app->bind('middleware', Middleware::class);
   }
 }
