@@ -133,7 +133,7 @@ class CacheManager
   }
 
   /**
-   * 指定缓存驱动
+   * 指定缓存商店
    *
    * @access public
    * @param string|null $name
