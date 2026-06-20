@@ -35,14 +35,24 @@ abstract class Provider
   }
 
   /**
-   * 该方法是在所有系统服务都绑定完毕过后调用，可以在此方法内注册路由，监听事件等
+   * 该方法用于启动/初始化服务
+   *
+   * Example:
+   * ```php
+   * $this->app->make('服务名');
+   * ```
    *
    * @return void
    */
   abstract public function boot(): void;
 
   /**
-   * 该方法会在服务注册时调用，在该方法内通过$this->app->bind('服务名', '服务类名');
+   * 该方法用于向应用容器中注册服务
+   *
+   * Example:
+   * ```php
+   * $this->app->bind('服务名', '类名');
+   * ```
    *
    * @return void
    */
