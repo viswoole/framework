@@ -31,7 +31,7 @@ class ServerEventHook
   protected static array $handles = [
     'start' => [[ServerEventHook::class, 'onStart']],
     'shutdown' => [[ServerEventHook::class, 'onShutdown']],
-    'beforeShutdown' => [[ServerEventHook::class, 'onBeforeShutdown']],
+    'beforeshutdown' => [[ServerEventHook::class, 'onBeforeShutdown']],
   ];
 
   /**
