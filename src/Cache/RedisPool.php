@@ -26,6 +26,9 @@ use Viswoole\Core\Channel\ConnectionPool;
  */
 class RedisPool extends ConnectionPool
 {
+  /**
+   * @param RedisConfig $config Redis配置
+   */
   public function __construct(protected RedisConfig $config)
   {
     parent::__construct($config->pool_max_size, $config->pool_fill_size);
@@ -69,10 +72,7 @@ class RedisPool extends ConnectionPool
   }
 
   /**
-   * 可实现此方法在获取或归还连接时检测连接是否可用
-   *
-   * @param mixed $connection
-   * @return bool 如果返回true则代表连接可用
+   * @inheritDoc
    */
   #[Override] protected function connectionDetection(mixed $connection): bool
   {
