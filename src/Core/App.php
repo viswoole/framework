@@ -46,7 +46,10 @@ use Viswoole\Router\RouterService;
  */
 class App extends Container
 {
-  public const string VERSION = '1.0.0';
+  /**
+   * 框架版本号
+   */
+  public const string VERSION = '1.0.2';
   /**
    * @var App 当前APP应用容器实例
    */
@@ -84,6 +87,9 @@ class App extends Container
 
   protected function __construct()
   {
+    // 确保项目根路径已定义
+    $this->getRootPath();
+    // 记录开始运行时间
     $this->startRunTime = time();
     // 兼容swoole原生服务对象注入
     $this->bindings[\Swoole\Server::class] = function () {
@@ -96,6 +102,18 @@ class App extends Container
     $this->bind(App::class, $this);
     $this->initialize();
     $this->event->emit('AppInitialized');
+  }
+
+  /**
+   * 获取项目根路径
+   *
+   * @access public
+   * @return string
+   */
+  public function getRootPath(): string
+  {
+    !defined('BASE_PATH') && define('BASE_PATH', dirname(realpath(__DIR__), 3));
+    return rtrim(BASE_PATH, DIRECTORY_SEPARATOR);
   }
 
   /**
@@ -169,18 +187,6 @@ class App extends Container
   public function getVendorPath(): string
   {
     return $this->getRootPath() . DIRECTORY_SEPARATOR . 'vendor';
-  }
-
-  /**
-   * 获取项目根路径
-   *
-   * @access public
-   * @return string
-   */
-  public function getRootPath(): string
-  {
-    !defined('BASE_PATH') && define('BASE_PATH', dirname(realpath(__DIR__), 3));
-    return rtrim(BASE_PATH, DIRECTORY_SEPARATOR);
   }
 
   /**
