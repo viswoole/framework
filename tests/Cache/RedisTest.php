@@ -17,8 +17,6 @@ namespace Viswoole\Tests\Cache;
 
 use Viswoole\Cache\Driver\Redis;
 
-require 'FileTest.php';
-
 /**
  * 测试Redis缓存
  */
@@ -29,6 +27,8 @@ class RedisTest extends FileTest
    */
   protected function setUp(): void
   {
-    $this->cache = new Redis('viswoole-redis-1');
+    $host = getenv('REDIS_HOST') ?: 'redis';
+    $this->cache = new Redis($host);
+    $this->cache->clear();
   }
 }
