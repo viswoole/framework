@@ -273,7 +273,8 @@ trait Crud
    */
   public function count(string $column = '*'): int|Raw
   {
-    return $this->aggregateQueries(__METHOD__, $column);
+    // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名(如 Viswoole\...\Crud::count)，应使用简单方法名
+    return $this->aggregateQueries('count', $column);
   }
 
   /**
@@ -322,7 +323,8 @@ trait Crud
    */
   public function min(string $column): string|int|float|Raw
   {
-    return $this->aggregateQueries(__METHOD__, $column);
+    // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
+    return $this->aggregateQueries('min', $column);
   }
 
   /**
@@ -334,7 +336,8 @@ trait Crud
    */
   public function max(string $column): string|int|float|Raw
   {
-    return $this->aggregateQueries(__METHOD__, $column);
+    // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
+    return $this->aggregateQueries('max', $column);
   }
 
   /**
@@ -346,7 +349,8 @@ trait Crud
    */
   public function avg(string $column): float|int|Raw
   {
-    return $this->aggregateQueries(__METHOD__, $column);
+    // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
+    return $this->aggregateQueries('avg', $column);
   }
 
   /**
@@ -358,7 +362,8 @@ trait Crud
    */
   public function sum(string $column): float|int|Raw
   {
-    return $this->aggregateQueries(__METHOD__, $column);
+    // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
+    return $this->aggregateQueries('sum', $column);
   }
 
   /**
@@ -403,7 +408,8 @@ trait Crud
   public function find(int|string $value = null, bool $allowEmpty = true): DataSet|Raw
   {
     $this->limit(1);
-    if (!empty($value)) $this->where($this->options->pk, $value);
+    // 修复: 使用严格比较 === null 判断，避免主键值为 0 时被 empty() 误判为空导致无法查询
+    if ($value !== null) $this->where($this->options->pk, $value);
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     if (empty($result) && !$allowEmpty) {
