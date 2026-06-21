@@ -53,8 +53,13 @@ class FileRule extends BaseValidateRule
       if (is_null($value)) return null;
       $this->error("必须上传 $name 文件");
     }
-    if ($this->count > 0 && count($value) !== $this->count) {
-      $this->error("必须上传 $this->count 个 $name 文件");
+    // 修复: count() 对非 Countable 对象(如单个 UploadedFile)会抛出 TypeError
+    // 需先判断值类型来计算文件数量, 单个文件视为 1 个
+    if ($this->count > 0) {
+      $fileCount = is_array($value) ? count($value) : 1;
+      if ($fileCount !== $this->count) {
+        $this->error("必须上传 $this->count 个 $name 文件");
+      }
     }
     if (is_array($value)) {
       foreach ($value as $item) $this->checkFile($item, $name);
@@ -79,7 +84,9 @@ class FileRule extends BaseValidateRule
       array_walk($types, function (&$item) {
         $item = strtolower(trim($item));
       });
-      if (!in_array(strtolower($type), $types)) return;
+      // 修复: 原逻辑完全反转, 原代码"不在允许列表中就 return(通过), 在列表中就 error(拒绝)"
+      // 正确逻辑应为"在允许列表中才通过(return), 不在列表中则拒绝(error)"
+      if (in_array(strtolower($type), $types)) return;
       $this->error("$name 文件的类型必须为 $this->fileMime");
     }
     if ($this->maxSize > 0 && $file->getSize() > $this->maxSize) {
