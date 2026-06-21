@@ -57,8 +57,9 @@ class Raw implements JsonSerializable
       foreach ($bindings as $key => $value) {
         if (is_array($value)) {
           $value = implode(',', $value);
+        // 修复#4: 对字符串值中的单引号进行转义，防止SQL语法错误
         } elseif (is_string($value)) {
-          $value = "'$value'";
+          $value = "'" . str_replace("'", "\\'", $value) . "'";
         } elseif (is_null($value)) {
           $value = 'NULL';
         } else {
