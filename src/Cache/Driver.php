@@ -17,6 +17,7 @@ namespace Viswoole\Cache;
 
 use Closure;
 use DateTime;
+use InvalidArgumentException;
 use Override;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
@@ -83,6 +84,11 @@ abstract class Driver implements CacheDriverInterface
     string|Closure $get = 'unserialize'
   ): static
   {
+    // 修复问题#17：serialize 闭包调用缺少 is_callable 验证，
+    // 避免传入不可调用的值导致后续 serialize/unserialize 调用时致命错误
+    if (!is_callable($set) || !is_callable($get)) {
+      throw new InvalidArgumentException('序列化回调必须为可调用结构');
+    }
     $this->serialize = [
       'set' => $set,
       'get' => $get
