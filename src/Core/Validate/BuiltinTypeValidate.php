@@ -134,7 +134,11 @@ class BuiltinTypeValidate
    */
   public static function int(mixed $value): int
   {
-    if (is_numeric($value)) $value = intval($value);
+    if (is_numeric($value) && !is_int($value)) {
+      // 修复: intval() 无法正确处理科学计数法(如 '1e5' 会被截断为 1)
+      // 统一通过 float 中转，确保科学计数法字符串能正确转换为整数
+      $value = (int)(float)$value;
+    }
     if (!is_int($value)) self::unifiedExceptionHandling('int', $value);
     return $value;
   }
@@ -185,7 +189,8 @@ class BuiltinTypeValidate
    */
   public static function null(mixed $value): null
   {
-    if (empty($value)) return null;
+    // 修复: empty() 会将 0, '', '0', false, [] 误判为 null，应使用严格比较
+    if ($value === null) return null;
     self::unifiedExceptionHandling('null', $value);
   }
 
