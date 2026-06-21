@@ -33,6 +33,7 @@ class Response implements ResponseInterface
 {
   /**
    * @var int 响应状态码
+   * @internal 仅用于构造时初始化 swooleResponse，后续不同步
    */
   protected int $statusCode = Status::OK;
   /**
@@ -41,6 +42,7 @@ class Response implements ResponseInterface
   protected string $reasonPhrase = Status::REASON_PHRASES[Status::OK];
   /**
    * @var array 默认响应标头
+   * @internal 仅用于构造时初始化 swooleResponse，后续不同步
    */
   protected array $headers = [
     'Content-Type' => 'text/html; charset=utf-8'
@@ -280,11 +282,12 @@ class Response implements ResponseInterface
    */
   #[Override] public function json(mixed $data): ResponseInterface
   {
-    $this->setContentType('application/json');
+    // 修复: 先 json_encode 成功后再 setContentType，避免编码失败但已设置了 Content-Type
     $data = json_encode($data, $this->jsonFlags);
     if (json_last_error() !== JSON_ERROR_NONE) {
       throw new RuntimeException('JSON响应数据编码失败，请检查数据是否正确。');
     }
+    $this->setContentType('application/json');
     $this->setContent($data);
     return $this;
   }
@@ -344,11 +347,21 @@ class Response implements ResponseInterface
       throw new InvalidArgumentException("没有找到要发送的文件：{$filePath}，请检查路径是否正确。");
     }
     if (empty($fileMimeType)) {
+      // 修复: finfo_open 和 finfo_file 可能返回 false，增加 false 检查
       $finfo = finfo_open(FILEINFO_MIME_TYPE);
-      $fileMimeType = finfo_file($finfo, $filePath);
-      finfo_close($finfo);
+      if ($finfo === false) {
+        $this->header('Content-Type', 'application/octet-stream');
+      } else {
+        $fileMimeType = finfo_file($finfo, $filePath);
+        finfo_close($finfo);
+        if ($fileMimeType === false) {
+          $fileMimeType = 'application/octet-stream';
+        }
+        $this->header('Content-Type', $fileMimeType);
+      }
+    } else {
+      $this->header('Content-Type', $fileMimeType);
     }
-    $this->header('Content-Type', $fileMimeType);
     return $this->swooleResponse->sendfile($filePath, $offset, $length);
   }
 
@@ -357,7 +370,8 @@ class Response implements ResponseInterface
    */
   #[Override] public function getHeader(): array
   {
-    return $this->swooleResponse->header;
+    // 修复: swooleResponse->header 可能为 null，使用 null 合并确保返回数组
+    return $this->swooleResponse->header ?? [];
   }
 
   /**
@@ -384,9 +398,12 @@ class Response implements ResponseInterface
     string $priority = ''
   ): ResponseInterface
   {
-    return $this->cookie(
+    // 修复: rawCookie 应调用 swooleResponse->rawcookie() 而非 cookie()，保留 rawCookie 语义
+    $result = $this->swooleResponse->rawcookie(
       $key, $value, $expire, $path, $domain, $secure, $httponly, $samesite, $priority
     );
+    if (!$result) throw new RuntimeException('设置rawCookie失败。');
+    return $this;
   }
 
   /**
