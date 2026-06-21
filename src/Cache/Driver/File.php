@@ -404,10 +404,10 @@ class File extends Driver
   /**
    * 获取锁文件
    *
-   * @param $scene
+   * @param string $scene 锁场景标识
    * @return string
    */
-  private function getLockFilename($scene): string
+  private function getLockFilename(string $scene): string
   {
     $dir = $this->dir('/lock');
     return $dir . $scene;
@@ -493,7 +493,11 @@ class File extends Driver
    */
   #[Override] public function getArray(string $key): array|false
   {
-    return $this->get($key, []);
+    // 修复问题#4：原实现 get($key, []) 永远返回数组不会返回 false，
+    // 改为缓存不存在时返回 false，与接口声明 array|false 一致
+    $result = $this->get($key);
+    if ($result === null) return false;
+    return is_array($result) ? $result : [$result];
   }
 
   /**
