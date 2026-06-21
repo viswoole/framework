@@ -164,10 +164,13 @@ class File extends Drive
         : LogManager::formatLogDataToString($this->logFormat, $logRecord);
       if (false === $logString && json_last_error() !== JSON_ERROR_NONE) {
         $msg = '无法序列化context：' . json_last_error_msg();
-        // 抛出异常
         trigger_error($msg, E_USER_WARNING);
         $logRecord['context'] = $msg;
-        $logString = json_encode($logRecord, $this->json_flags);
+        $logString = json_encode($logRecord, $this->json_flags | JSON_INVALID_UTF8_SUBSTITUTE);
+      }
+      // 修复问题#20：二次编码仍可能失败时使用安全的 fallback，避免写入空内容
+      if ($logString === false) {
+        $logString = '{"error":"log encoding failed"}';
       }
       $logDir = $this->getLogDir($level);
       // 获取日志文件夹下所有日志文件
@@ -195,9 +198,12 @@ class File extends Drive
       // 输出日志到控制台
       LogManager::echoConsole($level, $logString);
       // 写入日志数据
-      file_put_contents($currentLogFile, $logString . PHP_EOL, FILE_APPEND);
+      // 修复问题#9：file_put_contents 无并发保护，添加 LOCK_EX 标志防止并发写入交叉
+      file_put_contents($currentLogFile, $logString . PHP_EOL, FILE_APPEND | LOCK_EX);
       // 如果当前日志文件数量超过设定的最大文件数量，则删除最早创建的一个
-      if ($logFileCount > $this->maxFiles) {
+      // 修复问题#11：maxFiles 限制 off-by-one，文件编号从0开始，
+      // 实际文件数量 = 编号 + 1，应使用实际文件数量与 maxFiles 比较
+      if ($logFileCount + 1 > $this->maxFiles) {
         // 按文件创建时间排序
         usort($logFiles, function ($a, $b) {
           return filemtime($a) <=> filemtime($b);
