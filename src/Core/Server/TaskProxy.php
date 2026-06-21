@@ -54,9 +54,10 @@ class TaskProxy
     private readonly Closure    $finish_callback
   )
   {
-    $this->data = $this->swooleTask->data['data'];
-    $this->queue_id = $this->swooleTask->data['queueId'];
-    $this->topic = $this->swooleTask->data['topic'];
+    // 修复: 使用 null 合并运算符，避免数据访问无验证导致未定义键警告
+    $this->data = $this->swooleTask->data['data'] ?? null;
+    $this->queue_id = $this->swooleTask->data['queueId'] ?? null;
+    $this->topic = $this->swooleTask->data['topic'] ?? null;
     if (isset($this->swooleTask->data['dispatch_time'])) {
       $this->swooleTask->dispatch_time = $this->swooleTask->data['dispatch_time'];
     }
