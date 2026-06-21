@@ -71,7 +71,8 @@ class DbManager
     $this->table->column('save', Table::TYPE_INT, 4);
     $this->table->create();
     $debug = $config->get('database.debug', true);
-    $save = $config->get('info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER);
+    // 修复: 配置路径错误，应与 database.debug 一致使用 database 命名空间下的 info_save_manner
+    $save = $config->get('database.info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER);
     if (!is_int($save)) {
       $save = self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER;
     }
