@@ -154,14 +154,12 @@ class Env implements ArrayAccess
    */
   public function getEnv(string $name, $default = null): mixed
   {
-    $result = getenv('PHP_' . $name);
+    $result = getenv($name);
 
     if (false === $result) return $default;
 
-    if ('false' === $result) {
-      $result = false;
-    } elseif ('true' === $result) {
-      $result = true;
+    if (is_string($result) && isset($this->convert[$result])) {
+      $result = $this->convert[$result];
     }
 
     if (!isset($this->data[$name])) {
