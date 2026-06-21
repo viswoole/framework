@@ -82,6 +82,7 @@ class RedisPool extends ConnectionPool
     } catch (Throwable) {
       return false;
     }
-    return $result;
+    // 修复：ping() 实际返回字符串 '+PONG' 或 true，与方法声明的 bool 返回类型冲突，统一转为布尔值
+    return $result === true || $result === '+PONG';
   }
 }
