@@ -57,15 +57,15 @@ interface CacheDriverInterface
    * @access public
    * @param string $key 缓存标识
    * @param mixed $value 存储数据
-   * @param DateTime|int $expire 有效时间（秒）
+   * @param DateTime|int|null $expire 有效时间（秒），null表示使用驱动默认值
    * @param bool $NX 如果为true则缓存不存在才会写入
    * @return bool
    */
   public function set(
-    string       $key,
-    mixed        $value,
-    DateTime|int $expire = 0,
-    bool         $NX = false
+    string            $key,
+    mixed             $value,
+    DateTime|int|null $expire = null,
+    bool              $NX = false
   ): bool;
 
   /**
