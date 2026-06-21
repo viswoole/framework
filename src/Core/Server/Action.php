@@ -110,7 +110,7 @@ class Action
   {
     $pid_dir = null;
     if ($server_name) $pid_dir = config("server.servers.$server_name.options.pid_store_dir");
-    if (empty($pid_dir)) $pid_dir = Server::DEFAULT_PID_STORE_DIR;
+    if (empty($pid_dir)) $pid_dir = Server::getDefaultPidStoreDir();
     return $pid_dir;
   }
 
@@ -201,7 +201,7 @@ class Action
    * @return void
    * @throws ServerException
    */
-  public static function reload(string $server_name, mixed $only_reload_task_worker = false): void
+  public static function reload(string $server_name, bool $only_reload_task_worker = false): void
   {
     $pid = self::getServerPid($server_name);
     if ($pid) {
