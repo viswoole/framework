@@ -95,8 +95,8 @@ class File extends Driver
     if (preg_match(self::EXPIRE_PATTERN, $fileContent, $matches)) {
       $fileExpireTime = (int)$matches[1] - time();
       if ($fileExpireTime < 0) {
-        // 文件已经过期，删除文件
-        $this->unlock($filename);
+        // 修复：文件已过期应调用 unlink 删除文件，原代码错误调用了 unlock（解锁）
+        $this->unlink($filename);
         return null;
       } else {
         $fileContent = substr($fileContent, strlen($matches[0]));
@@ -140,28 +140,20 @@ class File extends Driver
   }
 
   /**
-   * @inheritDoc
+   * 删除文件
+   *
+   * @param string $path
+   * @return bool
    */
-  #[Override] public function unlock(string $id): bool
+  protected function unlink(string $path): bool
   {
-    if (empty($this->lockList)) return false;
-    if (!isset($this->lockList[$id])) return false;
-    $lockInfo = $this->lockList[$id];
-    $lockHandle = $lockInfo['lockHandle'];
-    $secretKey = $lockInfo['secretKey'];
-    if (is_resource($lockHandle)) {
-      // 读取文件内容
-      $fileContent = file_get_contents(stream_get_meta_data($lockHandle)['uri']);
-      if ($fileContent === $secretKey) {
-        // 如果文件内容与锁的secretKey匹配，解锁
-        flock($lockHandle, LOCK_UN);
-        fclose($lockHandle);
-        unset($this->lockList[$id]);
-        return true;
-      } else {
-        return false;
-      }
-    } else {
+    try {
+      $result = is_file($path) && unlink($path);
+      $dir = dirname($path);
+      // 如果目录为空，删除目录
+      if (count(glob($dir . '/*')) === 0) rmdir($dir);
+      return $result;
+    } catch (Throwable) {
       return false;
     }
   }
@@ -251,7 +243,10 @@ class File extends Driver
     if (!is_file($filename)) return false;
     $fileContent = file_get_contents($filename);
     $expire = $this->hasExpire($fileContent);
-    if ($expire === true) return false;
+    if ($expire === true) {
+      $this->unlink($filename);
+      return false;
+    }
     return $expire;
   }
 
@@ -297,30 +292,11 @@ class File extends Driver
   }
 
   /**
-   * 删除文件
-   *
-   * @param string $path
-   * @return bool
-   */
-  protected function unlink(string $path): bool
-  {
-    try {
-      $result = is_file($path) && unlink($path);
-      $dir = dirname($path);
-      // 如果目录为空，删除目录
-      if (count(glob($dir . '/*')) === 0) rmdir($dir);
-      return $result;
-    } catch (Throwable) {
-      return false;
-    }
-  }
-
-  /**
    * @inheritDoc
    */
   #[Override] public function has(string $key): bool
   {
-    return is_file($this->filename($key));
+    return $this->getRaw($key) !== null;
   }
 
   /**
@@ -380,14 +356,29 @@ class File extends Driver
 
     while ($retry-- > 0) {
 
-      $lockHandle = fopen($filename, 'w');
+      // 修复：使用 'c+' 模式打开文件，避免 'w' 模式截断已有锁文件内容导致无法判断上一个锁状态
+      $lockHandle = fopen($filename, 'c+');
+      if ($lockHandle === false) {
+        System::sleep($sleep);
+        continue;
+      }
 
       if (flock($lockHandle, LOCK_EX | LOCK_NB)) {
-        // 读取文件内容
-        $fileContent = file_get_contents(stream_get_meta_data($lockHandle)['uri']);
-        //如果上一个锁还未过期则取锁失败
-        if ($this->hasExpire($fileContent) === true) break;
-        // 将锁ID写入锁文件
+        // flock 成功意味着没有其他进程持有锁
+        // 读取文件内容，仅用于判断上一个锁是否已过期（处理进程崩溃未释放锁的情况）
+        $fileContent = stream_get_contents($lockHandle, 0, 0);
+        // 仅当上一个锁有过期时间且未过期时才重试；无过期时间(-1)或已过期(true)都应获取锁
+        $expireStatus = $fileContent === '' ? true : $this->hasExpire($fileContent);
+        if ($expireStatus !== true && $expireStatus > 0) {
+          // 上一个锁有过期时间且未过期，取锁失败，释放当前锁并关闭句柄后重试
+          flock($lockHandle, LOCK_UN);
+          fclose($lockHandle);
+          System::sleep($sleep);
+          continue;
+        }
+        // 将锁ID写入锁文件，先截断旧内容再写入
+        ftruncate($lockHandle, 0);
+        rewind($lockHandle);
         fwrite($lockHandle, $data);
         // 刷新文件缓冲区
         fflush($lockHandle);
@@ -401,7 +392,8 @@ class File extends Driver
         $result = true;
         break;
       } else {
-        //未获得锁 休眠
+        // 修复：未获得锁时关闭句柄避免文件句柄泄漏，再休眠重试
+        fclose($lockHandle);
         System::sleep($sleep);
       }
     }
@@ -418,7 +410,7 @@ class File extends Driver
   private function getLockFilename($scene): string
   {
     $dir = $this->dir('/lock');
-    return $dir . $this->getCacheKey($scene);
+    return $dir . $scene;
   }
 
   /**
@@ -428,6 +420,38 @@ class File extends Driver
   {
     foreach ($this->lockList as $lockId => $lockInfo) {
       if ($lockInfo['autoUnlock']) $this->unlock($lockId);
+    }
+  }
+
+  /**
+   * @inheritDoc
+   */
+  #[Override] public function unlock(string $id): bool
+  {
+    if (empty($this->lockList)) return false;
+    if (!isset($this->lockList[$id])) return false;
+    $lockInfo = $this->lockList[$id];
+    $lockHandle = $lockInfo['lockHandle'];
+    $secretKey = $lockInfo['secretKey'];
+    if (is_resource($lockHandle)) {
+      // 读取文件内容
+      rewind($lockHandle);
+      $fileContent = stream_get_contents($lockHandle);
+      if ($fileContent === $secretKey) {
+        // 修复：解锁前先清空文件内容，避免重新获取锁时读到旧的过期数据导致误判
+        ftruncate($lockHandle, 0);
+        rewind($lockHandle);
+        fflush($lockHandle);
+        // 释放锁并关闭句柄
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+        unset($this->lockList[$id]);
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
     }
   }
 
@@ -483,7 +507,7 @@ class File extends Driver
     $array = $this->getArray($key);
     if (empty($array)) return 0;
     if (is_string($values)) $values = [$values];
-    $newArray = array_filter($array, function ($value) use ($values, &$count) {
+    $newArray = array_filter($array, function ($value) use ($values) {
       return !in_array($value, $values);
     });
     $count = count($array) - count($newArray);
