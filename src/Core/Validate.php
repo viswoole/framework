@@ -92,7 +92,8 @@ class Validate
         if ($childType instanceof ReflectionNamedType) {
           $tArr[] = $childType->getName();
         } else {
-          $tArr[] = (string)$childType->getTypes();
+          // 修复#10: (string)$childType->getTypes()对数组转字符串得到"Array"，改为(string)$childType
+          $tArr[] = (string)$childType;
         }
       }
       return $tArr;
@@ -132,7 +133,7 @@ class Validate
   /**
    * 批量验证值是否为指定类型
    *
-   * @param string $value 值
+   * @param mixed $value 值
    * @param string[] $types 需要验证的类型
    * @return mixed
    */
@@ -196,10 +197,11 @@ class Validate
     $cases = call_user_func($enum . '::cases');
     // 兼容用数字索引枚举
     if (is_int($case)) {
-      if ($cases[$case]) {
+      // 修复#11: 枚举数字索引未做边界检查，改为isset检查；修复return throw语法错误
+      if (isset($cases[$case])) {
         return $cases[$case];
       } else {
-        return throw new ValidateException('must be between 0 and ' . count($cases) - 1);
+        throw new ValidateException('must be between 0 and ' . (count($cases) - 1));
       }
     }
     $names = [];
