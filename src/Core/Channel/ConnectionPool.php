@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Channel;
 
 use Override;
+use RuntimeException;
 use Swoole\Coroutine;
 use Swoole\Coroutine\Channel;
 use Viswoole\Core\Channel\Contract\ConnectionPoolInterface;
@@ -63,6 +64,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function fill(int $size = null): void
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     if (!$this->isCoroutine()) return;
     $size = $size === null ? $this->max_size : $size;
     while ($size > $this->length()) {
@@ -85,6 +90,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function length(): int
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     return $this->pool->length();
   }
 
@@ -124,6 +133,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function put(mixed $connection): void
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     // 非协程环境不归还连接
     if (!$this->isCoroutine()) return;
     // 判断返回连接是否为NULL 和 连接是否可用 可用则归还连接
@@ -160,6 +173,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function pop(float $timeout = -1): mixed
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     // 如果非协程环境 则直接创建连接
     if (!$this->isCoroutine()) return $this->createConnection();
     if ($this->isEmpty() && $this->length() < $this->max_size) $this->make();
@@ -170,7 +187,13 @@ abstract class ConnectionPool implements ConnectionPoolInterface
       $this->pool->errCode
     );
     //判断连接是否可用 如果连接不可用则返回一个新的连接 不可用的连接将会被丢弃
-    if (!$this->connectionDetection($connection)) $connection = $this->createConnection();
+    // 修复: 对 createConnection() 的新连接也执行 connectionDetection 检测，避免返回不可用连接
+    if (!$this->connectionDetection($connection)) {
+      $connection = $this->createConnection();
+      if (!$this->connectionDetection($connection)) {
+        throw new RuntimeException('新创建的连接不可用');
+      }
+    }
     return $connection;
   }
 
@@ -179,6 +202,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function isEmpty(): bool
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     return $this->pool->isEmpty();
   }
 
@@ -187,6 +214,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function isFull(): bool
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     return $this->pool->isFull();
   }
 
@@ -195,6 +226,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   #[Override] public function stats(): array
   {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
     return $this->pool->stats();
   }
 
