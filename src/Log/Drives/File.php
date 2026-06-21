@@ -45,13 +45,13 @@ class File extends Drive
    * @param string $log_dir 日志存储目录路径
    */
   public function __construct(
-    protected int    $storageDays = 7,
-    protected int    $maxFiles = 30,
-    protected int    $fileSize = 1024 * 1024 * 10,
+    protected int $storageDays = 7,
+    protected int $maxFiles = 30,
+    protected int $fileSize = 1024 * 1024 * 10,
     protected string $dateFormat = 'c',
     protected string $logFormat = '[%timestamp][%level]: %message %context in %source',
-    protected bool   $json = true,
-    protected int    $json_flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+    protected bool $json = true,
+    protected int $json_flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
     protected string $log_dir = BASE_PATH . '/runtime/logs',
   )
   {
@@ -105,8 +105,11 @@ class File extends Drive
     // 当前日期
     $currentDate = (int)date('Ymd');
     foreach ($levelDirs as $dateDir) {
+      $dirName = basename($dateDir);
+      // 修复：验证目录名是否为 Ymd（8位数字）日期格式，避免误删非日期命名的目录
+      if (!preg_match('/^\d{8}$/', $dirName)) continue;
       // 目录名则是日期
-      $date = (int)basename($dateDir);
+      $date = (int)$dirName;
       // 如果当前日期减去目录日期 大于最大存储的过期天数 则删除日志
       if ($currentDate - $date > $days) $this->rmdir($dateDir, $level);
     }
@@ -169,12 +172,23 @@ class File extends Drive
       $logDir = $this->getLogDir($level);
       // 获取日志文件夹下所有日志文件
       $logFiles = glob("$logDir/*.log");
-      // 日志数量
-      $logFileCount = count($logFiles);
+      // 修复：查找已有日志文件的最大编号，避免使用 count 导致文件被删除后编号回退覆盖已有日志
+      $maxIndex = -1;
+      foreach ($logFiles as $logFile) {
+        // 文件名格式: {level}_{number}.log
+        if (preg_match('/_(\d+)\.log$/', basename($logFile), $matches)) {
+          $index = (int)$matches[1];
+          if ($index > $maxIndex) $maxIndex = $index;
+        }
+      }
+      // 当前日志文件编号（取最大编号，若无文件则从0开始）
+      $logFileCount = max($maxIndex, 0);
       // 当前日志文件名
-      $currentLogFile = "$logDir/{$level}_$logFileCount.log";
-      // 如果当前日志文件超过设定的文件大小，则创建新的日志文件 +1
-      if (!file_exists($currentLogFile) || filesize($currentLogFile) >= $this->fileSize) {
+      $currentLogFile = "$logDir/{$level}_{$logFileCount}.log";
+      // 如果当前日志文件不存在或超过设定的文件大小，则创建新的日志文件 +1
+      if ($maxIndex >= 0 && (!file_exists($currentLogFile) || filesize(
+            $currentLogFile
+          ) >= $this->fileSize)) {
         $logFileCount++;
         $currentLogFile = "$logDir/" . $level . '_' . $logFileCount . '.log';
       }
