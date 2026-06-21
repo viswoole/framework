@@ -39,7 +39,7 @@ use Viswoole\Core\Config;
  * @method bool clear() 清除所有缓存
  * @method string lock(string $scene, int $expire = 10, bool $autoUnlock = false, int $retry = 5, int|float $sleep = 0.2) 获取竞争锁
  * @method void close() 关闭连接句柄（如果不手动调用则会在实例销毁时自动调用）
- * @method File connect() 获取连接句柄
+ * @method File|mixed connect() 获取连接句柄
  * @method int|false sAddArray(string $key, array|string $values) 往数组集合中追加值
  * @method array|false getArray(string $key) 获取数组集合
  * @method int|false sRemoveArray(string $key, array|string $values) 删除数组集合中的值
@@ -57,7 +57,7 @@ class CacheManager
   /**
    * @var string 默认缓存商店
    */
-  protected string $defaultStore;
+  protected string $defaultStore = '';
   /**
    * @var array<string,CacheDriverInterface> 缓存商店列表
    */
@@ -141,7 +141,7 @@ class CacheManager
    * @param string|null $name
    * @return CacheDriverInterface
    */
-  public function store(string $name = null): CacheDriverInterface
+  public function store(?string $name = null): CacheDriverInterface
   {
     if (empty($this->stores)) {
       throw new CacheErrorException('缓存商店为空，请先配置缓存商店');
