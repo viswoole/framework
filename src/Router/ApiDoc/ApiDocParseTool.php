@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\ApiDoc;
 
+use Throwable;
 use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
 
@@ -37,14 +38,22 @@ class ApiDocParseTool
     $count = 0;
     $list = [];
     foreach ($routes as $route) {
-      if ($route instanceof Group) {
-        $item = self::generateGroup($route);
-        $count += $item['count'];
-      } else {
-        $count++;
-        $item = self::generateRoute($route);
+      try {
+        if ($route instanceof Group) {
+          $item = self::generateGroup($route);
+          $count += $item['count'];
+        } else {
+          $count++;
+          $item = self::generateRoute($route);
+        }
+        $list[] = $item;
+      } catch (Throwable $e) {
+        // 解析单条路由失败时记录错误，继续解析其他路由
+        trigger_error(
+          'ApiDoc解析路由失败: ' . $e->getMessage(),
+          E_USER_WARNING
+        );
       }
-      $list[] = $item;
     }
     return [
       'count' => $count,
