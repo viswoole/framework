@@ -199,7 +199,10 @@ class Request implements RequestInterface
   {
     $userinfo = $this->getHeader('Authorization');
     if (!empty($userinfo)) {
-      foreach ($userinfo as $value) {
+      // 修复: getHeader() 返回类型为 array|string|null, 当传入 key 时返回的是字符串,
+      // 对字符串执行 foreach 会抛出 TypeError, 需统一转为数组后再遍历
+      $headers = is_array($userinfo) ? $userinfo : [$userinfo];
+      foreach ($headers as $value) {
         // 获取请求头部中的 "Authorization" 字段的值
         $authorizationHeader = $value;
         // 检查是否包含 "Basic " 前缀
@@ -433,7 +436,13 @@ class Request implements RequestInterface
     }
     foreach ($filters as $fn => $arguments) {
       if (function_exists($fn)) {
-        $data = $fn($data, ...$arguments);
+        // 修复: $arguments 可能为 null(见上方 $filters[$filter] = null 赋值),
+        // 在 strict_types 模式下对 null 使用展开运算符 ... 会抛出 TypeError
+        if (is_array($arguments)) {
+          $data = $fn($data, ...$arguments);
+        } else {
+          $data = $fn($data);
+        }
       }
     }
     return $data;
