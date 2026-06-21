@@ -161,15 +161,23 @@ class SqlBuilder
   {
     $table = $this->options->table;
     if (isset(self::$tableColumns[$table])) return self::$tableColumns[$table];
+    // 修复#1: 对表名使用反引号包裹，防止SQL注入风险
+    $quotedTable = $this->quote($table);
     $sql = match ($this->channel->type->value) {
-      'sqlite' => "PRAGMA table_info($table)",
-      'pgsql' => "SELECT column_name FROM information_schema.columns WHERE table_name = '$table'",
-      'oci' => "SELECT column_name FROM USER_TAB_COLUMNS WHERE table_name = '$table'",
-      'sqlsrv' => "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '$table'",
-      default => "DESCRIBE `$table`"
+      'sqlite' => "PRAGMA table_info($quotedTable)",
+      'pgsql' => 'SELECT column_name FROM information_schema.columns WHERE table_name = ?',
+      'oci' => 'SELECT column_name FROM USER_TAB_COLUMNS WHERE table_name = ?',
+      'sqlsrv' => 'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ?',
+      default => "DESCRIBE $quotedTable"
     };
     $conn = $this->channel->pop('read');
-    $statement = $conn->query($sql);
+    // 修复#1: pgsql/oci/sqlsrv 使用参数绑定代替直接拼接表名
+    if (in_array($this->channel->type->value, ['pgsql', 'oci', 'sqlsrv'])) {
+      $statement = $conn->prepare($sql);
+      $statement->execute([$table]);
+    } else {
+      $statement = $conn->query($sql);
+    }
     $this->channel->put($conn);
     if (!$statement) throw new DbException(
       $statement->errorInfo()[2], $statement->errorInfo()[1], $sql
@@ -507,8 +515,12 @@ class SqlBuilder
     if (!empty($this->options->join)) {
       foreach ($this->options->join as $joinItem) {
         $type = $joinItem['type'];
-        $table = $joinItem['table'];
-        $condition = $joinItem['localKey'] . $joinItem['operator'] . $joinItem['foreignKey'];
+        // 修复#3: 对join中的表名和字段名使用反引号包裹，防止SQL注入风险
+        $table = $this->quote($joinItem['table']);
+        $localKey = $this->quote($joinItem['localKey']);
+        $operator = $joinItem['operator'];
+        $foreignKey = $this->quote($joinItem['foreignKey']);
+        $condition = $localKey . $operator . $foreignKey;
         $join[] = "$type JOIN $table ON $condition";
       }
     }
@@ -545,6 +557,7 @@ class SqlBuilder
   protected function parseGroupBy(): string
   {
     if (!empty($this->options->groupBy)) {
+      // 修复#16: 对GROUP BY字段使用反引号包裹，防止SQL注入风险
       $group = array_map(function ($item) {
         return $this->quote($item);
       }, $this->options->groupBy);
@@ -563,7 +576,8 @@ class SqlBuilder
     if (empty($this->options->having)) return '';
     $havingClauses = [];
     foreach ($this->options->having as $clause) {
-      $col = $clause['column'];
+      // 修复#2: 对having条件中的字段名使用反引号包裹，防止SQL注入风险
+      $col = $this->quote($clause['column']);
       $op = $clause['operator'];
       $this->params[] = $clause['value'];
       $connector = $clause['connector'];
@@ -590,6 +604,7 @@ class SqlBuilder
         } else {
           $col = $item['column'];
           $direction = $item['direction'];
+          // 修复#10: 对排序字段使用反引号包裹，防止ORDER BY SQL注入风险
           $order[] = $this->quote($col) . ' ' . $direction;
         }
       }
