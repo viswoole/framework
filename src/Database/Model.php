@@ -192,6 +192,11 @@ abstract class Model
     return $this->query;
   }
 
+  public function __get(string $name): mixed
+  {
+    return $this->__properties($name);
+  }
+
   /**
    * 获取模型中的属性
    *
@@ -205,6 +210,11 @@ abstract class Model
     } else {
       return null;
     }
+  }
+
+  public function __isset(string $name): bool
+  {
+    return property_exists($this, $name);
   }
 
   /**
