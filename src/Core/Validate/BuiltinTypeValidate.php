@@ -216,7 +216,8 @@ class BuiltinTypeValidate
    */
   public static function true(mixed $value): true
   {
-    if ($value) return true;
+    // 修复: 使用严格比较 === true，避免 1、"1" 等真值通过校验
+    if ($value === true) return true;
     self::unifiedExceptionHandling('true', $value);
   }
 
@@ -229,7 +230,8 @@ class BuiltinTypeValidate
    */
   public static function false(mixed $value): false
   {
-    if (!$value) return false;
+    // 修复: 使用严格比较 === false，避免 0、"" 等假值通过校验
+    if ($value === false) return false;
     self::unifiedExceptionHandling('false', $value);
   }
 
