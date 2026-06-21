@@ -43,7 +43,8 @@ abstract class Facade
    */
   protected static function createFacade(): object
   {
-    if (self::$alwaysNewInstance) {
+    // 修复#1: self::改为static::，支持子类覆盖$alwaysNewInstance
+    if (static::$alwaysNewInstance) {
       return App::factory()->invokeClass(static::getMappingClass());
     } else {
       return App::factory()->make(static::getMappingClass());
