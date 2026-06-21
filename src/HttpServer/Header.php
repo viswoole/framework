@@ -32,11 +32,13 @@ class Header
    */
   public static function validate(string $name, array|string $value): void
   {
-    if (empty($name) || str_contains($name, "\n") || str_contains($name, ':')) {
+    // 修复: 增加 \r 检查，防止 CRLF 注入攻击
+    if (empty($name) || str_contains($name, "\n") || str_contains($name, "\r") || str_contains($name, ':')) {
       throw new InvalidArgumentException("无效的头部字段名称:$name");
     }
     // 验证头部字段值
-    if (!is_string($value) && !is_array($value) || empty($value)) {
+    // 修复: 使用精确的空值检查替代 empty()，避免运算符优先级导致条件语义不明确
+    if ($value === '' || $value === []) {
       throw new InvalidArgumentException("无效的头部字段值:$value");
     }
     if (is_array($value)) {
@@ -69,7 +71,8 @@ class Header
         $key = static::formatName($key, $nameModel);
       }
       if ($valueMode === 'array') {
-        if (is_string($value)) $value = explode(',', $value) ?: [];
+        // 修复: 过滤 explode 产生的空字符串值，避免引入无效空元素
+        if (is_string($value)) $value = array_filter(explode(',', $value), fn($v) => $v !== '');
       } elseif (is_array($value)) {
         $value = implode(',', $value);
       }
