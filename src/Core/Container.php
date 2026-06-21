@@ -439,8 +439,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 反射调用函数
    *
-   * @param string|Closure $concrete
-   * @param array<string|int,mixed> $params
+   * @param string|Closure $concrete 调用的函数或闭包
+   * @param array<string|int,mixed> $params 参数数组
    * @return mixed
    * @throws NotFoundException
    */
@@ -498,7 +498,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    */
   public function invokeMethod(array|callable $method, array $params = []): mixed
   {
-    if ($method instanceof Closure) return $this->invokeFunction($method);
+    // 修复: 闭包调用时需要传递 $params，否则参数被丢弃
+    if ($method instanceof Closure) return $this->invokeFunction($method, $params);
     try {
       $instance = null;
       if (is_array($method)) {
