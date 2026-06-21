@@ -17,6 +17,7 @@ namespace Viswoole\Core\Channel;
 
 use BadMethodCallException;
 use Override;
+use Swoole\Coroutine\WaitGroup;
 use Viswoole\Core\Channel\Contract\ChannelManagerInterface;
 use Viswoole\Core\Channel\Contract\ConnectionPoolInterface;
 use Viswoole\Core\Common\Str;
@@ -56,12 +57,19 @@ abstract class ChannelManager implements ChannelManagerInterface
   )
   {
     $this->defaultChannel = $defaultChannel;
-    foreach ($channels as $name => $config) {
-      run(function () use ($name, $config) {
-        $connect = $this->createPool($config);
-        $this->addChannel(Str::camelCaseToSnakeCase($name), $connect);
-      });
-    }
+    // 创建协程容器, 在其内部处理所有通道的创建
+    run(function () use ($channels) {
+      $wg = new WaitGroup();
+      foreach ($channels as $name => $config) {
+        $wg->add();
+        go(function () use ($name, $config, $wg) {
+          $channel = $this->createPool($config);
+          $this->addChannel(Str::camelCaseToSnakeCase($name), $channel);
+          $wg->done();
+        });
+      }
+      $wg->wait();
+    });
   }
 
   /**
