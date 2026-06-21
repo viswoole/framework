@@ -106,13 +106,17 @@ class ConnectManager
    */
   public function commit(): void
   {
-    $array = $this->connections;
-    foreach ($array as $key => $item) {
-      $item['connect']->commit();
-      unset($this->connections[$key]);
-      $this->put($item['channel'], $item['connect']);
+    // 修复: 使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
+    try {
+      $array = $this->connections;
+      foreach ($array as $key => $item) {
+        $item['connect']->commit();
+        unset($this->connections[$key]);
+        $this->put($item['channel'], $item['connect']);
+      }
+    } finally {
+      $this->close();
     }
-    $this->close();
   }
 
   /**
@@ -142,6 +146,12 @@ class ConnectManager
    */
   protected function close(): void
   {
+    // 修复: 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
+    $array = $this->connections;
+    foreach ($array as $key => $item) {
+      unset($this->connections[$key]);
+      $this->put($item['channel'], $item['connect']);
+    }
     $this->inTransaction = false;
     $this->connections = [];
   }
@@ -164,12 +174,16 @@ class ConnectManager
    */
   public function rollBack(): void
   {
-    $array = $this->connections;
-    foreach ($array as $key => $item) {
-      $item['connect']->rollBack();
-      unset($this->connections[$key]);
-      $this->put($item['channel'], $item['connect']);
+    // 修复: 使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
+    try {
+      $array = $this->connections;
+      foreach ($array as $key => $item) {
+        $item['connect']->rollBack();
+        unset($this->connections[$key]);
+        $this->put($item['channel'], $item['connect']);
+      }
+    } finally {
+      $this->close();
     }
-    $this->close();
   }
 }
