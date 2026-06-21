@@ -220,6 +220,9 @@ class TaskManager
         $methods = $refClass->getMethods();
         foreach ($methods as $method) {
           $methodName = $method->getName();
+          // 修复: 过滤掉魔术方法(以 __ 开头, 如 __construct、__destruct、__get 等),
+          // 这些方法不应被注册为任务方法
+          if (str_starts_with($methodName, '__')) continue;
           if ($method->isStatic()) {
             $h = "$handle::$methodName";
           } else {
