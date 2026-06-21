@@ -166,13 +166,12 @@ class Collection extends BaseCollection
   public function sortBy(string $column, int $sortOrder = SORT_ASC): Collection
   {
     $items = $this->getArrayCopy();
+    // 修复#12: 使用<=>飞船操作符替代比较逻辑，语义更明确
     usort($items, function ($a, $b) use ($column, $sortOrder) {
-      if ($a[$column] == $b[$column]) {
-        return 0;
-      }
-      return ($sortOrder == SORT_ASC)
-        ? ($a[$column] < $b[$column] ? -1 : 1)
-        : ($a[$column] > $b[$column] ? -1 : 1);
+      $aVal = $a[$column] ?? null;
+      $bVal = $b[$column] ?? null;
+      $comparison = $aVal <=> $bVal;
+      return $sortOrder === SORT_DESC ? -$comparison : $comparison;
     });
     return $this->cloneSelf($items);
   }
