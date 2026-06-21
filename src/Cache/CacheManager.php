@@ -69,10 +69,12 @@ class CacheManager
   public function __construct(protected Config $config)
   {
     $stores = $config->get('cache.stores', []);
-    $this->stores = $stores;
-    if (!empty($this->stores)) {
-      $this->defaultStore = $config->get('cache.default', array_key_first($stores));
-      foreach ($this->stores as $key => $driver) $this->addStore($key, $driver);
+    // 修复：初始化为空数组，统一由 addStore 以小写 key 存储，避免原始配置的大写 key 与小写 key 共存
+    $this->stores = [];
+    if (!empty($stores)) {
+      // 修复：defaultStore 统一转为小写，与 store() 读取时的小写转换保持一致
+      $this->defaultStore = strtolower($config->get('cache.default', array_key_first($stores)));
+      foreach ($stores as $key => $driver) $this->addStore($key, $driver);
     }
   }
 
