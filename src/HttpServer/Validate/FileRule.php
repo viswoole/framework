@@ -47,24 +47,24 @@ class FileRule extends BaseValidateRule
   /**
    * @inheritDoc
    */
-  #[Override] public function validate(mixed $value, string $name = ''): mixed
+  #[Override] public function validate(mixed $value): mixed
   {
     if (empty($value)) {
       if (is_null($value)) return null;
-      $this->error("必须上传 $name 文件");
+      $this->error('必须上传文件');
     }
     // 修复: count() 对非 Countable 对象(如单个 UploadedFile)会抛出 TypeError
     // 需先判断值类型来计算文件数量, 单个文件视为 1 个
     if ($this->count > 0) {
       $fileCount = is_array($value) ? count($value) : 1;
       if ($fileCount !== $this->count) {
-        $this->error("必须上传 $this->count 个 $name 文件");
+        $this->error("必须上传 $this->count 个文件");
       }
     }
     if (is_array($value)) {
-      foreach ($value as $item) $this->checkFile($item, $name);
+      foreach ($value as $item) $this->checkFile($item);
     } else {
-      $this->checkFile($value, $name);
+      $this->checkFile($value);
     }
     return $value;
   }
@@ -73,10 +73,9 @@ class FileRule extends BaseValidateRule
    * 验证文件
    *
    * @param UploadedFile $file
-   * @param string $name
    * @return void
    */
-  private function checkFile(UploadedFile $file, string $name): void
+  private function checkFile(UploadedFile $file): void
   {
     if ($this->fileMime !== '*') {
       $type = $file->getClientMediaType();
@@ -87,10 +86,10 @@ class FileRule extends BaseValidateRule
       // 修复: 原逻辑完全反转, 原代码"不在允许列表中就 return(通过), 在列表中就 error(拒绝)"
       // 正确逻辑应为"在允许列表中才通过(return), 不在列表中则拒绝(error)"
       if (in_array(strtolower($type), $types)) return;
-      $this->error("$name 文件的类型必须为 $this->fileMime");
+      $this->error("文件类型必须为 $this->fileMime");
     }
     if ($this->maxSize > 0 && $file->getSize() > $this->maxSize) {
-      $this->error("$name 文件大小不能超过 $this->maxSize 字节");
+      $this->error("文件大小不能超过 $this->maxSize 字节");
     }
   }
 }
