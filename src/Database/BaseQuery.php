@@ -185,7 +185,8 @@ class BaseQuery
    */
   public function page(int $page, int $pageSize): BaseQuery
   {
-    if ($page < 1) $page = 1;
+    $page = max(1, $page);
+    $pageSize = max(1, $pageSize);
     $offset = ($page - 1) * $pageSize;
     return $this->offset($offset)->limit($pageSize);
   }
