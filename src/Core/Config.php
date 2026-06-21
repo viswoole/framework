@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use RuntimeException;
 use Viswoole\Core\Common\Str;
 
 /**
@@ -88,7 +89,14 @@ class Config
         'php' => include $file,
         'yml', 'yaml' => function_exists('yaml_parse_file') ? yaml_parse_file($file) : [],
         'ini' => parse_ini_file($file, true, INI_SCANNER_TYPED) ?: [],
-        'json' => json_decode(file_get_contents($file), true),
+        'json' => (static function () use ($file) {
+          $content = file_get_contents($file);
+          $data = json_decode($content, true);
+          if (json_last_error() !== JSON_ERROR_NONE) {
+            throw new RuntimeException("JSON配置文件解析失败: $file - " . json_last_error_msg());
+          }
+          return $data ?? [];
+        })(),
         default => [],
       };
       if (isset($config) && is_array($config)) {
@@ -157,17 +165,16 @@ class Config
    */
   public function get(string $name = null, mixed $default = null): mixed
   {
-    if (empty($name)) return $this->config;
+    // 修复#3: empty()误判配置键'0'，改为严格判断null和空字符串
+    if ($name === null || $name === '') return $this->config;
     // 不区分大小写处理
     $nameParts = explode('.', $this->formatConfigKey($name));
     $config = $this->config;
 
     foreach ($nameParts as $part) {
       if (!is_array($config) || !array_key_exists($part, $config)) return $default;
-      $config = $config[$part] ?? $default;
-      if ($config === $default) {
-        break; // 当前层级已找不到有效配置且已返回默认值，无需继续遍历
-      }
+      // 修复#4: ??将null配置值误判为缺失，前一行已用array_key_exists确认键存在，直接取值
+      $config = $config[$part];
     }
     return $config;
   }
@@ -190,7 +197,8 @@ class Config
       $keys = explode('.', $key);
       $refArray = &$this->config;
       foreach ($keys as $k) {
-        if (!isset($refArray[$k])) {
+        // 修复#5: isset()覆盖null值配置，改为array_key_exists检查键是否存在，并确保值为数组才继续深入
+        if (!array_key_exists($k, $refArray) || !is_array($refArray[$k])) {
           // 如果键不存在，则创建它并将其设置为一个空数组
           $refArray[$k] = [];
         }
