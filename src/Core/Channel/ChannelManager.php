@@ -94,7 +94,8 @@ abstract class ChannelManager implements ChannelManagerInterface
   #[Override] public function setDefaultChannel(string $channel_name): void
   {
     if (!$this->hasChannel($channel_name)) throw new ChannelNotFoundException(
-      "redis通道{$channel_name}不存在"
+      // 修复: 移除硬编码的 "redis"，使错误信息通用化
+      "通道{$channel_name}不存在"
     );
     $this->defaultChannel = $channel_name;
   }
@@ -112,7 +113,8 @@ abstract class ChannelManager implements ChannelManagerInterface
    */
   public function __call(string $name, array $arguments)
   {
-    if (method_exists(ConnectionPool::class, $name)) {
+    // 修复: 检查接口 ConnectionPoolInterface 而非具体实现类 ConnectionPool，提高扩展性
+    if (method_exists(ConnectionPoolInterface::class, $name)) {
       return call_user_func_array([$this->getChannel(), $name], $arguments);
     } else {
       throw new BadMethodCallException("方法{$name}不存在");
