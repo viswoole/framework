@@ -47,7 +47,8 @@ class Event
   {
     $event = strtolower(trim($event));
     if (str_contains($event, '.')) {
-      [$event, $id] = explode($event, '.', 2);
+      // 修复: explode 参数顺序应为 (分隔符, 字符串, 限制)
+      [$event, $id] = explode('.', $event, 2);
       $this->callHandle($event, $id, $arguments);
     } else {
       $listens = $this->listens[$event] ?? [];
@@ -157,10 +158,12 @@ class Event
         'handle' => $handle
       ];
       return $id;
-    } elseif (class_exists($event)) {
+    } elseif (class_exists($handle)) {
+      // 修复: 应检查 $handle 而非 $event 是否为类名
       $eventList = [];
-      $refClass = new ReflectionClass($event);
-      $event = strtolower($refClass->getShortName());
+      $refClass = new ReflectionClass($handle);
+      $event = strtolower(trim($event));
+      $className = $refClass->getName();
       // 获取类的方法
       $methods = $refClass->getMethods();
       foreach ($methods as $method) {
@@ -170,17 +173,18 @@ class Event
           || $method->isConstructor()
           || $method->isDestructor()
         ) continue;
+        // 修复: 使用独立变量保存处理器，避免 $handle 被覆盖后影响后续循环
         if ($method->isStatic()) {
-          $handle = $refClass->getName() . '::' . $method->getName();
+          $handler = $className . '::' . $method->getName();
         } else {
-          $handle = [$handle, $method->getName()];
+          $handler = [$className, $method->getName()];
         }
         $id = strtolower($method->getName());
         $eventList[] = $id;
         $this->listens[$event][$id] = [
           'limit' => $limit,
           'count' => 0,
-          'handle' => $handle
+          'handle' => $handler
         ];
       }
       return $eventList;
