@@ -97,14 +97,22 @@ class Server
     // Server 的类型
     'sock_type' => SWOOLE_SOCK_TCP,
   ];
+  // 修复#8: 类常量依赖BASE_PATH存在加载顺序风险，改为静态方法延迟计算
   /**
-   * @var string PID默认存储目录
+   * 获取PID默认存储目录
+   * @return string
    */
-  const string DEFAULT_PID_STORE_DIR = BASE_PATH . '/runtime/server_pid';
+  public static function getDefaultPidStoreDir(): string
+  {
+    return BASE_PATH . '/runtime/server_pid';
+  }
   /**
-   * @var array 默认全局配置
+   * 获取默认全局配置
+   * @return array
    */
-  const array DEFAULT_GLOBAL_OPTION = [
+  public static function getDefaultGlobalOption(): array
+  {
+    return [
     // 一键协程化Hook函数范围 参考https://wiki.swoole.com/#/server/setting?id=hook_flags
     Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
     // 是否启用异步风格服务器的协程支持
@@ -125,7 +133,8 @@ class Server
     Constant::OPTION_PACKAGE_MAX_LENGTH => 2 * 1024 * 1024,
     // 日志输出等级
     Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
-  ];
+    ];
+  }
   /**
    * @var string 服务名称
    */
@@ -155,7 +164,10 @@ class Server
     /**
      * 当前正在运行的服务名称
      */
-    define('SERVER_NAME', $server_name);
+    // 修复#9: define()重复构造报Warning，增加defined检查
+    if (!defined('SERVER_NAME')) {
+      define('SERVER_NAME', $server_name);
+    }
     $this->serverName = $server_name;
     $this->event->emit('CreateServerBefore', [$this]);
     $this->getConfig();
@@ -195,7 +207,7 @@ class Server
       self::DEFAULT_CONSTRUCT_ARGUMENTS, $config['construct'] ?? []
     );
     // 全局配置
-    $globalOptions = config('server.options', self::DEFAULT_GLOBAL_OPTION);
+    $globalOptions = config('server.options', self::getDefaultGlobalOption());
     // 合并配置
     $config['options'] = array_merge($globalOptions, $config['options'] ?? []);
     // 添加事件
@@ -208,7 +220,7 @@ class Server
     $config['options'][Constant::OPTION_TASK_ENABLE_COROUTINE] = true;
     // 判断PID存储路径是否设置
     if (empty($config['options'][Constant::OPTION_PID_FILE])) {
-      $config['options'][Constant::OPTION_PID_FILE] = self::DEFAULT_PID_STORE_DIR . "/$this->serverName.pid";
+      $config['options'][Constant::OPTION_PID_FILE] = self::getDefaultPidStoreDir() . "/$this->serverName.pid";
     }
     // 判断PID存储路径是否存在，如果不存在则创建
     $pid_file = $config['options'][Constant::OPTION_PID_FILE];
