@@ -45,7 +45,9 @@ class Length extends BaseValidateRule
   #[Override] public function validate(mixed $value): mixed
   {
     if (is_string($value)) {
-      $len = mb_strlen(trim($value));
+      // 修复: 先 trim 再计算长度，并返回 trim 后的值，保持校验与返回值一致
+      $value = trim($value);
+      $len = mb_strlen($value);
     } elseif (is_array($value)) {
       $len = count($value);
     } else {
