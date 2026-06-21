@@ -26,12 +26,12 @@ use Viswoole\Core\Validate\BaseValidateRule;
 class Min extends BaseValidateRule
 {
   /**
-   * @param int $min 最小值
+   * @param int|float $min 最小值
    * @param string $message
    */
   public function __construct(
-    public int $min,
-    string     $message = ''
+    public int|float $min,
+    string           $message = ''
   )
   {
     parent::__construct($message);
@@ -43,6 +43,7 @@ class Min extends BaseValidateRule
   #[Override] public function validate(mixed $value): int|float
   {
     if (!is_numeric($value)) $this->error('必须为数值类型');
+    // 修复: $min 类型已改为 int|float，根据 $min 实际类型决定转换方式，消除 is_float 死代码
     $value = is_float($this->min) ? floatval($value) : intval($value);
     if ($value < $this->min) {
       $this->error("必须大于或等于 $this->min");
