@@ -341,7 +341,7 @@ class BaseQuery
    */
   public function withoutColumns(string ...$column): static
   {
-    $this->options->withoutColumns = is_string($column) ? explode(',', $column) : $column;
+    $this->options->withoutColumns = $column;
     return $this;
   }
 
