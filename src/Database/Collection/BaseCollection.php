@@ -62,22 +62,33 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 转换为数组
+   * 将数据集合转换为数组格式
    *
-   * @access public
-   * @param bool $withAttr 是否使用获取器对数据进行处理
-   * @param bool $hidden 是否应用隐藏字段
-   * @return array
+   * 该方法会递归处理嵌套的数据集合，应用获取器转换和隐藏字段过滤。
+   * 支持通过最大深度参数控制递归层级，防止无限递归导致的性能问题。
+   *
+   * @param bool $withAttr 是否应用获取器对数据进行处理，默认为true
+   * @param bool $hidden 是否应用隐藏字段过滤，默认为true
+   * @param int $maxDepth 最大递归深度，默认值为10，用于防止嵌套集合无限递归
+   * @return array 转换后的数组数据，键值对结构与原始集合保持一致
    */
-  public function toArray(bool $withAttr = true, bool $hidden = true): array
+  public function toArray(bool $withAttr = true, bool $hidden = true, int $maxDepth = 10): array
   {
     $withAttrColumn = array_keys($this->withAttr);
     $array = [];
     foreach ($this as $key => $value) {
       if ($value instanceof BaseCollection) {
-        $value = $value->toArray($withAttr, $hidden);
+        // 修复#18: 递归深度检查，超过最大深度时停止递归
+        if ($maxDepth <= 0) {
+          $value = [];
+        } else {
+          $value = $value->toArray($withAttr, $hidden, $maxDepth - 1);
+        }
       }
-      if (is_array($value)) $this->removeHiddenKeys($value, $this->hidden);
+      // 修复#7: removeHiddenKeys通过引用修改参数，需要确保对数组类型的value也生效
+      if (is_array($value)) {
+        $this->removeHiddenKeys($value, $this->hidden);
+      }
       if (is_string($key)) {
         if (in_array($key, $withAttrColumn)) {
           $value = $this->withAttr[$key]($value);
@@ -112,6 +123,19 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
         }
       }
     }
+  }
+
+  /**
+   * 将数据集合转换为JSON字符串表示
+   *
+   * 该方法实现了PHP的__toString魔术方法，当对象被当作字符串使用时自动调用。
+   * 内部通过toArray()方法将集合转换为数组，再编码为JSON格式，确保中文字符不被转义。
+   *
+   * @return string JSON格式的字符串，包含集合的所有数据，中文字符保持原样输出
+   */
+  public function __toString(): string
+  {
+    return json_encode($this->toArray(), JSON_UNESCAPED_UNICODE);
   }
 
   /**
