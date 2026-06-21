@@ -81,16 +81,15 @@ class App extends Container
    */
   private Table $_config;
   /**
-   * @var int 开始运行时间
+   * @var float 开始运行时间
    */
-  private int $startRunTime;
+  private float $startRunTime;
 
   protected function __construct()
   {
     // 确保项目根路径已定义
     $this->getRootPath();
-    // 记录开始运行时间
-    $this->startRunTime = time();
+    $this->startRunTime = microtime(true);
     // 兼容swoole原生服务对象注入
     $this->bindings[\Swoole\Server::class] = function () {
       return $this->server->getServer();
@@ -204,20 +203,20 @@ class App extends Container
    * 获取程序正常运行了多少秒
    *
    * @access public
-   * @return int 返回秒数
+   * @return float 返回秒数（含微秒精度）
    */
-  public function getUptime(): int
+  public function getUptime(): float
   {
-    return time() - $this->startRunTime;
+    return microtime(true) - $this->startRunTime;
   }
 
   /**
    * 获取程序开始运行时间
    *
    * @access public
-   * @return int 返回时间戳
+   * @return float 返回时间戳（含微秒精度）
    */
-  public function getStartRunTime(): int
+  public function getStartRunTime(): float
   {
     return $this->startRunTime;
   }
@@ -272,11 +271,12 @@ class App extends Container
    */
   public function isDebug(): bool
   {
-    return (bool)$this->_config->get('config')['debug'];
+    $config = $this->_config->get('config');
+    return is_array($config) && !empty($config['debug']);
   }
 
   /**
-   *
+   * 析构方法
    */
   public function __destruct()
   {
