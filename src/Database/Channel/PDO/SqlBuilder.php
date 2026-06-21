@@ -490,7 +490,8 @@ class SqlBuilder
     $index = $this->quote($this->options->force);
     return match ($this->channel->type) {
       DriverType::MYSQL => "FORCE INDEX($index)",
-      DriverType::SQLite => "a WITH (INDEX($index))",
+      // 修复: SQLite 使用 INDEXED BY 语法，而非错误的 "a WITH (INDEX(...))" (那是 SQL Server 语法)
+      DriverType::SQLite => "INDEXED BY $index",
       default => '',
     };
   }
@@ -526,6 +527,11 @@ class SqlBuilder
     foreach ($this->options->unions as $union) {
       $query = $union['query'];
       $type = $union['type'];
+      // 修复: 当 query 为 Raw 对象时，需要收集其绑定参数到 params，否则参数会丢失导致 SQL 执行错误
+      if ($query instanceof Raw) {
+        $this->params = array_merge($this->params, $query->bindings);
+        $query = $query->sql;
+      }
       $unionSql[] = "$type ($query)";
     }
     return implode(' ', $unionSql);
