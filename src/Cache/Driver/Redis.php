@@ -73,7 +73,23 @@ class Redis extends Driver
     int              $pool_fill_size = 0
   )
   {
-    $this->pool = new RedisPool(new RedisConfig(...func_get_args()));
+    $this->pool = new RedisPool(
+      new RedisConfig(
+        host          : $host,
+        port          : $port,
+        password      : $password,
+        db_index      : $db_index,
+        timeout       : $timeout,
+        retry_interval: $retry_interval,
+        read_timeout  : $read_timeout,
+        prefix        : $prefix,
+        tag_prefix    : $tag_prefix,
+        expire        : $expire,
+        tag_store     : $tag_store,
+        pool_max_size : $pool_max_size,
+        pool_fill_size: $pool_fill_size
+      )
+    );
     parent::__construct(
       $prefix,
       $tag_prefix,
@@ -120,8 +136,8 @@ class Redis extends Driver
    */
   #[Override] public function pull(string $key): mixed
   {
-    $result = $this->get($key, false);
-    if ($result !== false) $this->delete($key);
+    $result = $this->get($key);
+    if ($result !== null) $this->delete($key);
     return $result;
   }
 
@@ -142,8 +158,18 @@ class Redis extends Driver
    */
   #[Override] protected function unserialize(mixed $data): mixed
   {
-    // 如果是整数则不进行序列化
-    if (is_numeric($data)) return $data;
+    // Redis 的 get/set 操作：serialize 对整数直接返回（不序列化），Redis 将其存为字符串。
+    // unserialize 时，从 Redis 取出的数据始终为字符串，需要判断是否为数字字符串
+    // （对应 serialize 中跳过序列化的整数），如果是则转为数值类型，否则正常反序列化
+    if (is_int($data) || is_float($data)) return $data;
+    if (is_string($data) && is_numeric($data)) {
+      // 数字字符串：对应 serialize 中跳过序列化的整数/浮点数
+      // 判断是否为浮点数格式（含小数点或科学计数法）
+      if (str_contains($data, '.') || stripos($data, 'e') !== false) {
+        return (float)$data;
+      }
+      return (int)$data;
+    }
     return parent::unserialize($data);
   }
 
@@ -307,8 +333,10 @@ class Redis extends Driver
   {
     $key = $this->getCacheKey($key);
     if (is_string($values)) $values = [$values];
-    // 序列化
-    $values = array_map([$this, 'serialize'], $values);
+    // 修复：sAddArray 必须对所有值使用 parent::serialize() 进行完整序列化，
+    // 因为 Redis Set 存储的是字符串，$this->serialize 对整数会跳过序列化直接返回 int，
+    // 但 Redis sAdd 会将 int 转为字符串，后续 unserialize 无法正确反序列化原始字符串
+    $values = array_map('serialize', $values);
     return $this->connect()->sAdd($key, ...$values);
   }
 
@@ -321,7 +349,9 @@ class Redis extends Driver
     $name = $this->getCacheKey($key);
     $result = $this->connect()->sMembers($name);
     if ($result === false) return false;
-    return array_map([$this, 'unserialize'], $result);
+    // 修复：与 sAddArray 保持一致，使用 unserialize() 而非 $this->unserialize()
+    // 因为 sAddArray 使用 serialize() 存入，getArray 必须使用 unserialize() 取出
+    return array_map('unserialize', $result);
   }
 
   /**
@@ -330,7 +360,8 @@ class Redis extends Driver
   #[Override] public function sRemoveArray(string $key, array|string $values): false|int
   {
     if (is_string($values)) $values = [$values];
-    $values = array_map([$this, 'serialize'], $values);
+    // 修复：与 sAddArray 保持一致，使用 serialize() 而非 $this->serialize()
+    $values = array_map('serialize', $values);
     $name = $this->getCacheKey($key);
     return $this->connect()->sRem($name, ...$values);
   }
