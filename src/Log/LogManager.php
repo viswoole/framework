@@ -213,7 +213,12 @@ class LogManager
         $newStr = str_replace("%$key", (string)$value, $newStr);
       }
     } else {
-      $newStr = sprintf($formatRule, ...$logData);
+      // 修复问题#7：sprintf 展开关联数组会因键名非数字导致错误，
+      // 改为 vsprintf + array_values 确保索引为连续数字，并对数组类型的值做序列化
+      $logDataValues = array_map(function ($v) {
+        return is_array($v) ? json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : $v;
+      }, array_values($logData));
+      $newStr = vsprintf($formatRule, $logDataValues);
     }
     return $newStr;
   }
@@ -229,7 +234,9 @@ class LogManager
   public static function echoConsole(string $color, string $content): void
   {
     if (!self::$toTheConsole) return;
-    $console_color_pattern = '/^(\033)\[[0-9;]+m$/';
+    // 修复问题#12：原正则 '/^(\033)\[[0-9;]+m$/' 中 \033 在单引号中不被解析为 ESC 字符，
+    // 改为双引号使用 \x1b 确保 ESC 字符被正确解析
+    $console_color_pattern = "/^\x1b\[[0-9;]+m$/";
     $isColor = preg_match($console_color_pattern, $color);
     if (!$isColor) {
       $color = match ($color) {
