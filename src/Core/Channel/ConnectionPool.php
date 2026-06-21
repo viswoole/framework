@@ -35,8 +35,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     SWOOLE_CHANNEL_CLOSED => '失败：-2 连接已关闭',
     SWOOLE_CHANNEL_CANCELED => '失败：-3 意外取消'
   ];
-  /** @var Channel 当前连接池 */
-  protected Channel $pool;
+  /** @var Channel|null 当前连接池, close 后置为 null */
+  protected ?Channel $pool = null;
+  /** @var int make() 递归深度, 用于防止 make()->put()->make() 无限递归 */
+  private int $makeDepth = 0;
 
   /**
    * @param int $max_size 连接池长度
@@ -93,9 +95,21 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   protected function make(): void
   {
-    $connection = $this->createConnection();
-    if (!$this->isCoroutine()) return;
-    $this->put($connection);
+    // 修复: 增加递归深度限制, 防止 createConnection() 持续返回无效连接
+    // 导致 make()->put()->make() 无限递归最终栈溢出
+    if ($this->makeDepth >= 3) {
+      throw new ConnectionPoolException(
+        '创建连接失败: 已达到最大重试次数(3次), 请检查 createConnection() 与 connectionDetection() 实现'
+      );
+    }
+    $this->makeDepth++;
+    try {
+      $connection = $this->createConnection();
+      if (!$this->isCoroutine()) return;
+      $this->put($connection);
+    } finally {
+      $this->makeDepth--;
+    }
   }
 
   /**
@@ -190,7 +204,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   #[Override] public function close(): bool
   {
     $result = $this->pool->close();
-    if ($result) unset($this->pool);
+    // 修复: 不能使用 unset() 销毁类型属性, 否则属性会变为"未初始化"状态,
+    // 后续访问会抛出 Error: Typed property must not be accessed before initialization
+    // 改为将属性设为 null (属性已声明为可空类型 ?Channel)
+    if ($result) $this->pool = null;
     return $result;
   }
 }
