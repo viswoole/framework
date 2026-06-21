@@ -22,10 +22,10 @@ class Str
   /**
    * 骆驼形到蛇形
    *
-   * @param $input
-   * @return string
+   * @param string $input 驼峰命名字符串
+   * @return string 蛇形命名字符串
    */
-  public static function camelCaseToSnakeCase($input): string
+  public static function camelCaseToSnakeCase(string $input): string
   {
     $output = preg_replace('/([a-z])([A-Z])/', '$1_$2', $input);
     return strtolower($output);
@@ -34,10 +34,10 @@ class Str
   /**
    * 蛇形到骆驼形(单词首字母大写)
    *
-   * @param $input
-   * @return string
+   * @param string $input 蛇形命名字符串
+   * @return string 驼峰命名字符串
    */
-  public static function snakeCaseToCamelCase($input): string
+  public static function snakeCaseToCamelCase(string $input): string
   {
     $words = explode('_', $input);
     /** @noinspection SpellCheckingInspection */
