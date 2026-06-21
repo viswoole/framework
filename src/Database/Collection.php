@@ -186,6 +186,8 @@ class Collection extends BaseCollection
    */
   public function avg(string $attribute): float|int
   {
+    // 修复: 空集合时 count 为 0 会触发 DivisionByZeroError，空集合直接返回 0
+    if (count($this) === 0) return 0;
     $sum = $this->sum($attribute);
     return $sum / count($this);
   }
