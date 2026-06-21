@@ -26,6 +26,9 @@ use Viswoole\Cache\Exception\CacheErrorException;
  */
 class Tag implements CacheTagInterface
 {
+  /**
+   * @var array<string,string> - 标签映射
+   */
   protected array $tags;
 
   /**
@@ -82,31 +85,23 @@ class Tag implements CacheTagInterface
   {
     $result = $this->driver->set($key, $value, $expire, $NX);
     if ($result === false) return false;
-    return $this->push($key);
+    $this->push($key);
+    return true;
   }
 
   /**
    * 追加缓存标识到标签
    *
    * @access public
-   * @param string $key
-   * @return bool
+   * @param string $key - 缓存键
+   * @return void
    */
-  #[Override] public function push(string $key): bool
+  #[Override] public function push(string $key): void
   {
     foreach ($this->tags as $tag) {
-      // 把缓存键名添加到集合中
-      $result = $this->driver->sAddArray($tag, $key);
-      if ($result === false) {
-        throw new CacheErrorException('往标签集合中追加缓存键名失败');
-      }
+      $this->driver->sAddArray($tag, $key);
     }
-    // 把标签设置到缓存标签集合中
-    $result = $this->driver->sAddArray($this->driver->getTagStoreName(), $this->tags);
-    if ($result === false) {
-      throw new CacheErrorException('往标签集合中追加缓存键名失败');
-    }
-    return true;
+    $this->driver->sAddArray($this->driver->getTagStoreName(), $this->tags);
   }
 
   /**
@@ -136,8 +131,9 @@ class Tag implements CacheTagInterface
   #[Override] public function get(): array
   {
     $arr = [];
-    foreach ($this->tags as $tag) {
-      $list = $this->driver->get($tag, []);
+    foreach ($this->tags as $tag => $tagKey) {
+      $list = $this->driver->getArray($tagKey);
+      $list = $list === false ? [] : $list;
       if (count($this->tags) === 1) return $list;
       $arr[$tag] = $list;
     }
