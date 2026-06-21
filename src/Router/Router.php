@@ -559,10 +559,12 @@ class Router extends Collector
         if ($callback) $callback($pattern);
         if ($params) $params = array_merge($params, $pattern);
       }
+      // 修复#8: 当$params为null时默认初始化为空数组，避免动态路由参数丢失
+      $params = $params ?? [];
       // 绑定到容器
       bind(Route::class, $route);
       return $this->middleware->process(function () use ($route, $params) {
-        return invoke($route->getHandler(), $params ?? []);
+        return invoke($route->getHandler(), $params);
       }, $route->getMiddlewares());
     } catch (RouteNotFoundException $e) {
       // 匹配miss路由
