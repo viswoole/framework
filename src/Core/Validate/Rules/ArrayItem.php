@@ -49,7 +49,8 @@ class ArrayItem extends BaseValidateRule
     $array = [];
     foreach ($value as $item) {
       try {
-        Validate::check($item, $this->types);
+        // 修复: 原代码未将校验结果存入数组，导致始终返回空数组
+        $array[] = Validate::check($item, $this->types);
       } catch (ValidateException $e) {
         $this->error($e->getMessage());
       }
