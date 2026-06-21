@@ -180,7 +180,9 @@ class Server
         "{$this->serverName}服务未定义，请检查" . BASE_PATH . '/config/server.php配置文件。'
       );
     }
-    if (!($config['type'] ?? '' instanceof SwooleServer)) {
+    // 修复: instanceof 优先级高于 ??，且 instanceof 无法用于字符串变量，改用 is_subclass_of
+    $type = $config['type'] ?? null;
+    if (!is_string($type) || !is_subclass_of($type, SwooleServer::class)) {
       throw new ServerNotFoundException(
         "{$this->serverName}服务type属性配置错误，请检查" . BASE_PATH . '/config/server.php配置文件。'
       );
