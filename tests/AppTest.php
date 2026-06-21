@@ -165,6 +165,17 @@ class AppTest extends TestCase
   protected function setUp(): void
   {
     $this->app = App::factory();
+    // 启动输出缓冲，避免测试中 echo 输出导致 risky 标记
+    ob_start();
+  }
+
+  /**
+   * @return void
+   */
+  protected function tearDown(): void
+  {
+    // 清理输出缓冲
+    ob_end_clean();
   }
 }
 
