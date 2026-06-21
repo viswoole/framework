@@ -205,13 +205,13 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $instance = is_string($concrete)
       ? $this->invokeClass($concrete, $params)
       : $this->invokeFunction($concrete, $params);
-    // 获取常量
-    $class = get_class($instance) . '::NOT_ALLOW_NEW_INSTANCE';
-    // 判断类是否设置了allowNewInstance常量
+    // 修复#13: 常量名NOT_ALLOW_NEW_INSTANCE语义相反，改为ALLOW_NEW_INSTANCE
+    $class = get_class($instance) . '::ALLOW_NEW_INSTANCE';
+    // 判断类是否设置了ALLOW_NEW_INSTANCE常量
     /** @noinspection PhpUnhandledExceptionInspection */
     $allowNewInstance = defined($class) ? constant($class) : false;
-    // 如果类没有设置allowNewInstance属性，或设置为false则缓存单实例
-    if (!$allowNewInstance) $this->setSingleInstance($abstract, $instance);
+    // 如果类没有设置ALLOW_NEW_INSTANCE属性，或设置为false则缓存单实例
+    if ($allowNewInstance === false) $this->setSingleInstance($abstract, $instance);
     return $instance;
   }
 
@@ -375,26 +375,19 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    *
    * @param int $index
    * @param string $name
-   * @param ValidateException|string $e
+   * @param ValidateException $e
    * @return void
    */
-  protected function handleParamsError(int $index, string $name, ValidateException|string $e): void
+  protected function handleParamsError(int $index, string $name, ValidateException $e): void
   {
     $index++;
-    if (is_string($e)) {
-      throw new ValidateException(
-        $this->isDebug() ? "Argument #$index ($$name) " . $e : $e
-      );
+    if (!$this->isDebug()) {
+      throw $e;
     } else {
-      if (!$this->isDebug()) {
-        throw $e;
-      } else {
-        throw new ValidateException(
-          "Argument #$index ($$name) " . $e->getMessage(), previous: $e
-        );
-      }
+      throw new ValidateException(
+        "Argument #$index ($$name) " . $e->getMessage(), previous: $e
+      );
     }
-
   }
 
   /**
@@ -650,7 +643,12 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   public function remove(string $abstract): void
   {
     $class = $this->getBind($abstract);
-    unset($this->instances[is_string($class) ? $class : $abstract]);
+    $key = is_string($class) ? $class : $abstract;
+    unset($this->instances[$key]);
+    // 修复#6: remove()未清理协程上下文单例，补充协程上下文清理
+    if (Coroutine::isCoroutine()) {
+      Context::remove($this->CONTEXT_PREFIX . $key, Coroutine::getTopId());
+    }
   }
 
   /**
