@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Cache\Driver;
 
 use DateTime;
+use InvalidArgumentException;
 use Override;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
@@ -41,6 +42,10 @@ class Tag implements CacheTagInterface
   )
   {
     if (is_string($tags)) $tags = [$tags];
+    // 修复问题#13：空标签集合语义不明，构造时验证标签不为空
+    if (empty($tags)) {
+      throw new InvalidArgumentException('标签不能为空');
+    }
     foreach ($tags as $key => $tag) {
       $tags[$key] = $this->driver->getTagKey($tag);
     }
@@ -57,8 +62,8 @@ class Tag implements CacheTagInterface
   {
     foreach ($this->tags as $tag) {
       $names = $this->driver->getArray($tag);
-      // 清除标签下的缓存
-      $this->driver->delete($names);
+      // 修复问题#6：getArray 返回 false 时传给 delete 会导致错误，增加 false 检查
+      if ($names !== false) $this->driver->delete($names);
       // 清除标签
       $this->driver->delete($tag);
       // 从标签库库中删除标签
