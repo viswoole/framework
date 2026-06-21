@@ -82,11 +82,14 @@ class Coroutine extends \Swoole\Coroutine
       $cid = static::getCid();
       if ($cid === -1) return false;
     }
-
-    $pcid = static::getPcid($cid);
-    //如果没有父id
-    if ($pcid === false || $pcid === -1) return $unableToFindReturnSelfId ? $cid : false;
-    // 递归调用，查找顶级协程
-    return static::getTopId($pcid);
+    // 修复#20: 递归改为迭代实现，避免深层协程栈溢出
+    while (true) {
+      $pcid = static::getPcid($cid);
+      //如果没有父id
+      if ($pcid === false || $pcid === -1) {
+        return $unableToFindReturnSelfId ? $cid : false;
+      }
+      $cid = $pcid;
+    }
   }
 }
