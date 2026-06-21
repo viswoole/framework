@@ -65,13 +65,18 @@ class Request implements RequestInterface
   public function __construct(public readonly swooleRequest $swooleRequest)
   {
     $contentType = $swooleRequest->header['content-type'] ?? null;
-    if ($contentType === 'application/json') {
+    // 修复: 使用 str_starts_with 匹配，兼容 "application/json; charset=utf-8" 等 Content-Type
+    if ($contentType !== null && str_starts_with($contentType, 'application/json')) {
       // 获取原始请求内容
       $rawContent = $swooleRequest->rawContent();
       // 解析JSON数据
-      $postData = json_decode($rawContent, true);
+      $parsed = json_decode($rawContent, true);
+      // 修复: JSON 解析失败时设置为空数组，避免 $swooleRequest->post 为 null
+      if (json_last_error() !== JSON_ERROR_NONE) {
+        $parsed = [];
+      }
       // 将解析后的数据设置到 $request->post
-      $swooleRequest->post = $postData;
+      $swooleRequest->post = $parsed;
     }
     if (!empty($swooleRequest->files)) {
       $swooleRequest->files = $this->parseFiles(
@@ -89,10 +94,30 @@ class Request implements RequestInterface
   {
     $uploadedFiles = [];
     foreach ($files as $name => $file) {
-      if (is_numeric(implode('', array_keys($file)))) {
-        $uploadedFiles[$name] = array_map(fn(array $info) => new UploadedFile(...$info), $file);
+      // 修复: 兼容 Swoole 多文件上传格式
+      // Swoole 多文件格式为 [name => [0=>'a', 1=>'b'], tmp_name => [...], ...]
+      // 通过检查第一个值是否为数组来判断是否为多文件上传
+      $firstValue = reset($file);
+      if (is_array($firstValue)) {
+        // Swoole 多文件格式，需要转置
+        foreach ($firstValue as $index => $v) {
+          $uploadedFiles[$name][$index] = new UploadedFile(
+            $file['type'][$index] ?? '',
+            $file['name'][$index] ?? '',
+            $file['size'][$index] ?? 0,
+            $file['tmp_name'][$index] ?? '',
+            $file['error'][$index] ?? UPLOAD_ERR_OK,
+          );
+        }
       } else {
-        $uploadedFiles[$name] = new UploadedFile(...$file);
+        // 单文件
+        $uploadedFiles[$name] = new UploadedFile(
+          $file['type'] ?? '',
+          $file['name'] ?? '',
+          $file['size'] ?? 0,
+          $file['tmp_name'] ?? '',
+          $file['error'] ?? UPLOAD_ERR_OK,
+        );
       }
     }
     return $uploadedFiles;
@@ -106,13 +131,17 @@ class Request implements RequestInterface
    */
   #[Override] public function getUri(): Uri
   {
-    $host = explode(':', $this->getHeader('host'));
-    $port = $host[1] ?? null;
+    $host = $this->getHeader('host');
+    // 修复: 使用 parse_url 解析 host 头，兼容 IPv6 地址（如 [::1]:8080）
+    $parsed = parse_url('http://' . $host);
+    $hostname = $parsed['host'] ?? $host;
+    // 修复: port 为 0 时应视为无效端口，返回 null
+    $port = (int)($parsed['port'] ?? 0) > 0 ? (int)$parsed['port'] : null;
     return Uri::create(
       scheme  : $this->https() ? 'https' : 'http',
       userInfo: $this->getBasicAuthCredentials(),
-      host    : $host[0],
-      port    : (int)($host[1] ?? 0) ?: null,
+      host    : $hostname,
+      port    : $port,
       path    : $this->target(),
       query   : $this->getServer('query_string', '')
     );
@@ -341,7 +370,8 @@ class Request implements RequestInterface
         $params[$paramName] = $this->param($paramName, $defaultVal);
       }
     }
-    if ($params === null) return [];
+    // 修复: 使用 null 合并运算符替代冗余的 null 检查
+    $params ??= [];
     return $isShowNull ? $params : array_filter($params, fn($value) => !is_null($value));
   }
 
@@ -494,6 +524,8 @@ class Request implements RequestInterface
   #[Override] public function isJson(): bool
   {
     $accept = $this->getHeader('accept');
+    // 修复: accept 为 null 时 stristr() 会产生警告，提前返回 false
+    if ($accept === null) return false;
     $types = explode(',', self::ACCEPT_TYPE['json']);
     foreach ($types as $type) {
       if (stristr($accept, $type)) return true;
@@ -509,6 +541,8 @@ class Request implements RequestInterface
   #[Override] public function getAcceptType(): string
   {
     $accept = $this->getHeader('accept');
+    // 修复: accept 为 null 时 stristr() 会产生警告，提前返回 '*'
+    if ($accept === null) return '*';
     if (empty($accept)) return '*';
     foreach (self::ACCEPT_TYPE as $key => $val) {
       $types = explode(',', $val);
