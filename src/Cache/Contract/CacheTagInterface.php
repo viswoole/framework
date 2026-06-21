@@ -62,9 +62,9 @@ interface CacheTagInterface
    *
    * @access public
    * @param string $key
-   * @return bool
+   * @return void
    */
-  public function push(string $key): bool;
+  public function push(string $key): void;
 
   /**
    * 获取标签下的所有缓存标识
