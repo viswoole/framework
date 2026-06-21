@@ -68,14 +68,20 @@ class LogManager
    */
   public function __construct(Config $config)
   {
+    // 修复：options 可能为 null（未配置 log 项），增加空值保护
     $options = $config->get('log');
+    $options = is_array($options) ? $options : [];
     $channels = $options['channels'] ?? ['default' => new File()];
     if (!empty($channels)) {
-      $this->defaultChannel = $options['default'] ?? array_key_first($channels);
+      // 修复：defaultChannel 统一转为小写，与 channel() 读取时的小写转换保持一致
+      $this->defaultChannel = strtolower($options['default'] ?? array_key_first($channels));
       // 添加到通道列表
       foreach ($channels as $channelName => $channel) {
         $this->addChannel($channelName, $channel);
       }
+    } else {
+      // 修复：确保 defaultChannel 始终被初始化，避免后续访问未初始化属性
+      $this->defaultChannel = 'default';
     }
     $this->type_channel = $options['type_channel'] ?? [];
     $this->recordLogTraceSource = $options['trace_source'] ?? false;
@@ -264,15 +270,17 @@ class LogManager
           ? [$this->type_channel[$level]]
           : $this->type_channel[$level];
         // 兼容多通道记录日志
+        $result = null;
         foreach ($channels as $channel) {
-          call_user_func_array([$this->channel($channel), $name], $arguments);
+          $result = call_user_func_array([$this->channel($channel), $name], $arguments);
         }
+        return $result;
       } else {
         // 使用默认通道记录日志
         return call_user_func_array([$this->channel($this->defaultChannel), $name], $arguments);
       }
     } elseif (method_exists($this->channel($this->defaultChannel), $name)) {
-      call_user_func_array([$this->channel($this->defaultChannel), $name], $arguments);
+      return call_user_func_array([$this->channel($this->defaultChannel), $name], $arguments);
     }
     throw new BadMethodCallException("log $name method not exists.");
   }
@@ -287,13 +295,20 @@ class LogManager
   {
     if ($this->recordLogTraceSource) {
       $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 4);
+      // 修复：初始化为 null，避免 foreach 查找失败时 $backtrace 仍为完整数组导致后续访问数组下标类型错误
+      $traceFrame = null;
       foreach (array_reverse($backtrace) as $trace) {
         if (isset($trace['class']) && ($trace['class'] === Facade::class || $trace['class'] === self::class)) {
-          $backtrace = $trace;
+          $traceFrame = $trace;
           break;
         }
       }
-      $trace = ($backtrace['file'] ?? '') . ':' . ($backtrace['line']) ?? '';
+      // 修复：增加类型检查，查找失败（$traceFrame 为 null）时使用默认空值
+      $file = is_array($traceFrame) ? ($traceFrame['file'] ?? '') : '';
+      $line = is_array($traceFrame) ? ($traceFrame['line'] ?? '') : '';
+      // 修复：运算符优先级错误。原代码 ($backtrace['line']) ?? '' 的 ?? 作用于整个拼接表达式，
+      // 导致 $backtrace['line'] 不存在时触发未定义索引警告。拆分为独立变量并各自 ?? 兜底。
+      $trace = $file . ':' . $line;
       $context['_trace_source'] = $trace;
     } else {
       $context['_trace_source'] = 'not record';
