@@ -330,6 +330,15 @@ abstract class BaseRoute
    */
   public function setPatterns(array $patterns): static
   {
+    foreach ($patterns as $name => $regex) {
+      if (!is_string($regex) || empty($regex)) {
+        throw new InvalidArgumentException("路由参数正则 '$name' 必须是非空字符串");
+      }
+      // 验证正则表达式是否有效
+      if (@preg_match('/' . $regex . '/', '') === false) {
+        throw new InvalidArgumentException("路由参数正则 '$name' 无效: $regex");
+      }
+    }
     $this->patterns = array_merge($this->patterns, $patterns);
     return $this;
   }
