@@ -142,11 +142,12 @@ class Query extends BaseQuery
    */
   private function _getTime(string $format): string
   {
+    // 修复#6: 将所有分支返回值统一转为string，与返回类型声明一致
     return match ($format) {
       'datetime' => date('Y-m-d H:i:s'),
-      'timestamp', 'time' => time(),
+      'timestamp', 'time' => (string)time(),
       'date' => date('Y-m-d'),
-      'int' => 1,
+      'int' => '1',
       default => date($format)
     };
   }
@@ -231,7 +232,7 @@ class Query extends BaseQuery
    *
    * @param string $name
    * @param array $arguments
-   * @return void
+   * @return mixed
    */
   public function __call(string $name, array $arguments)
   {
@@ -239,7 +240,8 @@ class Query extends BaseQuery
       $class = get_class($this->model);
       throw new RuntimeException("$class::$name() 方法不存在");
     }
-    call_user_func_array([$this->model, $name], $arguments);
+    // 修复#5: 转发调用时添加return，确保返回值不丢失
+    return call_user_func_array([$this->model, $name], $arguments);
   }
 
   /**
