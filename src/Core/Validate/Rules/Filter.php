@@ -62,7 +62,11 @@ class Filter extends BaseValidateRule
   #[Override] public function validate(mixed $value): mixed
   {
     $valid = filter_var($value, $this->filter, $this->options);
-    if (!$valid) $this->error(self::FILTER_VALIDATE[$this->filter] ?? '验证失败');
+    // 修复: filter_var 可能返回合法的假值(如 0, false, 0.0)，应使用严格比较判断失败
+    // FILTER_VALIDATE_BOOL 失败时返回 null，其他过滤器失败时返回 false
+    if ($valid === false || $valid === null) {
+      $this->error(self::FILTER_VALIDATE[$this->filter] ?? '验证失败');
+    }
     if (!in_array($this->filter, array_keys(self::FILTER_VALIDATE))) return $valid;
     return $value;
   }
