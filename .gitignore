@@ -2,3 +2,7 @@
 /.idea/
 # 忽略composer的安装缓存
 composer.lock
+# 忽略依赖目录
+/vendor/
+# 忽略PHPUnit缓存
+/.phpunit.cache/
