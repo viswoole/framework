@@ -18,7 +18,7 @@ namespace Viswoole\Core\Validate\Rules;
 use Attribute;
 
 /**
- * 只能由字母或数字组成
+ * 字母数字验证规则，校验值是否仅由字母和数字组成
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class AlphaNumber extends Regex

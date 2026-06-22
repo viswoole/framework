@@ -28,39 +28,39 @@ use Viswoole\Router\Facade\Router;
 class Route extends BaseRoute
 {
   /**
-   * @var Status 状态
+   * @var Status 接口开发状态
    */
   private Status $status = Status::DEVELOPMENT;
   /**
-   * @var array 标签
+   * @var array 接口标签列表
    */
   private array $tags = [];
   /**
-   * @var string 作者
+   * @var string 接口作者
    */
   private string $author = '';
   /**
-   * @var string 创建时间
+   * @var string 接口创建时间
    */
   private string $createdAt = '';
   /**
-   * @var string 更新时间
+   * @var string 接口更新时间
    */
   private string $updatedAt = '';
   /**
-   * @var array{body:array<string,FieldStructure>, header:array<string,FieldStructure>, query:array<string,FieldStructure>} 请求参数结构
+   * @var array{body:array<string,FieldStructure>, header:array<string,FieldStructure>, query:array<string,FieldStructure>} 请求参数结构，按来源分组
    */
   private array $params = [];
   /**
-   * @var Returned[] 响应结构
+   * @var Returned[] 响应结构列表
    */
   private array $returned = [];
 
   /**
    * @param string|array $paths 路由访问路径
    * @param callable|string|array $handler 路由处理函数
-   * @param BaseRoute|null $parentOption 父级路由配置
-   * @param string|null $id
+   * @param BaseRoute|null $parentOption 父级路由配置，非空时继承其属性
+   * @param string|null $id 路由唯一标识，null 时自动生成
    */
   public function __construct(
     array|string          $paths,
@@ -81,7 +81,7 @@ class Route extends BaseRoute
   }
 
   /**
-   * 参数结构
+   * 获取请求参数结构，按 body/header/query 分组
    *
    * @return array{body:array<string,FieldStructure>, header:array<string,FieldStructure>, query:array<string,FieldStructure>}
    */
@@ -111,9 +111,9 @@ class Route extends BaseRoute
   }
 
   /**
-   * 设置所有标签
+   * 设置接口标签列表
    *
-   * @param array $tag 标签数组
+   * @param string ...$tag 标签名称
    * @return $this
    */
   public function setTags(string ...$tag): static

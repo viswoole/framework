@@ -18,7 +18,7 @@ namespace Viswoole\Core\Validate\Rules;
 use Attribute;
 
 /**
- * 验证字符串为纯字母
+ * 纯字母验证规则，校验值是否仅由 A-Z/a-z 组成
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Alpha extends Regex

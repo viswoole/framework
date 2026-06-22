@@ -20,13 +20,13 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * filter_var过滤器验证
+ * PHP 内置过滤器验证规则，基于 filter_var 实现常见格式校验
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Filter extends BaseValidateRule
 {
   /**
-   * 支持的验证过滤器
+   * 支持的验证过滤器及其默认错误提示
    */
   const array FILTER_VALIDATE = [
     FILTER_VALIDATE_INT => '必须是INT类型',
@@ -41,9 +41,9 @@ class Filter extends BaseValidateRule
   ];
 
   /**
-   * @param int $filter 过滤器ID，参考filter_var()方法filter参数
-   * @param array|int $options 过滤选项
-   * @param string $message 不传则会使用默认的错误提示信息
+   * @param int $filter 过滤器ID，参考 PHP filter_var() 的 filter 参数
+   * @param array|int $options 过滤选项或标志位
+   * @param string $message 校验失败提示信息，为空时使用过滤器默认提示
    * @see filter_var()
    * @link https://www.php.net/manual/zh/filter.filters.validate.php
    */
@@ -57,7 +57,7 @@ class Filter extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 使用 filter_var 执行校验，验证失败时抛出异常
    */
   #[Override] public function validate(mixed $value): mixed
   {

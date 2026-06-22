@@ -21,7 +21,10 @@ use Viswoole\HttpServer\Facade\Request;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BodyParamInterface;
 
 /**
- * 用于注入Body中传入的参数
+ * POST 请求体参数自动注入属性
+ *
+ * 标注到控制器参数或属性上，框架自动从 POST 请求体中注入值，
+ * 不允许为空时缺失参数将抛出验证异常。
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectPost implements BodyParamInterface
@@ -29,7 +32,12 @@ class InjectPost implements BodyParamInterface
   use ValidateNull;
 
   /**
-   * @inheritDoc
+   * 从 POST 请求体中获取值并校验空值
+   *
+   * @param string $name 参数名
+   * @param mixed $value 默认值
+   * @param bool $allowNull 是否允许为 null
+   * @return mixed 参数值
    */
   #[Override] public function inject(string $name, mixed $value, bool $allowNull): mixed
   {

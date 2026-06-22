@@ -19,7 +19,9 @@ use RuntimeException;
 use Throwable;
 
 /**
- * HTTP异常
+ * HTTP 业务异常
+ *
+ * 携带 HTTP 状态码与自定义响应头，用于在业务层主动中断请求并返回指定响应。
  */
 class HttpException extends RuntimeException
 {
@@ -53,9 +55,9 @@ class HttpException extends RuntimeException
   }
 
   /**
-   * 获取响应状态码
-   * @access public
-   * @return int
+   * 获取 HTTP 响应状态码
+   *
+   * @return int 状态码
    */
   public function getHttpCode(): int
   {

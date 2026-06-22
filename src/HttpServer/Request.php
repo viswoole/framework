@@ -26,16 +26,21 @@ use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\HttpServer\Message\Uri;
 
 /**
- * HTTP请求对象
+ * Swoole HTTP 请求的代理封装
  *
- * 该类用于Swoole\Http\Request类进行代理封装。
+ * 对 Swoole\Http\Request 进行面向对象封装，提供参数获取、标头操作、文件处理等能力，
+ * 并在构造时自动解析 JSON 请求体和上传文件。
  *
+ * @see RequestInterface
  * @link https://wiki.swoole.com/zh-cn/#/http_server?id=swoolehttprequest
  */
 class Request implements RequestInterface
 {
   /**
-   * 请求类型
+   * Accept 标头预定义类型映射
+   *
+   * 键为类型别名，值为对应的 MIME 类型列表（逗号分隔），
+   * 用于 isJson() 和 getAcceptType() 判断客户端期望的响应格式。
    */
   public const array ACCEPT_TYPE = [
     'html' => 'text/html,application/xhtml+xml,*/*',
@@ -52,15 +57,19 @@ class Request implements RequestInterface
     'csv' => 'text/csv'
   ];
   /**
-   *  例1 ['htmlspecialchars'=>['flags' => ENT_QUOTES|ENT_SUBSTITUTE]]。
-   *  例2 ['htmlspecialchars'=>[ENT_QUOTES|ENT_SUBSTITUTE]]。
-   *  例3 ['htmlspecialchars','strip_tags'=>null]。
-   * @var array{string:array} 全局过滤方法
+   * 全局输入过滤规则
+   *
+   * 键为 PHP 内置函数名，值为传给该函数的额外参数。
+   * 示例：['htmlspecialchars'=>['flags'=>ENT_QUOTES|ENT_SUBSTITUTE]]
+   *       ['htmlspecialchars'=>[ENT_QUOTES|ENT_SUBSTITUTE]]
+   *       ['htmlspecialchars','strip_tags'=>null]
+   *
+   * @var array<string, array<string,mixed>|null>
    */
   protected array $filter = ['htmlspecialchars' => ['flags' => ENT_QUOTES | ENT_SUBSTITUTE]];
 
   /**
-   * @param swooleRequest $swooleRequest
+   * @param swooleRequest $swooleRequest Swoole 原始请求对象，由框架在 onRequest 回调中注入
    */
   public function __construct(public readonly swooleRequest $swooleRequest)
   {
@@ -86,9 +95,13 @@ class Request implements RequestInterface
   }
 
   /**
-   * 解析上传文件为UploadedFile实例
-   * @param array $files
-   * @return array<string,UploadedFile|UploadedFile[]>
+   * 将 Swoole 原始文件结构转换为 UploadedFile 实例数组
+   *
+   * Swoole 多文件上传时结构为 [name=>[0=>'a',1=>'b'], tmp_name=>[...], ...]，
+   * 需要转置为每个文件独立的 UploadedFile 对象。
+   *
+   * @param array $files Swoole 原始 $_FILES 结构
+   * @return array<string, UploadedFile|UploadedFile[]> 键为字段名，值为单个或多个 UploadedFile
    */
   protected function parseFiles(array $files): array
   {
@@ -124,10 +137,12 @@ class Request implements RequestInterface
   }
 
   /**
-   * 检索 URI 实例。
+   * 构建当前请求的 URI 实例
    *
-   * @access public
-   * @return Uri 返回表示请求 URI 的 UriInterface 实例。
+   * 综合协议、Host 标头、认证信息、路径和查询参数组装完整 URI，
+   * 兼容 IPv6 地址格式（如 [::1]:8080）。
+   *
+   * @return Uri 当前请求的 URI 实例
    */
   #[Override] public function getUri(): Uri
   {
@@ -148,10 +163,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取请求标头,所有标头均为小写
+   * 获取请求标头（所有键名均为小写）
    *
-   * @param string|null $key 如果传入key则获取单个请求标头，否则获取所有标头
-   * @return array|string|null 存在返回标头值，不存在返回null
+   * @param string|null $key 标头名称，不传则返回全部标头关联数组
+   * @param mixed $default 标头不存在时的默认值
+   * @return array|string|null 传入 key 时返回字符串值或 null，不传时返回全部标头数组
    */
   #[Override] public function getHeader(
     ?string $key = null,
@@ -164,7 +180,9 @@ class Request implements RequestInterface
   }
 
   /**
-   * 创建一个新的RequestInterface对象
+   * 工厂方法：创建一个新的请求对象
+   *
+   * 用于在非 onRequest 回调场景下构造请求，例如异步任务中模拟请求。
    *
    * @param array{
    *   parse_cookie:bool,
@@ -173,8 +191,8 @@ class Request implements RequestInterface
    *   enable_compression:bool,
    *   compression_level:int,
    *   upload_tmp_dir:string
-   * } $options
-   * @return RequestInterface
+   * } $options Swoole\Request::create 的配置项
+   * @return RequestInterface 新创建的请求实例
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=create
    */
   #[Override] public static function create(array $options = []): RequestInterface
@@ -184,9 +202,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 判断是否https访问
+   * 判断当前请求是否通过 HTTPS 发起
    *
-   * @return bool
+   * 通过 Swoole Server 的 ssl 配置判断，而非请求标头。
+   *
+   * @return bool true 表示 HTTPS 请求
    */
   #[Override] public function https(): bool
   {
@@ -194,21 +214,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取服务参数
+   * 获取 Swoole server 属性（等价于 $_SERVER）
    *
-   * @return array{
-   *   query_string:string,
-   *   request_method:string,
-   *   request_uri:string,
-   *   path_info:string,
-   *   request_time:int,
-   *   request_time_float:float,
-   *   server_protocol:string,
-   *   server_port:int,
-   *   remote_port:int,
-   *   remote_addr:string,
-   *   master_time:int
-   * }|mixed
+   * @param string|null $key 属性键名，不传则返回全部
+   * @param mixed $default 键不存在时的默认值
+   * @return mixed 传入 key 时返回对应值，不传时返回完整 server 数组
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=server
    */
   public function getServer(?string $key = null, mixed $default = null): mixed
@@ -219,10 +229,9 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取基本身份验证票据
+   * 从 Authorization 标头中提取 Basic 认证凭据
    *
-   * @access public
-   * @return array|null AssociativeArray(username,password)
+   * @return array|null [username, password] 二元数组，无 Authorization 标头或格式不匹配时返回 null
    */
   public function getBasicAuthCredentials(): ?array
   {
@@ -250,10 +259,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取消息的请求目标。
+   * 获取请求路径（不含查询参数）
    *
-   * @access public
-   * @return string
+   * 优先取 path_info，回退到 request_uri，最终默认为 '/'。
+   *
+   * @return string 请求路径
    */
   public function target(): string
   {
@@ -261,10 +271,9 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取消息的请求目标。
+   * 获取请求路径（target 的别名）
    *
-   * @access public
-   * @return string
+   * @return string 请求路径
    */
   public function getPath(): string
   {
@@ -272,11 +281,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取cookie
+   * 获取 Cookie 值
    *
-   * @param string|null $key 要获取的Cookie名称，不传获取所有cookie关联数组
-   * @param mixed|null $default
-   * @return mixed
+   * @param string|null $key Cookie 名称，不传则返回全部 Cookie 关联数组
+   * @param mixed $default 键不存在时的默认值
+   * @return mixed 单个 Cookie 值或全部 Cookie 数组
    */
   #[Override] public function cookie(?string $key = null, mixed $default = null): mixed
   {
@@ -286,10 +295,10 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取上传的文件
+   * 获取上传文件
    *
-   * @param string|null $key 可选的文件名称（post上传的name属性），不传获取所有文件关联数组
-   * @return UploadedFile[]|null|array<string, UploadedFile[]|UploadedFile>|UploadedFile 没有文件则返回null
+   * @param string|null $key 表单字段名，不传则返回全部上传文件
+   * @return UploadedFile[]|UploadedFile|array<string, UploadedFile|UploadedFile[]>|null 无对应文件时返回 null
    */
   #[Override] public function files(?string $key = null): array|UploadedFile|null
   {
@@ -297,9 +306,9 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取POST包体，此函数等同于 PHP 的 fopen('php://input')。
+   * 获取原始请求体（等价于 fopen('php://input')）
    *
-   * @return string|false 返回原始POST数据，失败返回false
+   * @return string|false 原始 POST 数据，读取失败返回 false
    */
   #[Override] public function getContent(): string|false
   {
@@ -307,10 +316,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取完整的原始 Http 请求报文，注意 Http2 下无法使用。
-   * 包括 Http Header 和 Http Body。
+   * 获取完整原始 HTTP 请求报文（含 Header 和 Body）
    *
-   * @return string|false 执行成功返回报文，如果上下文连接不存在或者在 Http2 模式下返回 false
+   * 注意：HTTP2 模式下不可用。
+   *
+   * @return string|false 完整报文字符串，连接不存在或 HTTP2 模式下返回 false
    */
   #[Override] public function getData(): string|false
   {
@@ -318,11 +328,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 解析 HTTP 请求数据包，会返回成功解析的数据包长度。
+   * 解析 HTTP 请求数据包
    *
-   * @param string $data
-   * @return int 解析成功返回解析的报文长度
-   * @throws RuntimeException 解析失败
+   * @param string $data 待解析的原始数据包
+   * @return int 成功解析的报文长度
+   * @throws RuntimeException 解析失败时抛出
    */
   #[Override] public function parse(string $data): int
   {
@@ -330,9 +340,9 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取当前的 HTTP 请求数据包是否已到达结尾。
+   * 判断请求数据包是否已完整接收
    *
-   * @return bool
+   * @return bool true 表示数据包已到达结尾
    */
   #[Override] public function isCompleted(): bool
   {
@@ -340,9 +350,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取客户端ip
+   * 获取客户端 IP 地址
    *
-   * @return string
+   * 优先读取反向代理设置的 x-real-ip 标头，回退到 Swoole 的 remote_addr。
+   *
+   * @return string 客户端 IP，无法获取时返回 'UNKNOWN'
    */
   #[Override] public function ip(): string
   {
@@ -351,10 +363,10 @@ class Request implements RequestInterface
 
   /**
    * 批量获取请求参数
-   * @access public
-   * @param string|array|null $rule 可传key或[key=>default,...]或[key1,key2....]
-   * @param bool $isShowNull 是否显示为null的字段
-   * @return array
+   *
+   * @param string|array|null $rule 取值规则：字符串取单个字段；[key=>default] 取多个并设默认值；[key1,key2] 取多个无默认值；null 取全部
+   * @param bool $isShowNull 是否保留值为 null 的字段
+   * @return array 参数名到值的关联数组
    */
   #[Override] public function params(array|string|null $rule = null, bool $isShowNull = true
   ): array
@@ -376,13 +388,15 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取请求参数，自动判断get或post
+   * 获取请求参数（自动根据请求方法选择 GET 或 POST）
    *
-   * @access public
-   * @param string|null $key 字段，不传则获取全部
-   * @param mixed $default 默认值
-   * @param string|array|null $filter 过滤器
-   * @return mixed
+   * 非 GET 请求从 POST 取值，GET 请求从查询参数取值。
+   * 字符串类型的值会经过全局过滤器处理。
+   *
+   * @param string|null $key 参数名，不传则获取全部
+   * @param mixed $default 参数不存在时的默认值
+   * @param string|array|null $filter 额外过滤器，覆盖全局过滤规则
+   * @return mixed 参数值
    */
   #[Override] public function param(
     ?string      $key = null,
@@ -402,9 +416,10 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取当前的 HTTP 请求的请求方式。
+   * 获取当前请求的 HTTP 方法
    *
-   * @return string 成返回大写的请求方式
+   * @return string 大写的请求方法名（如 GET、POST）
+   * @throws RuntimeException Swoole 无法获取请求方法时抛出
    */
   #[Override] public function getMethod(): string
   {
@@ -414,11 +429,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取post参数
+   * 获取 POST 参数
    *
-   * @param string|null $key 要获取的参数
-   * @param mixed|null $default 默认值
-   * @return mixed
+   * @param string|null $key 参数名，不传则返回全部 POST 数据
+   * @param mixed $default 参数不存在时的默认值
+   * @return mixed 单个参数值或全部 POST 数据
    */
   #[Override] public function post(?string $key = null, mixed $default = null): mixed
   {
@@ -428,11 +443,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取get参数
+   * 获取 GET 查询参数
    *
-   * @param string|null $key 要获取的参数
-   * @param mixed|null $default 默认值
-   * @return mixed
+   * @param string|null $key 参数名，不传则返回全部查询参数
+   * @param mixed $default 参数不存在时的默认值
+   * @return mixed 单个参数值或全部查询参数
    */
   #[Override] public function get(?string $key = null, mixed $default = null): mixed
   {
@@ -442,11 +457,14 @@ class Request implements RequestInterface
   }
 
   /**
-   * 过滤数据
+   * 对字符串数据应用过滤函数链
    *
-   * @param string $data
-   * @param array|string|null $filter
-   * @return string
+   * 先应用全局 $filter 规则，再叠加调用时传入的 $filter。
+   * 每个过滤规则键为函数名，值为传给函数的额外参数数组。
+   *
+   * @param string $data 待过滤的原始字符串
+   * @param array|string|null $filter 额外过滤规则，字符串表示单个函数名，数组同 $filter 格式
+   * @return string 过滤后的字符串
    */
   protected function filter(string $data, array|string|null $filter = null): string
   {
@@ -479,10 +497,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取HTTP协议版本。
+   * 获取 HTTP 协议版本号
    *
-   * @access public
-   * @return string HTTP协议版本。例如，"1.1"，"1.0","2"
+   * 从 server_protocol（如 "HTTP/1.1"）中提取版本部分。
+   *
+   * @return string 协议版本，如 "1.1"、"2"
    */
   #[Override] public function getProtocolVersion(): string
   {
@@ -491,11 +510,10 @@ class Request implements RequestInterface
   }
 
   /**
-   * 通过给定的不区分大小写的名称检查标头是否存在。
+   * 检查指定标头是否存在（不区分大小写）
    *
-   * @access public
-   * @param string $key
-   * @return bool 如果任何标头名称使用不区分大小写的字符串比较与给定的标头名称匹配，则返回true。如果消息中没有找到匹配的标头名称，则返回false。
+   * @param string $key 标头名称（不区分大小写）
+   * @return bool 标头存在返回 true，否则返回 false
    */
   #[Override] public function hasHeader(string $key): bool
   {
@@ -503,11 +521,14 @@ class Request implements RequestInterface
   }
 
   /**
-   * 使用提供的值替换指定标头的实例。(不存在会新增)
+   * 设置（或新增）请求标头
    *
-   * @param string $name 不区分大小写的标头字段名称。
-   * @param string $value 标头值。
-   * @return static
+   * 标头名称会统一转为小写存储。若标头已存在则覆盖。
+   *
+   * @param string $name 标头名称（不区分大小写）
+   * @param string $value 标头值
+   * @return RequestInterface 支持链式调用
+   * @throws InvalidArgumentException 标头名称或值不合法时抛出
    */
   #[Override] public function setHeader(string $name, string $value): RequestInterface
   {
@@ -517,9 +538,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 当前是否JSON请求
-   * @access public
-   * @return bool
+   * 判断客户端是否期望 JSON 响应
+   *
+   * 通过 Accept 标头匹配 JSON MIME 类型判断。
+   *
+   * @return bool true 表示客户端期望 JSON 响应
    */
   #[Override] public function isJson(): bool
   {
@@ -534,9 +557,12 @@ class Request implements RequestInterface
   }
 
   /**
-   * 当前请求的资源类型
-   * @access public
-   * @return string
+   * 获取客户端期望的资源类型别名
+   *
+   * 遍历 ACCEPT_TYPE 映射，匹配 Accept 标头返回对应别名（如 json、html），
+   * 无法匹配时返回 '*'。
+   *
+   * @return string 资源类型别名，如 'json'、'html'、'*'
    */
   #[Override] public function getAcceptType(): string
   {
@@ -554,10 +580,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 用于 获取 Swoole\Http\Request 对象的属性
+   * 代理获取 Swoole\Http\Request 的属性
    *
-   * @param string $name
-   * @return mixed
+   * @param string $name 属性名
+   * @return mixed 属性值
+   * @throws InvalidArgumentException 属性在 Swoole\Http\Request 中不存在时抛出
    */
   public function __get(string $name)
   {
@@ -569,11 +596,11 @@ class Request implements RequestInterface
   }
 
   /**
-   * 用于 设置 Swoole\Http\Request 对象的属性
+   * 代理设置 Swoole\Http\Request 的属性
    *
-   * @param string $name
-   * @param $value
-   * @return void
+   * @param string $name 属性名
+   * @param mixed $value 属性值
+   * @throws InvalidArgumentException 属性在 Swoole\Http\Request 中不存在时抛出
    */
   public function __set(string $name, $value): void
   {
@@ -585,11 +612,12 @@ class Request implements RequestInterface
   }
 
   /**
-   * 转发调用到 Swoole\Http\Request 对象
+   * 代理调用 Swoole\Http\Request 的方法
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed 方法返回值
+   * @throws BadMethodCallException 方法在 Swoole\Http\Request 中不存在时抛出
    */
   public function __call(string $name, array $arguments)
   {
@@ -601,11 +629,12 @@ class Request implements RequestInterface
   }
 
   /**
-   * 添加/修改请求参数
+   * 合并写入请求参数
    *
-   * @param array<string,mixed> $params 参数名称
-   * @param string $type 参数类型，可选值auto,get,post。
-   * @return void
+   * 根据类型决定写入 GET 或 POST 存储，auto 模式按当前请求方法自动选择。
+   *
+   * @param array<string, mixed> $params 待合并的参数键值对
+   * @param string $type 写入目标：'get'、'post' 或 'auto'（按请求方法自动判断）
    */
   #[Override] public function addParams(array $params, string $type = 'auto'): void
   {
@@ -626,9 +655,9 @@ class Request implements RequestInterface
   }
 
   /**
-   * 获取Swoole\Http\Request 对象
+   * 获取底层的 Swoole\Http\Request 对象
    *
-   * @return swooleRequest
+   * @return swooleRequest Swoole 原始请求对象
    */
   #[Override] public function getSwooleRequest(): swooleRequest
   {

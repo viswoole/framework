@@ -20,7 +20,7 @@ use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
 
 /**
- * ApiDoc解析工具
+ * API 文档解析工具，将路由树转换为文档结构
  */
 class ApiDocParseTool
 {
@@ -62,19 +62,19 @@ class ApiDocParseTool
   }
 
   /**
-   * 生成路由组信息
+   * 递归生成路由组的文档结构
    *
-   * @param Group $group
+   * @param Group $group 路由组
    * @return array{
-   *   type: string,
-   *   id: string,
-   *   parentId: string|null,
-   *   citeLink: string|null,
-   *   title: string,
-   *   description: string,
-   *   count: int,
-   *   children: array<array>
-   * }
+   *    type: string,
+   *    id: string,
+   *    parentId: string|null,
+   *    citeLink: string|null,
+   *    title: string,
+   *    description: string,
+   *    count: int,
+   *    children: array<array>
+   *  } 分组文档结构
    */
   private static function generateGroup(Group $group): array
   {

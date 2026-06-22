@@ -23,14 +23,14 @@ use Viswoole\Core\Validate\BaseValidateRule;
 use Viswoole\Core\Validate\Type;
 
 /**
- * 数组元素验证器
+ * 数组元素验证规则，对数组中每个元素递归执行类型校验
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class ArrayItem extends BaseValidateRule
 {
   /**
-   * @param Type[]|Type $types 需要核验的类型，多个类型请用数组表达
-   * @param string $message 错误信息
+   * @param Type[]|Type $types 数组元素需要满足的类型约束，多个类型用数组表示
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     protected array|Type $types,
@@ -41,7 +41,7 @@ class ArrayItem extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 逐元素执行类型校验，返回校验后的数组
    */
   #[Override] public function validate(mixed $value): array
   {

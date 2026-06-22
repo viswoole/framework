@@ -43,30 +43,32 @@ use Viswoole\Router\Route\Route;
 class Router extends Collector
 {
   /**
-   * @var array<string,string> 完全静态的路由item索引
+   * @var array<string,string> 完全静态路由映射，键为 URL 路径，值为路由引用链路
    */
   protected array $staticRoute = [];
   /**
-   * @var array<string,string> 动态参数的子节点
+   * @var array<string,array<string,string>> 动态路由映射，按路径段数分组，键为正则，值为路由引用链路
    */
   protected array $dynamicRoute = [];
   /**
-   * @var bool 缓存路由
+   * @var bool 是否启用路由缓存
    */
   private bool $cache;
   /**
-   * @var bool 是否生成api文档
+   * @var bool 是否启用 API 文档生成
    */
   private bool $enableApiDoc;
   /**
-   * @var bool 初始化
+   * @var bool 路由是否已完成初始化
    */
   private bool $init;
 
   /**
-   * @param Event $event
-   * @param Config $config
-   * @param Middleware $middleware
+   * 初始化路由器，加载配置路由与注解路由并构建路由树
+   *
+   * @param Event $event 事件管理器，用于触发路由初始化事件
+   * @param Config $config 框架配置实例
+   * @param Middleware $middleware 中间件调度器
    */
   public function __construct(
     private readonly Event      $event,
@@ -139,9 +141,7 @@ class Router extends Collector
   }
 
   /**
-   * 加载路由配置
-   *
-   * @return void
+   * 加载路由配置文件（通过 router.route_config_files 配置项指定）
    */
   private function loadConfigRoute(): void
   {
@@ -343,10 +343,10 @@ class Router extends Collector
   }
 
   /**
-   * 插入路由到node树
-   * @param string $path
-   * @param string $routeIndex
-   * @return void
+   * 将路由插入静态路由表或动态路由树
+   *
+   * @param string $path 路由路径
+   * @param string $routeIndex 路由引用链路
    */
   private function insertRoute(string $path, string $routeIndex): void
   {
@@ -366,10 +366,11 @@ class Router extends Collector
   }
 
   /**
-   * 转换为正则
-   * @param array $segments UrlPath段
-   * @param array $patternRule 参数规则
-   * @return string
+   * 将 URL 路径段和参数正则约束转换为完整匹配正则
+   *
+   * @param string[] $segments URL 路径段数组
+   * @param array $patternRule 参数名到正则约束的映射
+   * @return string 完整的匹配正则表达式
    */
   private function convertRegex(array $segments, array $patternRule = []): string
   {
@@ -430,11 +431,10 @@ class Router extends Collector
   }
 
   /**
-   * 添加静态路由
+   * 注册静态路由到映射表
    *
-   * @param string $urlPath 匹配path
-   * @param string $routeIndex 路由item实例索引
-   * @return void
+   * @param string $urlPath 完整 URL 路径
+   * @param string $routeIndex 路由引用链路
    */
   private function addStaticRoute(string $urlPath, string $routeIndex): void
   {
@@ -482,9 +482,8 @@ class Router extends Collector
   }
 
   /**
-   * 判断是否启动了api文档解析功能
+   * 判断是否启用了 API 文档解析功能
    *
-   * @access public
    * @return bool
    */
   public function isEnableApiDoc(): bool
@@ -581,11 +580,14 @@ class Router extends Collector
   }
 
   /**
-   * 验证选项
+   * 校验请求选项（方法/域名/后缀）是否在允许列表中
    *
-   * @param array $option
-   * @param string $value
-   * @param string $message
+   * 允许列表中包含 '*' 时视为不限制。
+   *
+   * @param array $option 允许的值列表
+   * @param string $value 实际请求值
+   * @param string $message 不匹配时的异常消息
+   * @throws RouteNotFoundException 不匹配时抛出
    */
   private function checkOption(
     array  $option,

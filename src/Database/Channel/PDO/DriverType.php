@@ -15,7 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Database\Channel\PDO;
 /**
- * PDO支持的数据库驱动
+ * PDO 支持的数据库驱动枚举
+ *
+ * 枚举值对应 PDO DSN 中的驱动标识符。
  */
 enum DriverType: string
 {

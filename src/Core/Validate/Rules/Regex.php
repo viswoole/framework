@@ -20,14 +20,14 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 正则表达式校验
+ * 正则表达式验证规则，校验字符串是否匹配指定正则模式
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Regex extends BaseValidateRule
 {
   /**
-   * @param string $pattern 正则表达式
-   * @param string $message 校验失败信息
+   * @param string $pattern 正则表达式模式
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     private readonly string $pattern,
@@ -38,7 +38,7 @@ class Regex extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验字符串是否匹配正则模式
    */
   #[Override] public function validate(mixed $value): mixed
   {

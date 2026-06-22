@@ -25,12 +25,15 @@ use Viswoole\Log\LogManager;
 use Viswoole\Router\Exception\RouteNotFoundException;
 
 /**
- * 异常处理类
+ * HTTP 异常处理器
+ *
+ * 捕获各类异常并按 HTTP 语义转换为对应的响应状态码与 JSON 输出，
+ * 调试模式下额外输出调用栈信息。
  */
 class HttpExceptionHandle extends Handle
 {
   /**
-   * @var array 忽略的异常
+   * @var array<int,class-string<Throwable>> 不记录到日志的异常类型
    */
   protected array $ignoreReport = [
     ValidateException::class,

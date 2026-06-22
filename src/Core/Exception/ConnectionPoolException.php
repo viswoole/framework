@@ -18,7 +18,7 @@ namespace Viswoole\Core\Exception;
 use RuntimeException;
 
 /**
- * 连接池异常
+ * 连接池相关异常基类，涵盖通道、连接获取与释放等异常场景
  */
 class ConnectionPoolException extends RuntimeException
 {

@@ -18,7 +18,7 @@ namespace Viswoole\Core\Validate\Rules;
 use Attribute;
 
 /**
- * 验证是否为纯汉字组成的字符串
+ * 纯汉字验证规则，校验值是否仅由中文字符组成
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Chinese extends Regex

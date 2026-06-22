@@ -23,26 +23,32 @@ use Viswoole\Database\Query\Where;
 
 /**
  * 查询构造器
+ *
+ * 组合 Where、Join、Crud 三个 Trait，提供完整的查询构建能力。
+ * 每个实例绑定一个 Channel 和一张表，通过 Options 管理查询状态。
+ * 查询执行后自动 reset，可复用实例构建新查询。
+ *
+ * @see Options
  */
 class BaseQuery
 {
   use Where, Join, Crud;
 
   /**
-   * @var Options 查询配置选项
+   * @var Options 当前查询的配置选项
    */
   protected Options $options;
   /**
-   * @var RunInfo 最后一次查询的信息
+   * @var RunInfo 最近一次查询的运行信息
    */
   protected RunInfo $lastQuery;
 
   /**
-   * 表名称
+   * 初始化查询构造器
    *
-   * @param Channel $channel 数据库通道名称
-   * @param string $table 表
-   * @param string $pk
+   * @param Channel $channel 数据库通道实例
+   * @param string $table 表名
+   * @param string $pk 主键字段名
    */
   public function __construct(
     protected Channel $channel,
@@ -54,9 +60,7 @@ class BaseQuery
   }
 
   /**
-   * 克隆重置属性
-   *
-   * @return void
+   * 克隆时深拷贝 Options，避免多个实例共享同一 Options 对象
    */
   public function __clone(): void
   {
@@ -64,13 +68,12 @@ class BaseQuery
   }
 
   /**
-   * 严格检测字段
+   * 设置字段严格检测模式
    *
-   * 默认为true，写入不存在的字段时会抛出异常
-   * 如果设置为false，则会自动忽略不存在的字段。
+   * 开启时写入不存在的字段会抛出异常；关闭时自动忽略不存在的字段。
    *
-   * @param bool $flag 是否启用严格模式，默认=true
-   * @return static
+   * @param bool $flag 是否启用严格模式，默认 true
+   * @return static 支持链式调用
    */
   public function strict(bool $flag = true): static
   {
@@ -79,11 +82,10 @@ class BaseQuery
   }
 
   /**
-   * 对结果进行分组
+   * 设置 GROUP BY 子句
    *
-   * @access public
    * @param string|array $columns 分组依据的列名，多个列名用逗号隔开或使用数组
-   * @return static
+   * @return static 支持链式调用
    */
   public function groupBy(string|array $columns): static
   {
@@ -98,10 +100,9 @@ class BaseQuery
   }
 
   /**
-   * 获取最后一次查询
+   * 获取最近一次查询的运行信息
    *
-   * @access public
-   * @return RunInfo|null 如果没有查询，返回 null。
+   * @return RunInfo|null 查询运行信息，未执行过查询时返回 null
    */
   public function getLastQuery(): ?RunInfo
   {
@@ -110,14 +111,13 @@ class BaseQuery
   }
 
   /**
-   * 添加 HAVING 子句到分组查询。
+   * 添加 HAVING 子句到分组查询
    *
-   * @access public
-   * @param string $column 列名。
-   * @param string $operator 操作符。
-   * @param mixed $value 值。
-   * @param string $connector 连接符，可选，默认为 'AND'。
-   * @return static
+   * @param string $column 列名
+   * @param string $operator 比较运算符
+   * @param mixed $value 比较值
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
    */
   public function having(
     string $column,
@@ -131,19 +131,19 @@ class BaseQuery
   }
 
   /**
-   * 对结果进行排序。
+   * 设置 ORDER BY 子句
    *
-   * Example:
+   * 支持多种调用方式：
    * ```
-   * $query->orderBy('sort','desc');// SELECT ... ORDER BY `sort` DESC;
-   * $query->orderBy(['sort' => 'asc', 'age' => 'desc']);// SELECT ... ORDER BY `sort` ASC,`age` DESC;
-   * $query->orderBy(['sort','age'],'desc');// SELECT ... ORDER BY `sort` DESC,`age` DESC;
-   * $query->orderBy(Db::raw('RAND()'));// SELECT ... ORDER BY RAND();
+   * $query->orderBy('sort','desc');                          // 单列排序
+   * $query->orderBy(['sort' => 'asc', 'age' => 'desc']);     // 多列指定方向
+   * $query->orderBy(['sort','age'],'desc');                   // 多列统一方向
+   * $query->orderBy(Db::raw('RAND()'));                       // 原生表达式排序
    * ```
-   * @access public
-   * @param string|string[]|array<string,string>|Raw $column 排序依据的列名
-   * @param string $direction 排序方向，可选`asc`|`desc`,默认为`asc`。
-   * @return static
+   *
+   * @param string|string[]|array<string,string>|Raw $column 排序依据的列名、列名数组或原生表达式
+   * @param string $direction 排序方向 asc|desc，默认 asc
+   * @return static 支持链式调用
    */
   public function orderBy(string|array|Raw $column, string $direction = 'asc'): static
   {
@@ -176,12 +176,13 @@ class BaseQuery
   }
 
   /**
-   * 分页查询
+   * 设置分页查询
    *
-   * @access public
-   * @param int $page 页码
-   * @param int $pageSize 每页数量
-   * @return BaseQuery
+   * 自动计算 offset 并设置 limit。
+   *
+   * @param int $page 页码，从 1 开始
+   * @param int $pageSize 每页记录数
+   * @return BaseQuery 支持链式调用
    */
   public function page(int $page, int $pageSize): BaseQuery
   {
@@ -192,10 +193,10 @@ class BaseQuery
   }
 
   /**
-   * 限制返回的结果数量。
+   * 设置 LIMIT 子句
    *
-   * @param int $limit 结果数量。
-   * @return static
+   * @param int $limit 返回记录的最大数量
+   * @return static 支持链式调用
    */
   public function limit(int $limit): static
   {
@@ -204,10 +205,10 @@ class BaseQuery
   }
 
   /**
-   * 设置结果的偏移量。
+   * 设置 OFFSET 子句
    *
-   * @param int $offset 偏移量。
-   * @return static
+   * @param int $offset 结果偏移量
+   * @return static 支持链式调用
    */
   public function offset(int $offset): static
   {
@@ -216,12 +217,11 @@ class BaseQuery
   }
 
   /**
-   * 合并另一个查询结果。
+   * 添加 UNION 子句合并另一个查询结果
    *
-   * @access public
-   * @param string|Raw $query 另一个查询的 SQL 语句。
-   * @param string $type 合并类型，默认为 'UNION'，可选 'UNION'|'UNION ALL'。
-   * @return static
+   * @param string|Raw $query 要合并的 SQL 语句或 Raw 对象
+   * @param string $type 合并类型 UNION|UNION ALL，默认 UNION
+   * @return static 支持链式调用
    */
   public function union(string|Raw $query, string $type = 'UNION'): static
   {
@@ -231,11 +231,10 @@ class BaseQuery
   }
 
   /**
-   * 设置查询结果是否返回唯一记录。
+   * 设置是否返回唯一记录（DISTINCT）
    *
-   * @access public
-   * @param bool $flag 是否返回唯一记录，默认为 false。
-   * @return static
+   * @param bool $flag 是否去重，默认 true
+   * @return static 支持链式调用
    */
   public function distinct(bool $flag = true): static
   {
@@ -244,11 +243,10 @@ class BaseQuery
   }
 
   /**
-   * 强制索引
+   * 设置强制索引（FORCE INDEX），仅 MySQL 和 SQLite 有效
    *
-   * @access public
-   * @param string $index
-   * @return static
+   * @param string $index 索引名称
+   * @return static 支持链式调用
    */
   public function force(string $index): static
   {
@@ -257,10 +255,10 @@ class BaseQuery
   }
 
   /**
-   * 表别名
+   * 设置表别名
    *
-   * @param string $alias
-   * @return $this
+   * @param string $alias 别名
+   * @return static 支持链式调用
    */
   public function alias(string $alias): static
   {
@@ -269,15 +267,12 @@ class BaseQuery
   }
 
   /**
-   * 重置查询选项。
+   * 重置查询选项，保留表名和主键配置
    *
-   * 为了减少创建查询实例的额外开销，可调用该方法重置查询实例，会保留表名和主键配置，其他条件都会被重置。
+   * 为减少创建查询实例的开销，查询执行后会自动调用此方法重置条件。
+   * 手动调用会丢失已构建的查询条件。
    *
-   * 一般无需手动调用，每次执行完查询过后，会自动调用该方法，可继续引用当前实例构建新查询。
-   *
-   * 如果手动调用该方法，则会丢失构建的查询条件。
-   *
-   * @return static
+   * @return static 支持链式调用
    */
   public function reset(): static
   {
@@ -286,11 +281,10 @@ class BaseQuery
   }
 
   /**
-   * 选择要查询的列。
+   * 设置要查询的列，支持别名（column AS alias）
    *
-   * @access public
-   * @param string ...$column 要查询的列名,不传则默认查询所有列。
-   * @return static
+   * @param string ...$column 列名，不传则查询所有列
+   * @return static 支持链式调用
    */
   public function columns(string...$column): static
   {
@@ -315,7 +309,7 @@ class BaseQuery
   /**
    * 获取主键字段名
    *
-   * @return string
+   * @return string 主键字段名
    */
   public function getPrimaryKey(): string
   {
@@ -325,8 +319,7 @@ class BaseQuery
   /**
    * 获取当前查询的表名
    *
-   * @access public
-   * @return string
+   * @return string 表名
    */
   public function getTableName(): string
   {
@@ -334,11 +327,10 @@ class BaseQuery
   }
 
   /**
-   * 排除字段
+   * 设置要排除的列
    *
-   * @access public
-   * @param string ...$column
-   * @return static
+   * @param string ...$column 要排除的列名
+   * @return static 支持链式调用
    */
   public function withoutColumns(string ...$column): static
   {
@@ -347,13 +339,13 @@ class BaseQuery
   }
 
   /**
-   * 自动写入缓存
+   * 设置查询缓存，查询结果自动写入缓存，写入操作自动清除缓存
    *
    * @param string $key 缓存标识
-   * @param int $expire 缓存有效期
-   * @param string|null $tag 缓存标签
-   * @param string|null $store 缓存商店
-   * @return static
+   * @param int $expire 缓存有效期（秒），0 表示永不过期
+   * @param string|null $tag 缓存标签，用于分组管理
+   * @param string|null $store 缓存存储器名称，为 null 时使用默认存储器
+   * @return static 支持链式调用
    */
   public function cache(
     string $key,
@@ -367,12 +359,9 @@ class BaseQuery
   }
 
   /**
-   * 锁定记录以进行更新。
+   * 添加排他锁（FOR UPDATE），其他事务不能读取或修改该记录
    *
-   * 其他事务不能读取或修改该记录
-   *
-   * @access public
-   * @return $this
+   * @return static 支持链式调用
    */
   public function lockForUpdate(): static
   {
@@ -381,12 +370,9 @@ class BaseQuery
   }
 
   /**
-   * 共享锁定记录。
+   * 添加共享锁（LOCK IN SHARE MODE），其他事务可读但不可修改
    *
-   * 其他事务可以读取该记录，但无法修改
-   *
-   * @access public
-   * @return $this
+   * @return static 支持链式调用
    */
   public function sharedLock(): static
   {
@@ -395,11 +381,9 @@ class BaseQuery
   }
 
   /**
-   * 返回Raw对象，不执行查询
+   * 标记当前查询仅返回 Raw 对象而不实际执行
    *
-   *
-   * @access public
-   * @return $this
+   * @return static 支持链式调用
    */
   public function toRaw(): static
   {
@@ -408,10 +392,10 @@ class BaseQuery
   }
 
   /**
-   * 强制写入
+   * 设置使用 REPLACE INTO 替代 INSERT INTO（仅 MySQL 有效）
    *
-   * @param bool $flag
-   * @return $this
+   * @param bool $flag 是否启用 REPLACE，默认 true
+   * @return static 支持链式调用
    */
   public function replace(bool $flag = true): static
   {
@@ -420,10 +404,9 @@ class BaseQuery
   }
 
   /**
-   * 新查询实例
+   * 创建一个全新的查询实例，共享当前通道和表配置
    *
-   * @access public
-   * @return $this 返回一个全新的查询实例
+   * @return static 新的查询实例
    */
   public function newQuery(): static
   {

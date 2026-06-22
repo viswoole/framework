@@ -19,32 +19,33 @@ use RuntimeException;
 use Viswoole\Core\Common\Str;
 
 /**
- * 配置文件管理类
+ * 配置管理器
+ *
+ * 负责加载、解析和访问多格式配置文件（PHP/YAML/INI/JSON），
+ * 支持点号分隔的多级配置读写，可选大小写不敏感模式。
+ * 配置在 AppInitialized 事件后自动加载 lazy 子目录中的懒加载配置。
  */
 class Config
 {
   /**
-   * 配置文件目录
-   * @var string
+   * @var string 配置文件目录路径
    */
   public readonly string $path;
   /**
-   * 配置文件扩展名
-   * @var string
+   * @var string 配置文件扩展名匹配模式（如 '*' 匹配所有）
    */
   public readonly string $ext;
   /**
-   * @var bool 是否区分大小写
+   * @var bool 配置键是否区分大小写，为 false 时自动转为蛇形命名
    */
   public readonly bool $matchCase;
   /**
-   * 配置参数
-   * @var array
+   * @var array 已加载的配置数据，键为文件名（不含扩展名）
    */
   protected array $config = [];
 
   /**
-   * @param Event $event 事件管理器
+   * @param Event $event 事件管理器，用于监听 AppInitialized 事件触发懒加载
    */
   public function __construct(Event $event)
   {
@@ -59,9 +60,9 @@ class Config
   }
 
   /**
-   * 加载配置文件
-   * @param string $path
-   * @return void
+   * 扫描指定目录下的配置文件并合并到配置池
+   *
+   * @param string $path 配置文件目录路径
    */
   private function load(string $path): void
   {
@@ -73,11 +74,12 @@ class Config
   }
 
   /**
-   * 解析配置文件
+   * 解析配置文件列表，按文件扩展名分发到对应解析器
    *
-   * @access public
-   * @param array $files
-   * @return array
+   * 支持 PHP（include）、YAML、INI、JSON 四种格式，同名配置文件会合并
+   *
+   * @param array $files 配置文件路径列表
+   * @return array 以文件名为键的配置数组
    */
   protected function parse(array $files): array
   {
@@ -109,10 +111,10 @@ class Config
   }
 
   /**
-   * 递归转换键为小写
+   * 递归将数组所有键转为蛇形命名（仅在 matchCase=false 时调用）
    *
-   * @param array $array
-   * @return array
+   * @param array $array 待转换的数组
+   * @return array 键已转为蛇形命名的新数组
    */
   protected function recursiveArrayKeyToLower(array $array): array
   {
@@ -129,10 +131,10 @@ class Config
   }
 
   /**
-   * 格式化key
+   * 格式化配置键名，大小写不敏感模式下转为蛇形命名
    *
-   * @param string $key 配置参数名
-   * @return string 如果不区分大小写，则转换为蛇形
+   * @param string $key 原始键名
+   * @return string 格式化后的键名
    */
   public function formatConfigKey(string $key): string
   {
@@ -141,11 +143,10 @@ class Config
   }
 
   /**
-   * 检测配置是否存在
+   * 检测配置项是否存在（值为 null 视为不存在）
    *
-   * @access public
-   * @param string $name 配置参数名（支持多级配置 .号分割）
-   * @return bool 注意：如果检测配置值为null时也会返回false
+   * @param string $name 配置参数名，支持点号分隔多级
+   * @return bool 存在且非 null 返回 true
    */
   public function has(string $name): bool
   {
@@ -157,11 +158,11 @@ class Config
   }
 
   /**
-   * 获取配置参数 name为null则获取所有配置
-   * @access public
-   * @param string|null $name 配置名称（支持多级配置 .号分割）
-   * @param mixed $default 默认值(null)
-   * @return mixed
+   * 获取配置值，支持点号分隔的多级访问
+   *
+   * @param string|null $name 配置名称，为 null 时返回全部配置
+   * @param mixed $default 键不存在时的默认值
+   * @return mixed 配置值或默认值
    */
   public function get(string $name = null, mixed $default = null): mixed
   {
@@ -180,11 +181,12 @@ class Config
   }
 
   /**
-   * 设置或更新配置，仅在当前进程中下有效，重启进程则会丢失。
+   * 设置或更新配置项，仅在当前进程生命周期内有效，进程重启后丢失
    *
-   * @param string|array $key 键
-   * @param mixed|null $value 值
-   * @return void
+   * 支持批量设置（传入关联数组）和点号分隔的多级设置
+   *
+   * @param string|array $key 配置键名或键值对数组
+   * @param mixed|null $value 配置值
    */
   public function set(string|array $key, mixed $value = null): void
   {

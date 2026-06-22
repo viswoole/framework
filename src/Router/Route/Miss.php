@@ -18,7 +18,7 @@ use Closure;
 use Viswoole\Core\App;
 
 /**
- * 路由未匹配处理
+ * 兜底路由，当请求未匹配到任何路由时执行其处理函数
  */
 readonly class Miss
 {

@@ -23,7 +23,7 @@ use Swoole\Server\Port;
 use Viswoole\Core\Facade;
 
 /**
- * Swoole服务管理
+ * Swoole 服务门面，静态代理 Server 核心方法
  *
  * @link https://wiki.swoole.com/zh-cn/#/server/methods
  *
@@ -81,7 +81,7 @@ class Server extends Facade
 {
 
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
    */
   #[Override] protected static function getMappingClass(): string
   {

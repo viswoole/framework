@@ -19,16 +19,20 @@ use InvalidArgumentException;
 use Throwable;
 
 /**
- * 验证异常
+ * 数据验证失败时抛出，携带验证错误信息供上层获取
  */
 class ValidateException extends InvalidArgumentException
 {
   /**
-   * 验证错误信息
-   * @var string|array
+   * @var string|array 验证错误信息，支持单条字符串或多条错误数组
    */
   protected string|array $error;
 
+  /**
+   * @param string|array $error 验证错误信息，多条时传入数组
+   * @param int $code 异常错误码
+   * @param Throwable|null $previous 前一个异常
+   */
   public function __construct(string|array $error, int $code = 0, Throwable|null $previous = null)
   {
     $this->error = $error;
@@ -37,9 +41,9 @@ class ValidateException extends InvalidArgumentException
   }
 
   /**
-   * 获取验证错误信息
-   * @access public
-   * @return array|string
+   * 获取原始验证错误信息
+   *
+   * @return array|string 单条错误返回字符串，多条错误返回数组
    */
   public function getError(): array|string
   {

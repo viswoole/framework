@@ -19,7 +19,7 @@ use Override;
 use Viswoole\Core\Service\Provider;
 
 /**
- * 日志服务
+ * 日志服务提供者，负责将 LogManager 注册到容器并启动
  */
 class LogService extends Provider
 {

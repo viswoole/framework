@@ -30,30 +30,19 @@ use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Raw;
 
 /**
- * CRUD操作
+ * CRUD 操作 Trait
+ *
+ * 提供增删改查、聚合查询、游标查询等数据库操作方法，
+ * 通过 runCrud 统一入口执行，自动管理缓存、调试信息和查询重置。
  */
 trait Crud
 {
   /**
-   * 插入数据
+   * 插入数据，支持单条和批量写入
    *
-   * 示例：
-   * ```
-   * // 要写入的用户信息
-   * $userInfo = [
-   *    'name'=>'张三',
-   *    'age'=>18
-   * ];
-   * // 写入单条记录示例
-   * $result = $query->insert($userInfo);
-   * print_r('写入数据结果：'.$result>0?true:false);
-   * // 写入多条记录示例
-   * $result = $query->insert([$userInfo,$userInfo])
-   * print_r("成功创建数据：$result 条");
-   * ```
-   *
-   * @param array<string,mixed>|array<int,array<string,mixed>> $data 要插入的数据
-   * @return int|Raw 返回插入的记录数
+   * @param array<string,mixed>|array<int,array<string,mixed>> $data 关联数组（单条）或索引数组（批量）
+   * @return int|Raw 插入的记录数
+   * @throws InvalidArgumentException 数据为空时抛出
    */
   public function insert(array $data): int|Raw
   {
@@ -63,8 +52,10 @@ trait Crud
   }
 
   /**
-   * @param string $type
-   * @return Raw|string|array|int
+   * CRUD 操作统一入口，构建SQL并执行，自动管理缓存、调试信息和查询重置
+   *
+   * @param string $type 操作类型 insert|insertGetId|update|delete|select
+   * @return Raw|string|array|int 查询结果
    */
   protected function runCrud(string $type): Raw|string|array|int
   {
@@ -90,11 +81,11 @@ trait Crud
   }
 
   /**
-   * 执行查询
+   * 执行 SELECT 查询，支持缓存
    *
-   * @param Raw $raw
-   * @return array
-   * @throws DbException
+   * @param Raw $raw 构建后的SQL表达式
+   * @return array 查询结果数组
+   * @throws DbException 数据库操作失败时抛出
    */
   protected function runSelect(Raw $raw): array
   {
@@ -125,14 +116,12 @@ trait Crud
   }
 
   /**
-   * 执行查询
+   * 执行查询（select 的别名方法）
    *
-   * 该方法和select方法相同
-   *
-   * @param bool $allowEmpty
-   * @return Collection|Raw
-   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
-   * @throws DbException 数据库抛出的异常
+   * @param bool $allowEmpty 是否允许空结果
+   * @return Collection|Raw 查询结果集合
+   * @throws DataNotFoundException 查询为空且不允许空时抛出
+   * @throws DbException 数据库操作失败时抛出
    * @see self::select()
    */
   public function get(bool $allowEmpty = true): Collection|Raw
@@ -141,12 +130,12 @@ trait Crud
   }
 
   /**
-   * 执行查询，并返回查询结果
+   * 执行查询并返回 Collection 集合
    *
-   * @param bool $allowEmpty 是否允许为空。
-   * @return Collection|Raw
-   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
-   * @throws DbException
+   * @param bool $allowEmpty 是否允许空结果，为 false 且结果为空时抛出异常
+   * @return Collection|Raw 查询结果集合
+   * @throws DataNotFoundException 查询为空且不允许空时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function select(bool $allowEmpty = true): Collection|Raw
   {
@@ -159,10 +148,12 @@ trait Crud
   }
 
   /**
-   * @param Raw $raw
-   * @param false|string $getId
-   * @return string|int
-   * @throws DbException
+   * 执行写入操作（INSERT/UPDATE/DELETE），返回受影响行数或自增ID
+   *
+   * @param Raw $raw 构建后的SQL表达式
+   * @param false|string $getId 传入字段名时返回自增ID，false 时不获取
+   * @return string|int 受影响行数或自增ID
+   * @throws DbException 数据库操作失败时抛出
    */
   protected function runWrite(Raw $raw, false|string $getId): string|int
   {
@@ -192,7 +183,7 @@ trait Crud
   /**
    * 删除记录
    *
-   * @return int|Raw
+   * @return int|Raw 受影响的记录数
    */
   public function delete(): int|Raw
   {
@@ -200,11 +191,10 @@ trait Crud
   }
 
   /**
-   * 获取sql运行时间
+   * 记录查询运行信息并保存调试日志
    *
-   * @param float $start
-   * @param Raw $raw
-   * @return void
+   * @param float $start 查询开始时间（微秒）
+   * @param Raw $raw 执行的SQL表达式
    */
   private function setRunInfo(float $start, Raw $raw): void
   {
@@ -227,9 +217,9 @@ trait Crud
   }
 
   /**
-   * 执行查询，并以数组返回查询结果。
+   * 执行查询并以原始数组返回结果
    *
-   * @return array|Raw
+   * @return array|Raw 查询结果数组
    */
   public function getArray(): array|Raw
   {
@@ -237,10 +227,11 @@ trait Crud
   }
 
   /**
-   * 插入数据，返回主键值
+   * 插入数据并返回自增主键值
    *
-   * @param array $data
-   * @return string|int|Raw 写入成功返回主键值
+   * @param array $data 关联数组数据
+   * @return string|int|Raw 自增主键值
+   * @throws InvalidArgumentException 数据非关联数组时抛出
    */
   public function insertGetId(array $data): string|int|Raw
   {
@@ -254,8 +245,9 @@ trait Crud
   /**
    * 更新记录
    *
-   * @param array<string,mixed|Raw> $data 键值对数组，键为列名，值为要更新的值
-   * @return int|Raw 返回更新的记录数
+   * @param array<string,mixed|Raw> $data 键值对，键为列名，值为新值（支持 Raw 表达式）
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 数据为空时抛出
    */
   public function update(array $data): int|Raw
   {
@@ -265,11 +257,11 @@ trait Crud
   }
 
   /**
-   * 计算指定列不能为null的记录总数
+   * 计算指定列非 NULL 的记录总数
    *
-   * @param string $column 列名。
-   * @return int|Raw
-   * @throws DbException
+   * @param string $column 列名，默认 '*'
+   * @return int|Raw 记录总数
+   * @throws DbException 数据库操作失败时抛出
    */
   public function count(string $column = '*'): int|Raw
   {
@@ -278,11 +270,11 @@ trait Crud
   }
 
   /**
-   * 聚合查询
+   * 执行聚合查询（COUNT/MIN/MAX/AVG/SUM）
    *
-   * @param string $type
-   * @param string $column
-   * @return mixed|Raw
+   * @param string $type 聚合函数名
+   * @param string $column 列名
+   * @return mixed|Raw 聚合结果
    */
   private function aggregateQueries(string $type, string $column): mixed
   {
@@ -294,12 +286,11 @@ trait Crud
   }
 
   /**
-   * 返回某个字段的值
+   * 返回指定列的第一个值，自动添加 LIMIT 1
    *
-   * 该方法会自动添加上limit = 1
-   *
-   * @param string $column
-   * @return mixed|false 如果查询结果为空，则返回false。
+   * @param string $column 列名
+   * @return mixed|false 列值，查询为空或列不存在时返回 false
+   * @throws InvalidArgumentException 列不存在时抛出
    */
   public function value(string $column): mixed
   {
@@ -315,11 +306,11 @@ trait Crud
   }
 
   /**
-   * 获取最小值。
+   * 获取指定列的最小值
    *
-   * @param string $column 列名。
-   * @return string|int|float|Raw 最小值。
-   * @throws DbException
+   * @param string $column 列名
+   * @return string|int|float|Raw 最小值
+   * @throws DbException 数据库操作失败时抛出
    */
   public function min(string $column): string|int|float|Raw
   {
@@ -328,11 +319,11 @@ trait Crud
   }
 
   /**
-   * 获取最大值。
+   * 获取指定列的最大值
    *
-   * @param string $column 列名。
-   * @return string|int|float|Raw 最大值。
-   * @throws DbException
+   * @param string $column 列名
+   * @return string|int|float|Raw 最大值
+   * @throws DbException 数据库操作失败时抛出
    */
   public function max(string $column): string|int|float|Raw
   {
@@ -341,11 +332,11 @@ trait Crud
   }
 
   /**
-   * 获取平均值。
+   * 获取指定列的平均值
    *
-   * @param string $column 列名。
-   * @return float|int|Raw 平均值。
-   * @throws DbException
+   * @param string $column 列名
+   * @return float|int|Raw 平均值
+   * @throws DbException 数据库操作失败时抛出
    */
   public function avg(string $column): float|int|Raw
   {
@@ -354,11 +345,11 @@ trait Crud
   }
 
   /**
-   * 获取总和。
+   * 获取指定列的总和
    *
-   * @param string $column 列名。
-   * @return float|int|Raw 总和。
-   * @throws DbException
+   * @param string $column 列名
+   * @return float|int|Raw 总和
+   * @throws DbException 数据库操作失败时抛出
    */
   public function sum(string $column): float|int|Raw
   {
@@ -367,12 +358,12 @@ trait Crud
   }
 
   /**
-   * 查询单条记录，并返回DataSet对象
+   * 查询单条记录（first 的别名方法）
    *
-   * @param bool $allowEmpty
-   * @return DataSet|Raw
-   * @throws DataNotFoundException
-   * @throws DbException
+   * @param bool $allowEmpty 是否允许空结果
+   * @return DataSet|Raw 单行数据集
+   * @throws DataNotFoundException 查询为空且不允许空时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function first(bool $allowEmpty = true): DataSet|Raw
   {
@@ -380,30 +371,15 @@ trait Crud
   }
 
   /**
-   * 查询单条记录
+   * 按主键查询单条记录，自动添加 LIMIT 1
    *
-   * 和select()方法不同，find()方法会自动添加上limit = 1，
-   * 且返回的是Row对象，可以直接通过属性方式获取/修改字段值。支持save()方法直接保存修改过后的数据。
+   * 与 select() 不同，find() 返回 DataSet 对象，可直接修改字段值并调用 save() 持久化。
    *
-   * 示例:
-   * ```
-   * // 查询id为1的用户
-   * $user = Db::table('users','id')->find(1);
-   * // 上面的查询生成的sql等效于下一行查询,唯一不同的是find方法会直接返回DataSet对象，可以快捷操作当前数据
-   * // $user = Db::table('users','id')->where('id',1)->limit(1)->select();
-   * // 可支持同时使用where条件
-   * // $user = Db::table('users','id')->where('status',1)->find(1);
-   * // 修改用户名
-   * $user->name = 'John';// $user['name'] = 'John' 两种语法都可以使用
-   * // 保存修改
-   * $user->save();
-   * ```
-   *
-   * @param int|string|null $value 主键值
-   * @param bool $allowEmpty 是否允许为空
-   * @return DataSet|Raw
-   * @throws DataNotFoundException 如果查询结果为空，且allowEmpty为false，则抛出异常。
-   * @throws DbException
+   * @param int|string|null $value 主键值，为 null 时需配合 where 条件
+   * @param bool $allowEmpty 是否允许空结果，为 false 且结果为空时抛出异常
+   * @return DataSet|Raw 单行数据集
+   * @throws DataNotFoundException 查询为空且不允许空时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function find(int|string $value = null, bool $allowEmpty = true): DataSet|Raw
   {
@@ -419,14 +395,12 @@ trait Crud
   }
 
   /**
-   * 游标查询
+   * 游标查询，逐条返回数据，适用于大数据量场景
    *
-   * 该方法和select()方法类似，不同之处在于，该方法返回的是一个生成器，可以逐条读取数据。
+   * 不适用缓存，因为缓存大量数据仍会造成内存溢出。
    *
-   * 该方法不适用cache，因为缓存大量数据依旧会造成内存溢出。
-   *
-   * @return Generator 返回生成器
-   * @throws DbException
+   * @return Generator 逐条返回 DataSet 的生成器
+   * @throws DbException 数据库操作失败时抛出
    */
   public function cursor(): Generator
   {
@@ -454,11 +428,11 @@ trait Crud
   }
 
   /**
-   * 分段查询
+   * 分段查询，每次读取指定数量的数据，适用于大数据量分批处理
    *
-   * @param int $size 每次读取的数量
-   * @return Generator 返回生成器
-   * @throws DbException
+   * @param int $size 每次读取的记录数
+   * @return Generator 逐批返回 Collection 的生成器
+   * @throws DbException 数据库操作失败时抛出
    */
   public function chunk(int $size): Generator
   {

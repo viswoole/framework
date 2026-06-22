@@ -19,7 +19,13 @@ use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
 
 /**
- * 路由注解基类
+ * 路由注解基类，封装从注解参数到路由实例的创建逻辑
+ *
+ * 子类通过 $type 属性区分创建路由组（group）还是路由项（item），
+ * 并将注解参数映射到路由的路径、方法、中间件等配置。
+ *
+ * @see Controller 控制器注解
+ * @see RouteMapping 路由映射注解
  */
 abstract class RouteAnnotation
 {

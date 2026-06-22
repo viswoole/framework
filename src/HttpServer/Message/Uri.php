@@ -16,35 +16,41 @@ declare (strict_types=1);
 namespace Viswoole\HttpServer\Message;
 
 
+/**
+ * URI 值对象
+ *
+ * 不可变的 URI 组件容器，支持 scheme、userInfo、host、port、path、query、fragment
+ * 各部分的获取与 with* 系列修改方法（返回新实例）。
+ */
 class Uri
 {
 
   /**
-   * @var string http协议
+   * @var string 协议方案（http/https）
    */
   private string $scheme;
   /**
-   * @var string 用户信息
+   * @var string 用户信息（user:password 格式）
    */
   private string $userInfo;
   /**
-   * @var string 域名或ip
+   * @var string 主机名或 IP 地址
    */
   private string $host;
   /**
-   * @var int|null 端口
+   * @var int|null 端口号，null 表示使用协议默认端口
    */
   private ?int $port;
   /**
-   * @var string 访问资源路径
+   * @var string 资源路径
    */
   private string $path;
   /**
-   * @var string 查询参数
+   * @var string 查询字符串（不含 ?）
    */
   private string $query;
   /**
-   * @var string 片段部分 #xxx
+   * @var string 片段标识（不含 #）
    */
   private string $fragment;
 
@@ -68,15 +74,16 @@ class Uri
   }
 
   /**
-   * 根据request创建URI对象
-   * @param string $scheme
-   * @param array|null $userInfo
-   * @param string $host
-   * @param int|null $port
-   * @param string $path
-   * @param string $query
-   * @param string $fragment
-   * @return static
+   * 工厂方法：根据各组件创建 URI 实例
+   *
+   * @param string $scheme 协议方案
+   * @param array|null $userInfo [user, password] 二元数组
+   * @param string $host 主机名
+   * @param int|null $port 端口号
+   * @param string $path 资源路径
+   * @param string $query 查询字符串
+   * @param string $fragment 片段标识
+   * @return static 新的 URI 实例
    */
   public static function create(
     string $scheme = '',
@@ -100,11 +107,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的协议方案部分（Scheme）。
-   * 例如，对于 URI "http://example.com"，此方法返回 "http"。
+   * 获取协议方案
    *
-   * @access public
-   * @return string
+   * @return string 如 'http' 或 'https'
    */
   public function getScheme(): string
   {
@@ -112,12 +117,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的授权部分（Authority）。
-   * 授权部分通常包括主机名和可选的端口号。
-   * 例如，对于 URI "http://example.com:8080"，此方法返回 "example.com:8080"。
+   * 获取授权部分（host:port）
    *
-   * @access public
-   * @return string
+   * @return string 如 'example.com:8080'，端口为默认值时省略
    */
   public function getAuthority(): string
   {
@@ -128,12 +130,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的用户信息部分。通常用于包含用户名和密码。
-   * 例如，对于 URI "http://user:password@example.com"，此方法返回 "user:password"。
-   * 从Authorization 请求头获取。
+   * 获取用户信息部分（从 Authorization 标头解析）
    *
-   * @access public
-   * @return string
+   * @return string 如 'user:password'
    */
   public function getUserInfo(): string
   {
@@ -141,11 +140,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的主机部分（Host）。
-   * 主机部分通常包括主机名或 IP 地址。例如，对于 URI "http://example.com"，此方法返回 "example.com"。
+   * 获取主机名或 IP 地址
    *
-   * @access public
-   * @return string
+   * @return string 如 'example.com'
    */
   public function getHost(): string
   {
@@ -153,12 +150,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的端口部分（Port）。
-   * 端口部分表示 URI 使用的端口号。
-   * 例如，对于 URI "http://example.com:8080"，此方法返回 8080。
+   * 获取端口号
    *
-   * @access public
-   * @return int|null
+   * @return int|null 端口号，null 表示使用协议默认端口
    */
   public function getPort(): ?int
   {
@@ -166,11 +160,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的路径部分（Path）。路径部分表示资源在服务器上的路径。
-   * 例如，对于 URI "http://example.com/path/to/resource"，此方法返回 "/path/to/resource"
+   * 获取资源路径
    *
-   * @access public
-   * @return string
+   * @return string 如 '/path/to/resource'
    */
   public function getPath(): string
   {
@@ -178,13 +170,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的查询部分（Query）。
-   * 查询部分通常用于传递参数给资源。
-   * 例如，对于 URI "http://example.com/resource?param1=value1&param2=value2"，
-   * 此方法返回 "param1=value1&param2=value2"。
+   * 获取查询字符串（不含 ?）
    *
-   * @access public
-   * @return string
+   * @return string 如 'param1=value1&param2=value2'
    */
   public function getQuery(): string
   {
@@ -192,12 +180,9 @@ class Uri
   }
 
   /**
-   * 获取 URI 的片段部分（Fragment）。
-   * 片段部分通常用于标识资源中的特定部分。
-   * 例如，对于 URI "http://example.com/resource#section1"，此方法返回 "section1"。
+   * 获取片段标识（不含 #）
    *
-   * @access public
-   * @return string
+   * @return string 如 'section1'
    */
   public function getFragment(): string
   {
@@ -205,11 +190,10 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的协议部分。
+   * 返回修改协议方案后的新 URI 实例
    *
-   * @access public
-   * @param string $scheme
-   * @return Uri
+   * @param string $scheme 协议方案
+   * @return Uri 新实例
    */
   public function withScheme(string $scheme): Uri
   {
@@ -219,12 +203,11 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的用户信息部分。
+   * 返回修改用户信息后的新 URI 实例
    *
-   * @access public
-   * @param string $user 用户
-   * @param string|null $password 密码
-   * @return Uri
+   * @param string $user 用户名
+   * @param string|null $password 密码，为空时仅保留用户名
+   * @return Uri 新实例
    */
   public function withUserInfo(string $user, ?string $password = null): Uri
   {
@@ -238,11 +221,10 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的主机部分。
+   * 返回修改主机名后的新 URI 实例
    *
-   * @access public
-   * @param string $host
-   * @return Uri
+   * @param string $host 主机名或 IP
+   * @return Uri 新实例
    */
   public function withHost(string $host): Uri
   {
@@ -252,11 +234,10 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的端口部分。
+   * 返回修改端口号后的新 URI 实例
    *
-   * @access public
-   * @param int|null $port
-   * @return Uri
+   * @param int|null $port 端口号，null 表示使用协议默认端口
+   * @return Uri 新实例
    */
   public function withPort(?int $port): Uri
   {
@@ -266,11 +247,10 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的路径部分。
+   * 返回修改资源路径后的新 URI 实例
    *
-   * @access public
-   * @param string $path
-   * @return Uri
+   * @param string $path 资源路径
+   * @return Uri 新实例
    */
   public function withPath(string $path): Uri
   {
@@ -280,11 +260,10 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的查询部分。
+   * 返回修改查询字符串后的新 URI 实例
    *
-   * @access public
-   * @param string $query
-   * @return Uri
+   * @param string $query 查询字符串（不含 ?）
+   * @return Uri 新实例
    */
   public function withQuery(string $query): Uri
   {
@@ -294,11 +273,10 @@ class Uri
   }
 
   /**
-   * 创建一个新的 URI 对象，其中包含指定的片段部分。
+   * 返回修改片段标识后的新 URI 实例
    *
-   * @access public
-   * @param string $fragment
-   * @return Uri
+   * @param string $fragment 片段标识（不含 #）
+   * @return Uri 新实例
    */
   public function withFragment(string $fragment): Uri
   {
@@ -308,11 +286,11 @@ class Uri
   }
 
   /**
-   * 返回 URI 的字符串表示形式。这是一个魔术方法，用于将 URI 对象转换为字符串。
-   * http://example.com:8080/path#fragment?query=1
+   * 将 URI 转换为字符串表示
    *
-   * @access public
-   * @return string
+   * 格式：scheme://host[:port][path][?query][#fragment]
+   *
+   * @return string 完整 URI 字符串
    */
   public function __toString(): string
   {

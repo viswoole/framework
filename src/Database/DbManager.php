@@ -28,36 +28,42 @@ use Viswoole\Log\LogManager;
 /**
  * 数据库通道管理器
  *
+ * 负责数据库通道的注册、切换与调试信息管理，通过 Swoole\Table 实现跨进程共享调试配置。
+ * 所有数据库操作均通过通道代理执行，支持事务管理和原生SQL表达式构建。
+ *
  * @method BaseQuery table(string $table, string $pk = 'id') 选择要查询的表
  * @method array query(string $sql, array $bindings = []) 原生查询 select
  * @method int|string execute(string $sql, array $bindings = []) 原生写入，包括 insert、update、delete
  * @method mixed pop(string $type) 获取可用的连接$type可选值为`read`|`write`
  * @method void put(mixed $connect) 归还一个可用的连接，如果连接已被损坏，请归还null
+ * @see Channel
  */
 class DbManager
 {
   /**
-   * debug信息直接输出到控制台
+   * 调试信息输出到控制台
    */
   const int DEBUG_SAVE_CONSOLE = 1;
   /**
-   * debug信息保存到日志文件
+   * 调试信息保存到日志文件
    */
   const int DEBUG_SAVE_LOGGER = 2;
   public readonly string $defaultChannel;
   /**
-   * @var array<string,Channel> 数据库通道
+   * @var array<string,Channel> 已注册的数据库通道，键名为通道小写名称
    */
   protected array $channels = [];
   /**
-   * @var Table 高性能共享表
+   * @var Table 跨进程共享的调试配置表
    */
   private Table $table;
 
   /**
-   * @param Config $config 配置管理器
-   * @param LogManager $logManager 日志管理器
-   * @throws DbException 配置错误
+   * 初始化数据库管理器，注册通道并配置调试模式
+   *
+   * @param Config $config 配置管理器，用于读取 database 配置项
+   * @param LogManager $logManager 日志管理器，用于调试信息写入日志
+   * @throws DbException 通道配置错误时抛出
    */
   public function __construct(Config $config, protected LogManager $logManager)
   {
@@ -83,14 +89,13 @@ class DbManager
   }
 
   /**
-   * 添加一个数据库通道
+   * 注册一个数据库通道
    *
-   * 注意：该方法需在swoole服务器启动之前调用，在工作进程添加的通道不会同步到其他进程。
+   * 注意：该方法需在 Swoole 服务器启动之前调用，在工作进程添加的通道不会同步到其他进程。
    *
-   * @param string $name 通道名称
-   * @param Channel|string|array{driver:string,options:array} $channel 驱动类
-   * @return void
-   * @throws DbException 配置错误
+   * @param string $name 通道名称，不区分大小写
+   * @param Channel|string|array{driver:string,options:array} $channel 通道实例、类名或配置数组（含 driver 和 options 键）
+   * @throws DbException 通道类不存在、未实现 Channel 接口或配置格式错误时抛出
    */
   public function addChannel(string $name, Channel|string|array $channel): void
   {
@@ -116,11 +121,9 @@ class DbManager
   }
 
   /**
-   * 设置debug模式
+   * 切换调试模式开关
    *
-   * @access public
-   * @param bool $debug
-   * @return void
+   * @param bool $debug true 开启调试，false 关闭调试
    */
   public function setDebug(bool $debug): void
   {
@@ -132,9 +135,7 @@ class DbManager
   /**
    * 设置调试信息保存方式
    *
-   * @access public
-   * @param int $manner
-   * @return void
+   * @param int $manner 保存方式，可使用 DEBUG_SAVE_CONSOLE、DEBUG_SAVE_LOGGER 或位运算组合
    */
   public function setDebugInfoSaveManner(int $manner): void
   {
@@ -144,11 +145,11 @@ class DbManager
   }
 
   /**
-   * 保存调试信息
+   * 根据当前调试配置保存查询运行信息
    *
-   * @access public
-   * @param RunInfo $debugInfo
-   * @return void
+   * 仅在调试模式开启时生效，按配置的保存方式输出到控制台和/或日志文件。
+   *
+   * @param RunInfo $debugInfo 查询运行信息
    */
   public function saveDebugInfo(RunInfo $debugInfo): void
   {
@@ -171,9 +172,9 @@ class DbManager
   }
 
   /**
-   * 是否开启debug
+   * 判断调试模式是否开启
    *
-   * @return bool
+   * @return bool 调试模式开启返回 true
    */
   public function debug(): bool
   {
@@ -181,9 +182,9 @@ class DbManager
   }
 
   /**
-   * 调试信息保存方式
+   * 获取调试信息保存方式
    *
-   * @return int 1 代表控制台，2 代表日志文件，3 代表同时保存到控制台和日志文件
+   * @return int 1=控制台，2=日志文件，3=同时保存到控制台和日志文件
    */
   public function debugInfoSaveManner(): int
   {
@@ -191,9 +192,9 @@ class DbManager
   }
 
   /**
-   * 开启事务(startTransaction别名方法)
+   * 开启事务（startTransaction 的简写）
    *
-   * @return void
+   * @see startTransaction()
    */
   public function start(): void
   {
@@ -203,8 +204,9 @@ class DbManager
   /**
    * 开启事务
    *
-   * @param Closure|null $query 如果传入闭包则自动捕获异常并执行commit|rollBack
-   * @return void
+   * 传入闭包时自动管理事务：闭包执行成功则提交，异常则回滚。
+   *
+   * @param Closure|null $query 闭包内执行事务操作，传入后自动 commit/rollBack
    */
   public function startTransaction(Closure $query = null): void
   {
@@ -220,9 +222,7 @@ class DbManager
   }
 
   /**
-   * 提交事务
-   * @access public
-   * @return void
+   * 提交当前事务
    */
   public function commit(): void
   {
@@ -230,10 +230,7 @@ class DbManager
   }
 
   /**
-   * 回滚所有事务
-   *
-   * @access public
-   * @return void
+   * 回滚当前事务
    */
   public function rollBack(): void
   {
@@ -241,11 +238,11 @@ class DbManager
   }
 
   /**
-   * 原生sql
+   * 创建原生SQL表达式对象，用于在查询构建中嵌入不被参数绑定的SQL片段
    *
-   * @param string $sql 原生sql语句，支持占位符
-   * @param array $bindings 绑定参数
-   * @return Raw
+   * @param string $sql 原生SQL语句，支持位置占位符(?)和命名占位符(:name)
+   * @param array $bindings 绑定参数，与占位符对应
+   * @return Raw 原生SQL表达式对象
    */
   public function raw(string $sql, array $bindings = []): Raw
   {
@@ -253,12 +250,12 @@ class DbManager
   }
 
   /**
-   * 转发调用
+   * 将方法调用转发到默认数据库通道
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
-   * @throws DbException
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed 通道方法的返回值
+   * @throws DbException 通道方法不存在时抛出
    */
   public function __call(string $name, array $arguments)
   {
@@ -270,12 +267,12 @@ class DbManager
   }
 
   /**
-   * 获取数据库通道
+   * 获取指定名称的数据库通道
    *
-   * @access public
-   * @param string|null $name 通道名称
-   * @return Channel
-   * @throws DbException 没有数据库通道
+   * @param string|null $name 通道名称，为 null 时使用默认通道
+   * @return Channel 数据库通道实例
+   * @throws DbException 通道列表为空时抛出
+   * @throws InvalidArgumentException 指定通道不存在时抛出
    */
   public function channel(string $name = null): Channel
   {
@@ -290,11 +287,10 @@ class DbManager
   }
 
   /**
-   * 判断通道是否存在
+   * 判断指定名称的通道是否已注册
    *
-   * @access public
-   * @param string $channel_name
-   * @return bool
+   * @param string $channel_name 通道名称，不区分大小写
+   * @return bool 通道已注册返回 true
    */
   public function hasChannel(string $channel_name): bool
   {
@@ -302,10 +298,9 @@ class DbManager
   }
 
   /**
-   * 返回所有通道
+   * 获取所有已注册的数据库通道
    *
-   * @access public
-   * @return array<string,Channel>
+   * @return array<string,Channel> 键为通道名称，值为通道实例
    */
   public function getChannels(): array
   {

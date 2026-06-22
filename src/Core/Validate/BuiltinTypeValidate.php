@@ -21,11 +21,17 @@ use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Exception\ValidateException;
 
 /**
- * 内置类型校验
+ * PHP 内置类型校验器
+ *
+ * 为每种 PHP 内置类型提供校验与自动转换方法，
+ * 支持布尔值宽松转换、数字字符串转数值、关联数组转对象等。
+ * 校验失败时统一抛出 ValidateException。
  */
 class BuiltinTypeValidate
 {
-  // PHP内置原子类型
+  /**
+   * @var string[] PHP 内置原子类型名称列表，用于 isBuiltin() 判断
+   */
   public const array TYPES = [
     'bool',
     'null',
@@ -46,11 +52,11 @@ class BuiltinTypeValidate
   ];
 
   /**
-   * 验证是否为bool
+   * boolean 别名，代理到 bool()
    *
-   * @param mixed $value
-   * @return bool
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return bool 校验通过的布尔值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function boolean(mixed $value): bool
   {
@@ -58,11 +64,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 判断是否为bool，带自动转换
+   * 校验布尔类型，支持宽松转换（'true'/'on'/'yes'/1 → true，'false'/'off'/'no'/0 → false）
    *
-   * @param mixed $value
-   * @return bool
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return bool 校验通过的布尔值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function bool(mixed $value): bool
   {
@@ -76,12 +82,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 统一异常处理
+   * 统一的校验失败异常抛出，格式化实际类型与期望类型
    *
-   * @param string $type
-   * @param mixed $value
-   * @return void
-   * @throws ValidateException
+   * @param string $type 期望的类型名
+   * @param mixed $value 实际的值
+   * @throws ValidateException 始终抛出
    */
   public static function unifiedExceptionHandling(string $type, mixed $value): void
   {
@@ -90,10 +95,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 判断Closure
+   * 校验闭包类型
    *
-   * @param mixed $value
-   * @return callable
+   * @param mixed $value 待校验的值
+   * @return Closure 校验通过的闭包
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function Closure(mixed $value): Closure
   {
@@ -102,10 +108,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 判断callable
+   * 校验可调用类型
    *
-   * @param mixed $value
-   * @return callable
+   * @param mixed $value 待校验的值
+   * @return callable 校验通过的可调用结构
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function callable(mixed $value): callable
   {
@@ -114,11 +121,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为int
+   * integer 别名，代理到 int()
    *
-   * @param mixed $value
-   * @return int
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return int 校验通过的整数值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function integer(mixed $value): int
   {
@@ -126,11 +133,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为int
+   * 校验整数类型，数字字符串自动转为整数（含科学计数法）
    *
-   * @param mixed $value
-   * @return int
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return int 校验通过的整数值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function int(mixed $value): int
   {
@@ -144,10 +151,10 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 任意类型
+   * mixed 类型不做校验，直接返回原值
    *
-   * @param mixed $value
-   * @return mixed
+   * @param mixed $value 任意值
+   * @return mixed 原值
    */
   public static function mixed(mixed $value): mixed
   {
@@ -155,11 +162,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为double
+   * double 别名，代理到 float()
    *
-   * @param mixed $value
-   * @return float
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return float 校验通过的浮点数值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function double(mixed $value): float
   {
@@ -167,11 +174,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为float
+   * 校验浮点数类型，数字字符串自动转为浮点数
    *
-   * @param mixed $value
-   * @return float
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return float 校验通过的浮点数值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function float(mixed $value): float
   {
@@ -181,11 +188,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 判断是否为null
+   * 校验 null 类型，使用严格比较（=== null）
    *
-   * @param mixed $value
-   * @return null
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return null 校验通过返回 null
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function null(mixed $value): null
   {
@@ -195,11 +202,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为可迭代对象
+   * 校验可迭代类型（数组或 Traversable 对象）
    *
-   * @param mixed $value
-   * @return bool
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return mixed 校验通过的可迭代值
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function iterable(mixed $value): mixed
   {
@@ -208,11 +215,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为true
+   * 校验严格 true 类型，使用 === true 比较
    *
-   * @param mixed $value
-   * @return true
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return true 校验通过返回 true
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function true(mixed $value): true
   {
@@ -222,11 +229,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 验证是否为false
+   * 校验严格 false 类型，使用 === false 比较
    *
-   * @param mixed $value
-   * @return false
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return false 校验通过返回 false
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function false(mixed $value): false
   {
@@ -236,11 +243,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 检测是否为字符串
+   * 校验字符串类型
    *
-   * @param mixed $value
-   * @return string
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return string 校验通过的字符串
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function string(mixed $value): string
   {
@@ -249,11 +256,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 检测是否为数组
+   * 校验数组类型
    *
-   * @param mixed $value
-   * @return array
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return array 校验通过的数组
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function array(mixed $value): array
   {
@@ -262,11 +269,11 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 检测是否为对象,如果为关联数组自动转换为对象类型
+   * 校验对象类型，关联数组自动转为 stdClass 对象
    *
-   * @param mixed $value
-   * @return object
-   * @throws ValidateException 验证失败
+   * @param mixed $value 待校验的值
+   * @return object 校验通过的对象
+   * @throws ValidateException 类型不匹配时抛出
    */
   public static function object(mixed $value): object
   {
@@ -279,10 +286,10 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 判断是否内置类型
+   * 判断类型名是否为 PHP 内置原子类型
    *
-   * @param string|Type|ReflectionNamedType $type
-   * @return bool
+   * @param string|Type|ReflectionNamedType $type 类型名、Type 枚举或反射类型
+   * @return bool 是内置类型返回 true
    */
   public static function isBuiltin(string|Type|ReflectionNamedType $type): bool
   {

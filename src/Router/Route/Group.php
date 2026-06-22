@@ -76,7 +76,10 @@ class Group extends BaseRoute
   }
 
   /**
-   * @inheritDoc
+   * 校验处理函数，空数组兼容缓存序列化占位符
+   *
+   * @param callable|array|string $handler 处理函数
+   * @return callable|array 校验后的处理函数
    */
   protected function verifyHandler(callable|array|string $handler): callable|array
   {

@@ -19,13 +19,13 @@ use Override;
 use Viswoole\Core\Middleware;
 
 /**
- * 中间件服务
+ * 中间件服务提供者，负责注册和启动中间件管理器
  */
 class MiddlewareService extends Provider
 {
 
   /**
-   * @inheritDoc
+   * 启动中间件管理器，解析并初始化所有已注册的中间件
    */
   #[Override] public function boot(): void
   {
@@ -33,7 +33,7 @@ class MiddlewareService extends Provider
   }
 
   /**
-   * @inheritDoc
+   * 将中间件管理器绑定到容器
    */
   #[Override] public function register(): void
   {

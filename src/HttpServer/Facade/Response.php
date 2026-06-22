@@ -21,7 +21,9 @@ use Viswoole\Core\Facade;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
 /**
- * HTTP响应对象
+ * HTTP 响应对象静态代理
+ *
+ * 提供对 Response 实例的静态调用入口，简化状态码、标头、Cookie、内容输出等操作。
  *
  * @method static ResponseInterface status(int $http_status_code, string $reasonPhrase = '') 设置响应状态
  * @method static ResponseInterface header(string $key, string $value, bool $format = true) 设置响应标头

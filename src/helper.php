@@ -64,9 +64,9 @@ if (!function_exists('getAppPath')) {
 }
 if (!function_exists('getEnvPath')) {
   /**
-   * 获取环境变量文件路径
+   * 获取 .env 环境变量文件路径
    *
-   * @return string
+   * @return string .env 文件绝对路径
    */
   function getEnvPath(): string
   {
@@ -75,11 +75,11 @@ if (!function_exists('getEnvPath')) {
 }
 if (!function_exists('app')) {
   /**
-   * 获取服务或容器
+   * 获取容器实例或从容器中解析服务
    *
-   * @param string|null $name 标识或接口,不传返回容器实例
-   * @return mixed|App
-   * @throws NotFoundException
+   * @param string|null $name 服务标识或接口名，null 时返回容器实例
+   * @return mixed|App 容器实例或解析出的服务
+   * @throws NotFoundException 服务不存在时抛出
    */
   function app(?string $name = null): mixed
   {
@@ -89,7 +89,7 @@ if (!function_exists('app')) {
 }
 if (!function_exists('isDebug')) {
   /**
-   * 判断是否Debug环境
+   * 判断当前是否为调试模式
    *
    * @return bool
    */
@@ -125,11 +125,11 @@ if (!function_exists('app_debug')) {
 }
 if (!function_exists('config')) {
   /**
-   * 获取配置
+   * 获取配置项的值，支持点号分隔的多级键名
    *
-   * @param string|null $name 配置名（支持二级 .号分割）
-   * @param mixed $default 默认值
-   * @return mixed
+   * @param string|null $name 配置键名
+   * @param mixed $default 键不存在时的默认值
+   * @return mixed 配置值或默认值
    * @see Config::get()
    */
   function config(string $name = null, mixed $default = null): mixed
@@ -184,11 +184,11 @@ if (!function_exists('echo_log')) {
 }
 if (!function_exists('cache')) {
   /**
-   * 缓存助手函数
+   * 缓存助手函数，获取缓存值或返回缓存管理器实例
    *
-   * @param string|null $key 缓存标识
-   * @param mixed|null $value 缓存不存在时返回的默认值
-   * @return mixed|CacheManager 如果缓存标识为null，则返回CacheManager实例
+   * @param string|null $key 缓存键名，null 时返回 CacheManager 实例
+   * @param mixed|null $value 键不存在时的默认值
+   * @return mixed|CacheManager 缓存值或缓存管理器实例
    */
   function cache(?string $key = null, mixed $value = null): mixed
   {
@@ -198,11 +198,11 @@ if (!function_exists('cache')) {
 }
 if (!function_exists('invoke')) {
   /**
-   * 调用函数或方法，依赖注入
+   * 通过容器依赖注入调用函数或方法
    *
-   * @param array|callable|string $callable
-   * @param array $params
-   * @return mixed
+   * @param array|callable|string $callable 可调用的函数、方法或 [类, 方法] 数组
+   * @param array $params 额外传入的参数
+   * @return mixed 调用结果
    */
   function invoke(array|callable|string $callable, array $params = []): mixed
   {
@@ -211,11 +211,10 @@ if (!function_exists('invoke')) {
 }
 if (!function_exists('bind')) {
   /**
-   * 绑定接口或实现到容器
+   * 将接口或标识绑定到具体实现到容器
    *
-   * @param string $abstract 标识或接口
-   * @param object|string $concrete 实例或类名
-   * @return void
+   * @param string $abstract 接口名或标识
+   * @param object|string $concrete 实现实例或类名
    */
   function bind(string $abstract, object|string $concrete): void
   {
@@ -237,9 +236,9 @@ if (!function_exists('make')) {
 }
 if (!function_exists('getVersion')) {
   /**
-   * 获取当前版本号
+   * 获取框架当前版本号
    *
-   * @return string
+   * @return string 版本号
    */
   function getVersion(): string
   {

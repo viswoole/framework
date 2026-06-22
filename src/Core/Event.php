@@ -20,28 +20,32 @@ use ReflectionClass;
 
 /**
  * 事件管理器
+ *
+ * 提供事件的注册、触发和移除机制，支持闭包监听、类方法监听和 event.id 语法。
+ * 事件名统一转为小写，确保 on/emit/off 大小写不敏感。
+ * 支持监听次数限制，达到限制后自动移除。
  */
 class Event
 {
   /**
-   * @var array 监听器
+   * @var array<string,array<string,array{limit:int,count:int,handle:mixed}>> 已注册的监听器，键为事件名，值为监听器ID到配置的映射
    */
   private array $listens = [];
 
   /**
-   * 触发事件
+   * 触发事件，支持 "事件名.监听器ID" 语法定向触发指定监听器
    *
    * 示例：
    * ```
    * use \Viswoole\Core\Facade\Event;
-   * // 触发事件
+   * // 触发事件的所有监听器
    * Event::emit('userLogin', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
-   * // 如果注册的监听器是一个类，则需要用"事件名称.方法名"触发
+   * // 仅触发 user 事件下 login 监听器
    * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
    * ```
-   * @param string $event 事件名称
-   * @param array $arguments 需要额外传递的参数
-   * @return void
+   *
+   * @param string $event 事件名称，不区分大小写
+   * @param array $arguments 传递给监听器的参数
    */
   public function emit(string $event, array $arguments = []): void
   {
@@ -59,12 +63,11 @@ class Event
   }
 
   /**
-   * 调用监听器
+   * 调用指定监听器，受监听次数限制约束，达到限制后自动移除
    *
-   * @param string $event
-   * @param string $id
-   * @param array $arguments
-   * @return void
+   * @param string $event 事件名（已小写化）
+   * @param string $id 监听器ID
+   * @param array $arguments 传递给监听器的参数
    */
   private function callHandle(string $event, string $id, array $arguments): void
   {
@@ -81,11 +84,10 @@ class Event
   }
 
   /**
-   * 关闭监听
+   * 移除事件监听器，不传 ID 时移除该事件的全部监听器
    *
-   * @param string $event 事件名称,不区分大小写
-   * @param string|null $id 监听器id，如果为null，则关闭该事件的所有监听器
-   * @return void
+   * @param string $event 事件名称，不区分大小写
+   * @param string|null $id 监听器ID，为 null 时移除该事件的所有监听器
    */
   public function off(string $event, string $id = null): void
   {
@@ -101,9 +103,9 @@ class Event
   }
 
   /**
-   * 获取已监听的事件
+   * 获取所有已注册监听的事件名列表
    *
-   * @return array
+   * @return array 事件名数组
    */
   public function getEvents(): array
   {
@@ -111,38 +113,34 @@ class Event
   }
 
   /**
-   * 注册事件监听
+   * 注册事件监听器，支持闭包回调和类方法批量注册
+   *
+   * 闭包回调返回唯一监听器ID，类名注册则扫描所有 public 方法以方法名为ID批量注册
    *
    * 示例：
    * ```
    * use \Viswoole\Core\Facade\Event;
-   * // 模拟监听用户登录事件
+   * // 闭包监听
    * $id = Event::on('userLogin', function(array $data){
-   *    dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
+   *    dump($data,'登录信息');
    * })
-   * // 触发用户登录事件
    * Event::emit('userLogin', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
-   * // 清除监听器
-   * Event::off('userLogin',$id);
+   * Event::off('userLogin', $id);
    *
-   * // 监听器类
+   * // 类方法批量监听
    * class UserEvents{
-   *   public static function login(array $data){
-   *      dump($data,'登录信息'); // ['id'=>1,'login_at'=>'2024-01-01 01:21:32']
-   *   }
+   *   public static function login(array $data){ ... }
    * }
-   * // $handle传入监听器类，批量注册
    * Event::on('user', UserEvents::class);
-   * // 触发监听器中的login方法
-   * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']])
-   * // 关闭监听器
+   * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
    * Event::off('user.login');
    * ```
    *
-   * @param string $event 不区分大小写的事件名称，不能包含`.`
-   * @param callable|string $handle 任意可调用的回调，也可以是类名，如：UserEvents::class
-   * @param int $limit 监听次数，0为不限制。
-   * @return string|array 返回事件监听器id，仅用于删除监听器
+   * @param string $event 事件名称，不区分大小写，不能包含 '.'
+   * @param callable|string $handle 闭包回调或监听器类名
+   * @param int $limit 最大监听次数，0 为不限制，达到后自动移除
+   * @return string|array 闭包注册返回监听器ID，类名注册返回方法名ID数组
+   * @throws InvalidArgumentException 事件名包含 '.' 或 $handle 不可调用时抛出
    */
   public function on(string $event, callable|string $handle, int $limit = 0): string|array
   {
@@ -194,10 +192,7 @@ class Event
   }
 
   /**
-   * 清除所有事件监听
-   *
-   * @access public
-   * @return void
+   * 清除所有事件监听器
    */
   public function offAll(): void
   {

@@ -24,25 +24,27 @@ use Viswoole\Log\Drive;
 use Viswoole\Log\LogManager;
 
 /**
- * 日志文件驱动
+ * 文件日志驱动，将日志写入本地文件系统
  *
- * 该驱动器将日志写入文件，支持按级别、日期、大小进行切割，支持json格式存储。
+ * 支持按级别分目录、按日期分目录、按文件大小切割、JSON 格式存储。
+ * 通过 Swoole 定时器在每日凌晨自动清理过期日志。
  *
- * 不建议使用该驱动进行存储非常重要的日志数据，并发写入可能会导致日志顺序不准确，需谨慎使用。
+ * 注意：并发写入可能导致日志顺序不完全准确，对日志可靠性要求极高的场景
+ * 建议使用第三方日志库或自行实现驱动。
  *
- * 如果您对日志性能和可靠性有非常高的要求，建议使用第三方日志库，或自行编写日志存储驱动。
+ * @see Drive 日志驱动抽象基类
  */
 class File extends Drive
 {
   /**
-   * @param int $storageDays 日志存储的天数（仅在协程环境中有效）
-   * @param int $maxFiles 最大日志文件数量（针对日志级别）
-   * @param int $fileSize 日志文件大小
-   * @param string $dateFormat 日期格式传入timestamp为时间戳格式
-   * @param string $logFormat 日志格式
-   * @param bool $json 是否json存储
-   * @param int $json_flags json格式化参数
-   * @param string $log_dir 日志存储目录路径
+   * @param int $storageDays 日志保留天数，超过天数的日志目录将被自动清理
+   * @param int $maxFiles 单个级别下最大日志文件数量，超出时删除最早的文件
+   * @param int $fileSize 单个日志文件最大字节数，超出后自动切割新文件
+   * @param string $dateFormat 时间戳格式化规则，传入 'timestamp' 保留原始时间戳
+   * @param string $logFormat 日志文本格式规则，支持 %占位符 和 sprintf 两种模式
+   * @param bool $json 是否以 JSON 格式存储日志
+   * @param int $json_flags JSON 编码标志位
+   * @param string $log_dir 日志文件根目录路径
    */
   public function __construct(
     protected int $storageDays = 7,
@@ -60,9 +62,10 @@ class File extends Drive
   }
 
   /**
-   * 该方法用于启用计时器，在每日凌晨进行删除日志文件
+   * 注册 Swoole 定时器，在每日凌晨触发过期日志清理
    *
-   * @return void
+   * 首次延迟到下一个午夜执行，之后每 24 小时重复执行。
+   * 服务器关闭时自动清理定时器资源。
    */
   private function startDailyTimer(): void
   {
@@ -89,12 +92,12 @@ class File extends Drive
   }
 
   /**
-   * 清除过期日志
+   * 清理超过保留天数的过期日志目录
    *
-   * @access public
-   * @param int|null $days 天数，大于该天数的文件视为过期
-   * @param string|null $level 错误级别
-   * @return void
+   * 仅删除日期目录名符合 Ymd 格式（8位数字）的目录，避免误删非日期命名的目录。
+   *
+   * @param int|null $days 保留天数，null 时使用配置的 storageDays
+   * @param string|null $level 指定只清理的日志级别，null 时清理整个日期目录
    */
   public function clearExpireLog(?int $days = null, ?string $level = null): void
   {
@@ -116,11 +119,10 @@ class File extends Drive
   }
 
   /**
-   * 递归删除目录下的文件
+   * 递归删除目录下的文件，目录为空时一并删除目录本身
    *
-   * @param string $dir 文件目录
-   * @param string|null $level
-   * @return void
+   * @param string $dir 待删除的目录路径
+   * @param string|null $level 指定只删除某级别子目录，null 时删除整个目录
    */
   private function rmdir(string $dir, ?string $level = null): void
   {
@@ -145,11 +147,12 @@ class File extends Drive
   }
 
   /**
-   * 保存日志(协程结束，日志记录器销毁时会自动调用该方法存储日志)
+   * 批量将日志记录持久化到文件系统
    *
-   * @access public
-   * @param array<int,array{timestamp:int,level:string,message:string,context:array,source:string}> $logRecords 需要写入日志的记录
-   * @return void
+   * 协程结束时由 Recorder 析构自动调用。每条日志按级别和日期写入对应目录，
+   * 文件超过 fileSize 时自动切割，超过 maxFiles 时删除最早文件。
+   *
+   * @param array<int,array{timestamp:int,level:string,message:string,context:array,source:string}> $logRecords 待写入的日志记录列表
    */
   #[Override] public function save(array $logRecords): void
   {
@@ -218,10 +221,12 @@ class File extends Drive
   }
 
   /**
-   * 获取存储地址
+   * 根据日志级别和当前日期构建日志文件存储目录，不存在时自动创建
    *
-   * @param string $level
-   * @return string
+   * 目录结构: {log_dir}/{yyyyMMdd}/{level}/
+   *
+   * @param string $level 日志级别名称
+   * @return string 日志文件存储目录的绝对路径
    */
   protected function getLogDir(string $level): string
   {

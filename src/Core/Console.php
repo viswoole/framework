@@ -27,10 +27,16 @@ use Viswoole\Core\Console\Commands\Service\ServiceDiscover;
 use Viswoole\Core\Console\Commands\Vendor\VendorPublish;
 
 /**
- * 控制台命令行处理程序
+ * 控制台应用
+ *
+ * 基于 Symfony Console 组件的命令行应用，自动加载框架内置命令和用户自定义命令，
+ * 支持依赖包通过 commands.php 注册命令。
  */
 class Console extends Application
 {
+  /**
+   * @var string[] 框架内置命令类列表
+   */
   protected array $defaultCommands = [
     Facade::class,
     ServerStart::class,
@@ -48,8 +54,7 @@ class Console extends Application
   }
 
   /**
-   * 加载命令
-   * @return void
+   * 加载并注册所有命令，合并框架默认、用户配置和依赖包三处注册的命令
    */
   protected function loadCommand(): void
   {
@@ -63,12 +68,11 @@ class Console extends Application
   }
 
   /**
-   * 添加一个命令行处理程序
+   * 注册命令处理程序，支持类名和 Command 实例两种形式
    *
-   * @access public
-   * @param Command|string $command
-   * @return Command|null
-   * @throws InvalidArgumentException 传入的参数不是命令处理类
+   * @param Command|string $command 命令类名或实例
+   * @return Command|null 注册成功的 Command 实例
+   * @throws InvalidArgumentException 类不存在或未继承 Command 时抛出
    */
   public function addCommand(Command|string $command): ?Command
   {

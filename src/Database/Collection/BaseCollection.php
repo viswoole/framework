@@ -24,22 +24,26 @@ use Viswoole\Database\Model\Query;
 
 /**
  * 数据集合基类
+ *
+ * 继承 ArrayObject 实现数组式访问，提供 JSON 序列化、隐藏字段过滤、获取器等通用能力。
+ * 子类 Collection 和 DataSet 分别处理多行和单行数据。
+ *
+ * @see Collection
+ * @see DataSet
  */
 abstract class BaseCollection extends ArrayObject implements JsonSerializable
 {
   protected int $flags = 0;
-  /**
-   * @var array 获取器
-   */
+  /** @var array 获取器回调列表，键为列名，值为回调函数 */
   protected array $withAttr = [];
-  /**
-   * @var array 要隐藏的字段
-   */
+  /** @var array 需要隐藏的字段名列表，支持点号分隔的嵌套字段 */
   protected array $hidden = [];
 
   /**
-   * @param BaseQuery|Query $query 查询对象
-   * @param array $data 查询结果
+   * 构建集合，同步模型查询的隐藏字段配置
+   *
+   * @param BaseQuery|Query $query 查询对象，用于后续数据库操作
+   * @param array $data 查询结果原始数据
    */
   public function __construct(
     protected BaseQuery|Query $query,
@@ -62,15 +66,12 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 将数据集合转换为数组格式
+   * 将数据集合递归转换为数组，应用获取器和隐藏字段过滤
    *
-   * 该方法会递归处理嵌套的数据集合，应用获取器转换和隐藏字段过滤。
-   * 支持通过最大深度参数控制递归层级，防止无限递归导致的性能问题。
-   *
-   * @param bool $withAttr 是否应用获取器对数据进行处理，默认为true
-   * @param bool $hidden 是否应用隐藏字段过滤，默认为true
-   * @param int $maxDepth 最大递归深度，默认值为10，用于防止嵌套集合无限递归
-   * @return array 转换后的数组数据，键值对结构与原始集合保持一致
+   * @param bool $withAttr 是否应用获取器，默认 true
+   * @param bool $hidden 是否过滤隐藏字段，默认 true
+   * @param int $maxDepth 最大递归深度，默认 10，防止嵌套集合无限递归
+   * @return array 转换后的数组数据
    */
   public function toArray(bool $withAttr = true, bool $hidden = true, int $maxDepth = 10): array
   {
@@ -102,14 +103,13 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 删除隐藏字段
+   * 递归移除隐藏字段，支持点号分隔的嵌套字段路径
    *
-   * @param $data
-   * @param array $hidden
-   * @param string $parentKey
-   * @return void
+   * @param array $data 数据引用
+   * @param array $hidden 需要隐藏的字段路径列表
+   * @param string $parentKey 父级字段路径前缀
    */
-  private function removeHiddenKeys(&$data, array $hidden, string $parentKey = ''): void
+  private function removeHiddenKeys(array &$data, array $hidden, string $parentKey = ''): void
   {
     if (!is_numeric(implode('', array_keys($data)))) {
       foreach ($data as $key => &$value) {
@@ -126,12 +126,9 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 将数据集合转换为JSON字符串表示
+   * 将集合转换为 JSON 字符串，中文字符保持原样输出
    *
-   * 该方法实现了PHP的__toString魔术方法，当对象被当作字符串使用时自动调用。
-   * 内部通过toArray()方法将集合转换为数组，再编码为JSON格式，确保中文字符不被转义。
-   *
-   * @return string JSON格式的字符串，包含集合的所有数据，中文字符保持原样输出
+   * @return string JSON 格式字符串
    */
   public function __toString(): string
   {
@@ -139,9 +136,9 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 判断是否为空
+   * 判断集合是否为空
    *
-   * @return bool
+   * @return bool 集合为空返回 true
    */
   public function isEmpty(): bool
   {
@@ -149,12 +146,11 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 定义获取器
+   * 定义获取器，在 toArray 时对指定列的值进行转换
    *
-   * @access public
-   * @param string $column
-   * @param callable $callback
-   * @return static
+   * @param string $column 列名
+   * @param callable $callback 转换回调
+   * @return static 支持链式调用
    */
   public function withAttr(string $column, callable $callback): static
   {
@@ -163,20 +159,16 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 要隐藏的字段
+   * 设置要隐藏的字段，支持点号分隔的嵌套字段路径
    *
    * 示例：
    * ```
-   * // 该方法对多行数据集和单行数据集都有效
-   * $collection = $query->table('user')->select();
-   * // 隐藏所有数据的password字段
-   * $collection->hidden('password');
-   * // 隐藏所有数据的address.city字段，用.可以嵌套层级
-   * $collection->hidden('address.city');
+   * $collection->hidden('password');           // 隐藏 password 字段
+   * $collection->hidden('address.city');        // 隐藏嵌套的 address.city 字段
    * ```
    *
-   * @param string ...$column
-   * @return static
+   * @param string ...$column 要隐藏的字段路径
+   * @return static 支持链式调用
    */
   public function hidden(string ...$column): static
   {
@@ -185,9 +177,7 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 克隆
-   *
-   * @return void
+   * 克隆时深拷贝查询对象和数据
    */
   public function __clone(): void
   {
@@ -196,12 +186,12 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   }
 
   /**
-   * 该方法用于获取当前集合的数组（深度）拷贝，并返回一个新的数组。
+   * 获取集合数据的深度拷贝数组
    *
-   * 如果Collection对象调用该方法，则返回的是一个包含所有行的数组。行元素依然是DataSet对象，
-   * 如果你需要将每一行数据都转换为数组，请使用toArray()方法。
+   * Collection 调用时返回包含所有 DataSet 行的数组；
+   * 如需将每行也转为数组，请使用 toArray() 方法。
    *
-   * @return array
+   * @return array DataSet 对象数组
    */
   public function getArrayCopy(): array
   {
@@ -216,10 +206,10 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   /**
    * 删除集合中的所有记录
    *
-   * 前提条件是集合中的每一行记录都必须存在主键字段。
+   * 前提：集合中每行记录必须存在主键字段。
    *
-   * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
-   * @return int
+   * @param bool $real 是否硬删除，默认 false；仅模型查询结果支持 $real 参数
+   * @return int 成功删除的记录数
    */
   abstract public function delete(bool $real = false): int;
 }

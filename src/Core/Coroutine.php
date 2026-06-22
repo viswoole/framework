@@ -21,20 +21,21 @@ use Swoole\Coroutine\Context;
 /**
  * 协程代理类
  *
- * 扩展了\Swoole\Coroutine，添加了非协程环境下的兼容性
+ * 扩展 Swoole\Coroutine，添加非协程环境下的兼容性支持。
+ * 在非协程环境中 getContext() 返回虚拟上下文对象，避免调用方判空。
  */
 class Coroutine extends \Swoole\Coroutine
 {
   /**
-   * @var Context 模拟协程上下文，兼容非协程环境
+   * @var Context 非协程环境下的虚拟上下文对象，延迟创建
    */
   public static Context $mock_context;
 
   /**
-   * 返回指定协程的 Context 对象。
+   * 获取协程上下文对象，非协程环境下返回虚拟上下文以保持兼容
    *
-   * @param int $cid 如果未指定或指定为 0，则将使用当前协程的 ID。
-   * @return Context|null 非协程环境也会返回一个协程上下文对象，是虚拟的，兼容非协程上下文
+   * @param int $cid 协程ID，0 或不传则使用当前协程
+   * @return Context|null 协程上下文对象，非协程环境返回虚拟上下文
    */
   #[Override] public static function getContext(int $cid = 0): ?Context
   {
@@ -46,10 +47,9 @@ class Coroutine extends \Swoole\Coroutine
   }
 
   /**
-   * 判断是否在协程中运行
+   * 判断当前是否在协程环境中运行（getCid() !== -1）
    *
-   * @access public
-   * @return bool
+   * @return bool 在协程中返回 true
    */
   public static function isCoroutine(): bool
   {
@@ -57,9 +57,9 @@ class Coroutine extends \Swoole\Coroutine
   }
 
   /**
-   * 获取当前协程id
+   * 获取当前协程ID
    *
-   * @return int
+   * @return int 协程ID，非协程环境返回 -1
    */
   public static function id(): int
   {
@@ -67,11 +67,11 @@ class Coroutine extends \Swoole\Coroutine
   }
 
   /**
-   * 获取顶级协程id
+   * 获取顶级（根）协程ID，沿协程树向上迭代查找无父协程的根节点
    *
-   * @param int|null $cid 协程cid，可传入某个协程的id以获取它的父id，默认值当前协程id。
-   * @param bool $unableToFindReturnSelfId 如果没有父id是否返回当前协程id
-   * @return false|int 如果返回false则没有上级协程id
+   * @param int|null $cid 起始协程ID，默认为当前协程
+   * @param bool $unableToFindReturnSelfId 无父协程时是否返回自身ID，为 false 则返回 false
+   * @return false|int 顶级协程ID，非协程环境或 $unableToFindReturnSelfId 为 false 且无父协程时返回 false
    */
   public static function getTopId(
     ?int $cid = null,

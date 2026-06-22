@@ -17,24 +17,30 @@ namespace Viswoole\Cache;
 
 
 /**
- * Redis缓存配置
+ * Redis 连接与连接池的不可变配置对象
+ *
+ * 封装 Redis 服务器连接参数、缓存驱动通用参数及连接池容量配置，
+ * 以 readonly 类形式确保配置在创建后不可修改。
  */
 readonly class RedisConfig
 {
 
   /**
-   * @param string $host 连接地址
-   * @param int $port 连接端口
-   * @param string $password 密码
-   * @param int $db_index redis数据库 0-15
-   * @param float $timeout 连接超时时间
-   * @param int $retry_interval 连接重试时间等待单位毫秒
-   * @param float $read_timeout 读取超时时间
-   * @param string $prefix 缓存前缀
-   * @param int $expire 过期时间，单位秒
-   * @param string $tag_store 标签仓库名称(用于存储标签映射列表),不能为空
-   * @param int $pool_max_size 连接池最大长度
-   * @param int $pool_fill_size 连接池最小长度，如果为0则默认不填充连接池
+   * 初始化 Redis 配置
+   *
+   * @param string $host Redis 服务器地址
+   * @param int $port Redis 服务器端口
+   * @param string $password 认证密码，空字符串表示无密码
+   * @param int $db_index Redis 数据库索引（0-15）
+   * @param float $timeout 连接超时时间（秒）
+   * @param int $retry_interval 重连等待间隔（毫秒）
+   * @param float $read_timeout 读取超时时间（秒）
+   * @param string $prefix 缓存键前缀
+   * @param string $tag_prefix 标签键前缀标识
+   * @param int $expire 默认过期时间（秒），0 表示永不过期
+   * @param string $tag_store 标签仓库键名，不能为空
+   * @param int $pool_max_size 连接池最大连接数
+   * @param int $pool_fill_size 连接池最小填充连接数，0 表示不预填充
    */
   public function __construct(
     public string $host = '127.0.0.1',

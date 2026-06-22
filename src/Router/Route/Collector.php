@@ -21,7 +21,12 @@ use RuntimeException;
 use Viswoole\Core\Facade\Server;
 
 /**
- * 路由方法
+ * 路由收集器，提供路由定义的快捷方法和路由查询能力
+ *
+ * 封装 GET/POST/PUT/DELETE 等快捷注册方法、路由组定义、miss 路由注册，
+ * 以及按 ID 或引用链路查询路由实例。
+ *
+ * @see Router 路由器
  */
 abstract class Collector
 {

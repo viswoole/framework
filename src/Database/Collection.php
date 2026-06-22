@@ -24,15 +24,20 @@ use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model\Query;
 
 /**
- * 数据集合，可通过数组方式访问
+ * 数据集合，可通过数组方式访问和操作多行查询结果
+ *
+ * 继承 BaseCollection，提供过滤、排序、聚合、分块等集合操作方法，
+ * 同时支持批量更新、批量删除等数据库操作。
+ *
+ * @see BaseCollection
  */
 class Collection extends BaseCollection
 {
   /**
-   * 数据集列表
+   * 构建集合，将原始数据行转换为 DataSet 对象
    *
-   * @param BaseQuery|Query $query 查询对象
-   * @param array $data 查询结果
+   * @param BaseQuery|Query $query 查询对象，用于后续的数据库操作
+   * @param array $data 查询结果原始数据
    */
   public function __construct(protected BaseQuery|Query $query, array $data)
   {
@@ -46,9 +51,9 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 获取第一行数据
+   * 获取集合中第一行数据
    *
-   * @return DataSet|null 如果集合为空，则返回null。
+   * @return DataSet|null 第一行数据，集合为空时返回 null
    */
   public function first(): ?DataSet
   {
@@ -60,13 +65,11 @@ class Collection extends BaseCollection
    *
    * 示例:
    * ```
-   * // 通过以下方式获得满足条件的数据集列表
-   * $filtered = $collection->filter(function (Row $row) { return $row->age > 25; });
-   * print_r($filtered->toArray());
+   * $filtered = $collection->filter(function (DataSet $row) { return $row->age > 25; });
    * ```
    *
-   * @param callable $callback 回调函数
-   * @return Collection 过滤后的集合
+   * @param callable $callback 过滤回调，返回 true 时保留该行
+   * @return Collection 过滤后的新集合
    */
   public function filter(callable $callback): Collection
   {
@@ -74,10 +77,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 克隆当前对象
+   * 基于新数据克隆当前集合，保留隐藏字段和获取器配置
    *
-   * @param array $data
-   * @return static
+   * @param array $data 新的数据数组
+   * @return static 克隆后的集合实例
    */
   private function cloneSelf(array $data): static
   {
@@ -90,10 +93,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 给当前集合中的每一行数据应用回调函数
+   * 对集合中每一行数据应用回调函数，返回转换后的新集合
    *
-   * @param callable $callback
-   * @return static
+   * @param callable $callback 转换回调，接收 DataSet 返回转换后的值
+   * @return static 转换后的新集合
    */
   public function map(callable $callback): static
   {
@@ -101,9 +104,9 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 返回集合中的最后一行数据
+   * 获取集合中最后一行数据
    *
-   * @return DataSet|null 如果集合为空，则返回null。
+   * @return DataSet|null 最后一行数据，集合为空时返回 null
    */
   public function last(): ?DataSet
   {
@@ -112,9 +115,7 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 获取所有数据
-   *
-   * 与getArrayCopy方法一致
+   * 获取所有数据的 DataSet 数组
    *
    * @return DataSet[]
    * @see static::getArrayCopy()
@@ -125,11 +126,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 反向过滤，返回不满足条件的元素集合
+   * 反向过滤，返回不满足条件的元素组成的新集合
    *
-   * @access public
-   * @param callable $callback 回调函数
-   * @return Collection 过滤后的集合
+   * @param callable $callback 过滤回调，返回 true 时排除该行
+   * @return Collection 过滤后的新集合
    */
   public function reject(callable $callback): Collection
   {
@@ -144,11 +144,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 降序排序
+   * 按指定列降序排序
    *
-   * @access public
    * @param string $column 排序列名
-   * @return Collection 排序后的集合
+   * @return Collection 排序后的新集合
    */
   public function sortByDesc(string $column): Collection
   {
@@ -156,12 +155,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 根据指定的属性对集合进行排序
+   * 按指定列对集合进行排序
    *
-   * @access public
    * @param string $column 排序列名
-   * @param int $sortOrder 排序顺序 (SORT_ASC 或 SORT_DESC)
-   * @return Collection 排序后的集合
+   * @param int $sortOrder 排序方向 SORT_ASC|SORT_DESC，默认 SORT_ASC
+   * @return Collection 排序后的新集合
    */
   public function sortBy(string $column, int $sortOrder = SORT_ASC): Collection
   {
@@ -177,11 +175,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 计算集合中所有元素特定属性的平均值
+   * 计算集合中指定列的平均值
    *
-   * @access public
-   * @param string $attribute 属性名
-   * @return float|int 平均值，如果集合为空，则返回0
+   * @param string $attribute 列名
+   * @return float|int 平均值，集合为空时返回 0
    */
   public function avg(string $attribute): float|int
   {
@@ -192,10 +189,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 计算集合中所有行特定列的总和
+   * 计算集合中指定列的总和
    *
-   * @param string $column 字段名,字段数据类型必须为int、float
-   * @return int|float 总和，如果集合为空，则返回0
+   * @param string $column 列名，字段值必须为 int 或 float 类型
+   * @return int|float 总和，集合为空时返回 0
    */
   public function sum(string $column): int|float
   {
@@ -208,10 +205,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 找到集合中某个列的最大值
+   * 获取集合中指定列的最大值
    *
-   * @param string $column 字段名称，类型必须为int、float
-   * @return int|float|null 最大值,数据集为空时返回null
+   * @param string $column 列名，字段值必须为 int 或 float 类型
+   * @return int|float|null 最大值，集合为空时返回 null
+   * @throws InvalidArgumentException 字段值非数值类型时抛出
    */
   public function max(string $column): int|float|null
   {
@@ -232,10 +230,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 找到集合中某个列的最小值
+   * 获取集合中指定列的最小值
    *
-   * @param string $column 字段名称，类型必须为int、float
-   * @return int|float|null 最大值,数据集为空时返回null
+   * @param string $column 列名，字段值必须为 int 或 float 类型
+   * @return int|float|null 最小值，集合为空时返回 null
+   * @throws InvalidArgumentException 字段值非数值类型时抛出
    */
   public function min(string $column): int|float|null
   {
@@ -258,12 +257,9 @@ class Collection extends BaseCollection
   /**
    * 追加一行数据到集合中
    *
-   * @param mixed $value
-   * @param bool $autoWrite 如果传入的是数组，且该参数值为true，则自动写入数据库
-   * @return void
-   * @throws DbException
-   * @throws DbException
-   * @throws DbException
+   * @param mixed $value DataSet 对象或关联数组
+   * @param bool $autoWrite 传入数组且为 true 时，自动写入数据库
+   * @throws DbException 数据库操作失败时抛出
    */
   public function append(mixed $value, bool $autoWrite = false): void
   {
@@ -283,15 +279,14 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 删除集合中的所有记录
+   * 删除集合中所有记录
    *
-   * 前提条件是集合中的每一行记录都必须存在主键字段。
+   * 前提：集合中每行记录必须存在主键字段。
    *
-   * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
-   * @return int 成功返回删除的记录数，失败返回0。
-   * @throws RuntimeException 如果缺少主键字段
-   * @throws DbException
-   * @throws DbException
+   * @param bool $real 是否硬删除，默认 false；仅模型查询结果支持 $real 参数
+   * @return int 成功删除的记录数，失败返回 0
+   * @throws RuntimeException 缺少主键字段时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   #[Override] public function delete(bool $real = false): int
   {
@@ -301,10 +296,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 获取所有行主键
+   * 收集集合中所有行的主键值
    *
-   * @param string $pk
-   * @return array|int
+   * @param string $pk 主键字段名
+   * @return array|int 主键值数组，集合为空时返回 0
+   * @throws RuntimeException 某行缺少主键字段时抛出
    */
   private function getPks(string $pk): array|int
   {
@@ -326,8 +322,8 @@ class Collection extends BaseCollection
    * 根据字段值过滤集合中的元素
    *
    * @param string $column 字段名
-   * @param mixed $value 字段值
-   * @return Collection 过滤后的集合
+   * @param mixed $value 匹配值
+   * @return Collection 过滤后的新集合
    */
   public function where(string $column, mixed $value): Collection
   {
@@ -342,13 +338,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 批量更新数据
+   * 批量更新集合中所有记录
    *
-   * @param array $data
-   * @return int 返回更新的记录数。
-   * @throws DbException
-   * @throws DbException
-   * @throws DbException
+   * @param array $data 要更新的键值对
+   * @return int 成功更新的记录数
+   * @throws DbException 数据库操作失败时抛出
    */
   public function update(array $data): int
   {
@@ -367,8 +361,7 @@ class Collection extends BaseCollection
   /**
    * 遍历集合中的每一行数据
    *
-   * @param callable $callback
-   * @return void
+   * @param callable $callback 回调函数，接收 DataSet 参数
    */
   public function each(callable $callback): void
   {
@@ -378,11 +371,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 按指定字段进行排序，默认按主键排序，影响当前集合
+   * 按指定字段排序，默认按主键排序，直接修改当前集合
    *
-   * @param int $flags 支持`SORT_ASC`|`SORT_DESC`
-   * @param string|null $column
-   * @return true
+   * @param int $flags 排序方向 SORT_ASC|SORT_DESC
+   * @param string|null $column 排序列名，为 null 时使用主键
+   * @return true 始终返回 true
    */
   public function asort(int $flags = SORT_ASC, ?string $column = null): true
   {
@@ -411,10 +404,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 给集合中的每一行数据的键进行排序
+   * 对集合中每一行数据的键进行排序
    *
-   * @param int $flags
-   * @return true
+   * @param int $flags 排序标志，默认 SORT_REGULAR
+   * @return true 始终返回 true
    */
   public function ksort(int $flags = SORT_REGULAR): true
   {
@@ -425,10 +418,10 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 分块处理
+   * 将集合按指定大小分块
    *
-   * @param int $size
-   * @return Collection[]
+   * @param int $size 每块的元素数量
+   * @return Collection[] 分块后的集合数组
    */
   public function chunk(int $size): array
   {
@@ -440,11 +433,11 @@ class Collection extends BaseCollection
   }
 
   /**
-   * 通过数组方式添加记录
+   * 通过数组方式添加记录，仅接受 DataSet 对象或关联数组
    *
-   * @param mixed $key
-   * @param mixed $value
-   * @return void
+   * @param mixed $key 键名
+   * @param mixed $value DataSet 对象或关联数组
+   * @throws InvalidArgumentException 值类型不合法时抛出
    */
   public function offsetSet(mixed $key, mixed $value): void
   {

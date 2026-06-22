@@ -34,9 +34,9 @@ enum Status: string
   case TESTING = 'testing';
 
   /**
-   * 获取中文标签
+   * 获取状态的中文标签
    *
-   * @return string
+   * @return string 中文标签
    */
   public function getLabel(): string
   {
@@ -51,9 +51,9 @@ enum Status: string
   }
 
   /**
-   * 获取颜色
+   * 获取状态对应的展示颜色（十六进制）
    *
-   * @return string
+   * @return string 颜色值
    */
   public function getColor(): string
   {

@@ -21,7 +21,10 @@ use Viswoole\HttpServer\Facade\Request;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\QueryParamInterface;
 
 /**
- * 注入GET查询参数
+ * GET 查询参数自动注入属性
+ *
+ * 标注到控制器参数或属性上，框架自动从 GET 查询参数中注入值，
+ * 不允许为空时缺失参数将抛出验证异常。
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectGet implements QueryParamInterface
@@ -29,7 +32,12 @@ class InjectGet implements QueryParamInterface
   use ValidateNull;
 
   /**
-   * @inheritDoc
+   * 从 GET 查询参数中获取值并校验空值
+   *
+   * @param string $name 参数名
+   * @param mixed $value 默认值
+   * @param bool $allowNull 是否允许为 null
+   * @return mixed 参数值
    */
   #[Override] public function inject(string $name, mixed $value, bool $allowNull): mixed
   {

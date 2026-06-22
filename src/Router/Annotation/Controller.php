@@ -17,7 +17,9 @@ namespace Viswoole\Router\Annotation;
 use Attribute;
 
 /**
- * 路由分组，Controller注解
+ * 控制器注解，将控制器类注册为路由组
+ *
+ * 继承 RouteAnnotation，type 为 group，仅注册带有 RouteMapping 注解的方法。
  */
 #[Attribute(Attribute::TARGET_CLASS)]
 class Controller extends RouteAnnotation

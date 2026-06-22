@@ -20,7 +20,12 @@ use Stringable;
 use Viswoole\Log\Contract\CollectorInterface;
 
 /**
- * 日志收集器抽象类
+ * 日志收集器抽象基类，提供各级别日志的快捷方法
+ *
+ * 将 error、warning、info 等级别方法统一转发至 mixed()，
+ * 子类只需实现 mixed() 即可支持所有级别。
+ *
+ * @see CollectorInterface 收集器接口
  */
 abstract class Collector implements CollectorInterface
 {

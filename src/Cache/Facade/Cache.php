@@ -26,7 +26,13 @@ use Viswoole\Cache\Driver\Redis;
 use Viswoole\Core\Facade;
 
 /**
- * 缓存驱动管理器
+ * 缓存门面，提供静态代理访问 CacheManager 的所有能力
+ *
+ * 通过 Facade 模式将 CacheManager 的实例方法映射为静态调用，
+ * 使业务代码无需注入即可便捷操作缓存。
+ *
+ * @see CacheManager
+ * @see Facade
  *
  * @method static int|false inc(string $key, int $step = 1) 自增缓存（针对数值缓存）
  * @method static mixed get(string $key, mixed $default = null) 获取缓存
@@ -60,7 +66,9 @@ class Cache extends Facade
   public const string REDIS_DRIVER = Redis::class;
 
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
+   *
+   * @return string CacheManager 类名
    */
   #[Override] protected static function getMappingClass(): string
   {

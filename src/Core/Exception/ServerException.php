@@ -18,7 +18,7 @@ namespace Viswoole\Core\Exception;
 use Exception;
 
 /**
- * 服务异常类
+ * Swoole 服务相关异常基类，涵盖服务启动、关闭及运行时异常
  */
 class ServerException extends Exception
 {

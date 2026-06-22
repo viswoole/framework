@@ -25,7 +25,12 @@ use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Core\Config;
 
 /**
- * 缓存驱动管理器
+ * 缓存商店管理器，负责多驱动商店的注册、切换与方法代理转发
+ *
+ * 通过统一的代理接口（__call）将调用转发至默认商店或指定商店的驱动实例，
+ * 实现多缓存存储的透明切换。商店名称不区分大小写，内部统一转为小写索引。
+ *
+ * @see CacheDriverInterface 被代理的缓存驱动接口
  *
  * @method int|false inc(string $key, int $step = 1) 自增缓存（针对数值缓存）
  * @method mixed get(string $key, mixed $default = null) 获取缓存
@@ -55,16 +60,18 @@ class CacheManager
   public const string FILE_DRIVER = File::class;
   public const string REDIS_DRIVER = Redis::class;
   /**
-   * @var string 默认缓存商店
+   * @var string 默认缓存商店名称（小写）
    */
   protected string $defaultStore = '';
   /**
-   * @var array<string,CacheDriverInterface> 缓存商店列表
+   * @var array<string,CacheDriverInterface> 已注册的缓存商店映射（键名为小写）
    */
   protected array $stores;
 
   /**
-   * @param Config $config
+   * 从配置中加载缓存商店并注册
+   *
+   * @param Config $config 框架配置实例，用于读取 cache.stores 和 cache.default
    */
   public function __construct(protected Config $config)
   {
@@ -79,11 +86,14 @@ class CacheManager
   }
 
   /**
-   * 添加缓存商店
+   * 注册一个缓存商店到管理器中
    *
-   * @param string $name 不区分大小写的缓存商店名称
-   * @param CacheDriverInterface|string|array{driver:string,options:array{string:mixed}|object} $driver
-   * @return void
+   * 支持三种驱动定义方式：类名字符串、完整配置数组、已实例化的驱动对象。
+   * 商店名称不区分大小写，内部统一转为小写存储。
+   *
+   * @param string $name 商店名称（不区分大小写）
+   * @param CacheDriverInterface|string|array{driver:string,options:array{string:mixed}|object} $driver 驱动定义，支持类名、配置数组或驱动实例
+   * @throws CacheErrorException 驱动类不存在、配置格式错误或未实现接口时抛出
    */
   public function addStore(string $name, CacheDriverInterface|string|array $driver): void
   {
@@ -111,11 +121,10 @@ class CacheManager
   }
 
   /**
-   * 判断是否存在该缓存商店
+   * 判断指定名称的缓存商店是否已注册
    *
-   * @access public
-   * @param string $name 缓存商店名称，不区分大小写
-   * @return bool
+   * @param string $name 商店名称（不区分大小写）
+   * @return bool 已注册返回 true
    */
   public function hasStore(string $name): bool
   {
@@ -123,11 +132,11 @@ class CacheManager
   }
 
   /**
-   * 转发调用
+   * 将方法调用代理转发至默认商店的驱动实例
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * @param string $name 方法名
+   * @param array $arguments 方法参数列表
+   * @return mixed 驱动方法的返回值
    */
   public function __call(string $name, array $arguments)
   {
@@ -135,11 +144,13 @@ class CacheManager
   }
 
   /**
-   * 指定缓存商店
+   * 获取指定名称的缓存商店驱动实例
    *
-   * @access public
-   * @param string|null $name
-   * @return CacheDriverInterface
+   * 未指定名称时返回默认商店驱动。商店名称不区分大小写。
+   *
+   * @param string|null $name 商店名称，null 时使用默认商店
+   * @return CacheDriverInterface 缓存驱动实例
+   * @throws CacheErrorException 商店为空或指定商店不存在时抛出
    */
   public function store(?string $name = null): CacheDriverInterface
   {

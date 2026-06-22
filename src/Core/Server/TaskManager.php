@@ -30,12 +30,16 @@ use Viswoole\Log\Facade\Log;
 /**
  * 任务管理器
  *
+ * 提供 Swoole Task 任务的注册、投递和队列持久化能力，
+ * 服务重启时自动恢复未完成的队列任务。
  * 注意：使用任务管理服务必须配置服务选项：
  * `Constant::OPTION_TASK_USE_OBJECT => true` 或 `Constant::OPTION_TASK_ENABLE_COROUTINE => true`
  */
 class TaskManager
 {
-  // 缓存标签前缀
+  /**
+   * @var string 任务队列缓存标签前缀
+   */
   const string CACHE_TAG_PREFIX = '$_TASK_QUEUE_';
   /**
    * @var array<string,callable> 任务主题
@@ -43,7 +47,7 @@ class TaskManager
   protected array $topics = [];
 
   /**
-   * @param CacheManager $cache
+   * @param CacheManager $cache 缓存管理器，用于任务队列的持久化存储
    */
   public function __construct(protected CacheManager $cache)
   {
@@ -69,10 +73,10 @@ class TaskManager
   }
 
   /**
-   * 获取队列缓存商店
+   * 获取指定工作进程对应的队列缓存存储
    *
-   * @param string $workId
-   * @return CacheTagInterface
+   * @param string $workId 工作进程ID
+   * @return CacheTagInterface 带标签的缓存存储实例
    */
   protected function getQueueCacheStore(string $workId): CacheTagInterface
   {
@@ -80,11 +84,10 @@ class TaskManager
   }
 
   /**
-   * 任务分发，该方法用于处理swoole异步服务的`onTask`事件并分发给对应的任务处理器
+   * 处理 Swoole onTask 事件，将任务分发到对应主题的处理器
    *
-   * @param SwooleServer $server
-   * @param SwooleTask $task
-   * @return void
+   * @param SwooleServer $server Swoole 服务实例
+   * @param SwooleTask $task Swoole 任务对象
    */
   protected function onTask(SwooleServer $server, SwooleTask $task): void
   {
@@ -105,11 +108,10 @@ class TaskManager
   }
 
   /**
-   * 判断是否存在任务主题
+   * 校验任务主题是否已注册
    *
-   * @param string $topic
-   * @return void
-   * @throws InvalidArgumentException 不存在则会抛出异常
+   * @param string $topic 任务主题名称
+   * @throws InvalidArgumentException 任务主题未注册时抛出
    */
   public function has(string $topic): void
   {
@@ -118,11 +120,10 @@ class TaskManager
   }
 
   /**
-   * 从队列中删除任务
+   * 从队列缓存中移除已完成的任务记录
    *
-   * @param string $queueId 唯一队列id
-   * @param string $workId 工作进程id
-   * @return void
+   * @param string $queueId 队列唯一标识
+   * @param string $workId 工作进程ID
    */
   protected function remove(string $queueId, string $workId): void
   {
@@ -130,12 +131,13 @@ class TaskManager
   }
 
   /**
-   * 异步任务投递
+   * 投递异步任务到 Task Worker 进程
    *
-   * @param string $topic 要执行的任务主题
-   * @param mixed $data 要传递给任务的数据
-   * @param bool $queue 是否加入队列，服务重启能够自动恢复未执行的任务。
-   * @return int|false 成功返回任务id，失败返回false
+   * @param string $topic 已注册的任务主题名称
+   * @param mixed $data 传递给任务处理器的业务数据
+   * @param bool $queue 是否持久化到队列，启用后服务重启可自动恢复未执行的任务
+   * @return int|false 投递成功返回任务ID，投递失败返回 false
+   * @throws RuntimeException 队列缓存写入失败时抛出
    */
   public function emit(
     string $topic,
@@ -177,12 +179,16 @@ class TaskManager
   }
 
   /**
-   * 添加任务主题
+   * 注册任务主题及其处理器
+   *
+   * 支持两种注册方式：
+   * - 传入 callable：直接注册为指定主题的处理器
+   * - 传入类名：自动扫描该类的所有公开方法，以 "主题.方法名" 的形式批量注册
    *
    * 示例：
    *
    * ```
-   * $taskManager->dispatch('test', function (TaskProxy $task) {
+   * $taskManager->register('test', function (TaskProxy $task) {
    *   // 任务执行完毕调用finish
    *   $task->finish('success');
    * })
@@ -204,12 +210,12 @@ class TaskManager
    *   }
    * }
    * // 注册一个类，支持静态方法、动态方法
-   * $taskManager->dispatch('sms', Sms::class);//将会注册sms.sendLoginCode、sms.sendRegisterCode这两个主题
+   * $taskManager->register('sms', Sms::class);//将会注册sms.sendLoginCode、sms.sendRegisterCode这两个主题
    * ```
-   * @access public
-   * @param string $topic 任务名称，不区分大小写。
-   * @param callable|string $handle 任务处理函数，支持传入类批量注册。
-   * @return void
+   *
+   * @param string $topic 任务主题名称，不区分大小写；传入类名时作为命名前缀
+   * @param callable|string $handle 任务处理回调，或待扫描的类名
+   * @throws InvalidArgumentException 类名无效或反射失败时抛出
    */
   public function register(string $topic, callable|string $handle): void
   {
@@ -243,13 +249,12 @@ class TaskManager
   }
 
   /**
-   * 同步阻塞等待任务执行完成
+   * 同步阻塞投递任务并等待执行结果
    *
-   * @access public
-   * @param string $topic 要执行的任务主题
-   * @param mixed $data 要传递给任务的数据
-   * @param float $timeout 等待超时时间，单位秒
-   * @return string|false 如果任务执行成功返回任务结果，失败返回false（如果回调函数返回null也会返回false）
+   * @param string $topic 已注册的任务主题名称
+   * @param mixed $data 传递给任务处理器的业务数据
+   * @param float $timeout 等待超时时间，单位秒，默认 0.5
+   * @return string|false 任务执行成功返回结果字符串，失败或回调返回 null 时返回 false
    */
   public function emitWait(
     string $topic,
@@ -268,13 +273,12 @@ class TaskManager
   }
 
   /**
-   * 同步阻塞等待执行多个任务
+   * 同步阻塞投递多个任务并等待全部执行结果
    *
-   * @access public
-   * @param array<string,array> $tasks 任务列表[topic=>data]
-   * @param float $timeout 超时时间，单位秒
-   * @param bool $isCo 是否支持协程调度
-   * @return array
+   * @param array<string,array> $tasks 任务列表，键为主题名称，值为传递给处理器的业务数据
+   * @param float $timeout 等待超时时间，单位秒，默认 0.5
+   * @param bool $isCo 是否启用协程并发调度，启用时使用 taskCo，否则使用 taskWaitMulti
+   * @return array 各任务的执行结果列表
    */
   public function emitsWait(
     array $tasks,

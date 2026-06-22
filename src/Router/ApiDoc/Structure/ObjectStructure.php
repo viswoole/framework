@@ -23,7 +23,7 @@ use ReflectionProperty;
 use Viswoole\Router\ApiDoc\DocCommentTool;
 
 /**
- * 对象结构
+ * 对象类型结构，通过反射从类构造函数或公开属性推导字段列表
  */
 class ObjectStructure extends ClassTypeStructure
 {

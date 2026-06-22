@@ -120,11 +120,11 @@ class ParamParseTool
   }
 
   /**
-   * 解析参数结构
+   * 解析单个参数的来源与结构
    *
-   * @param ReflectionParameter $parameter
-   * @param string $docComment
-   * @return array{body:FieldStructure[], query:FieldStructure[], header:FieldStructure[]}|null
+   * @param ReflectionParameter $parameter 反射参数
+   * @param string $docComment 方法文档注释
+   * @return array{body:FieldStructure[],query:FieldStructure[],header:FieldStructure[]}|null 无参数来源注解时返回 null
    */
   private static function parseParamField(
     ReflectionParameter $parameter,

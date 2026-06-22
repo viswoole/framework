@@ -21,7 +21,10 @@ use Viswoole\HttpServer\Facade\Request;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\HeaderParamInterface;
 
 /**
- * 注入请求标头
+ * 请求标头自动注入属性
+ *
+ * 标注到控制器参数或属性上，框架自动从请求标头中注入值，
+ * 不允许为空时缺失标头将抛出验证异常。
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectHeader implements HeaderParamInterface
@@ -29,12 +32,12 @@ class InjectHeader implements HeaderParamInterface
   use ValidateNull;
 
   /**
-   * 注入请求头
+   * 从请求标头中获取值并校验空值
    *
-   * @param string $name 标头
+   * @param string $name 标头名称
    * @param mixed $value 默认值
-   * @param bool $allowNull 是否允许为空
-   * @inheritDoc
+   * @param bool $allowNull 是否允许为 null
+   * @return string|null 标头值
    */
   #[Override] public function inject(string $name, mixed $value, bool $allowNull): string|null
   {

@@ -18,86 +18,77 @@ namespace Viswoole\Log\Contract;
 use Stringable;
 
 /**
- * 日志收集器接口
+ * 日志收集器接口，定义各级别日志记录的统一契约
+ *
+ * 遵循 PSR-3 日志等级语义，提供 error、warning、info、debug、sql、task、alert
+ * 及自定义级别 mixed 的方法签名。
  */
 interface CollectorInterface
 {
   /**
-   * 程序运行错误时应抛出的日志。
+   * 记录运行时错误（无需立即处理但需监控）
    *
-   * @param string|Stringable $message
-   * @param array $context
-   *
-   * @return void
+   * @param string|Stringable $message 错误描述
+   * @param array $context 附加上下文
    */
   public function error(string|Stringable $message, array $context = []): void;
 
   /**
-   * 警告日志，例如调用了弃用的API
+   * 记录非错误的异常情况，如调用弃用 API
    *
-   * @param string|Stringable $message
-   * @param array $context
-   * @return void
+   * @param string|Stringable $message 警告描述
+   * @param array $context 附加上下文
    */
   public function warning(string|Stringable $message, array $context = []): void;
 
   /**
-   * 普通的信息日志例如登录，注册等日志。
+   * 记录普通业务信息，如用户登录、注册等
    *
-   * @param string|Stringable $message
-   * @param array $context
-   * @return void
+   * @param string|Stringable $message 信息描述
+   * @param array $context 附加上下文
    */
   public function info(string|Stringable $message, array $context = []): void;
 
   /**
-   * 详细的调试日志
+   * 记录详细调试信息，仅在开发调试阶段使用
    *
-   * @param string|Stringable $message
-   * @param array $context
-   * @return void
+   * @param string|Stringable $message 调试描述
+   * @param array $context 附加上下文
    */
   public function debug(string|Stringable $message, array $context = []): void;
 
   /**
-   * 任意日志
+   * 记录自定义级别的日志
    *
-   * @param string $level 日志标签
-   * @param string|Stringable $message
-   * @param array $context
-   * @return void
+   * @param string $level 自定义日志级别标签
+   * @param string|Stringable $message 日志消息
+   * @param array $context 附加上下文
    */
   public function mixed(string $level, string|Stringable $message, array $context = []): void;
 
   /**
-   * sql日志。
+   * 记录 SQL 执行日志
    *
-   * @param string|Stringable $message 描述消息
-   * @param array $context 上下文
-   *
-   * @return void
+   * @param string|Stringable $message SQL 语句或描述
+   * @param array $context 附加上下文
    */
   public function sql(Stringable|string $message, array $context = []): void;
 
   /**
-   * 任务日志。
+   * 记录异步任务日志
    *
-   * @param string|Stringable $message 描述消息
-   * @param array $context 上下文
-   *
-   * @return void
+   * @param string|Stringable $message 任务描述
+   * @param array $context 附加上下文
    */
   public function task(Stringable|string $message, array $context = []): void;
 
   /**
-   * 必须立即采取行动。
+   * 记录必须立即采取行动的警报，如整个网站关闭、数据库不可用
    *
-   * Example: 整个网站关闭，数据库不可用等。这应该触发短信提醒并唤醒您。
+   * 此级别应触发短信提醒等紧急通知。
    *
-   * @param string|Stringable $message
-   * @param array $context
-   *
-   * @return void
+   * @param string|Stringable $message 警报描述
+   * @param array $context 附加上下文
    */
   public function alert(string|Stringable $message, array $context = []): void;
 }

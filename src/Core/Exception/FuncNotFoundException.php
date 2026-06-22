@@ -15,6 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Exception;
 
+/**
+ * 函数不存在时抛出，通常在调用未定义的全局函数时触发
+ */
 class FuncNotFoundException extends NotFoundException
 {
 

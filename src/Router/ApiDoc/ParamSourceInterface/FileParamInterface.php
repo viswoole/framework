@@ -16,9 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\ParamSourceInterface;
 
 /**
- * 参数需带有实现了该接口的注解声明，文档才能解析参数类型为文件参数。
- *
- * 使用路由的服务应该实现该接口，并在inject方法中注入对应的文件。
+ * 文件参数来源接口，实现此接口的注解将参数标记为上传文件参数
  */
 interface FileParamInterface extends BaseSourceInterface
 {

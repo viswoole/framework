@@ -24,28 +24,33 @@ use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Cache\Driver\Tag;
 
 /**
- * 缓存驱动基类
+ * 缓存驱动抽象基类，提供缓存键前缀、标签、序列化及过期时间等通用能力
+ *
+ * 各具体驱动（File、Redis 等）继承此类并实现差异化的存储逻辑。
+ * 基类封装了标签管理、锁键生成、序列化/反序列化等横切关注点。
+ *
+ * @see CacheDriverInterface
  */
 abstract class Driver implements CacheDriverInterface
 {
   /**
-   * @var string 缓存前缀
+   * @var string 缓存键前缀，用于隔离不同应用的缓存命名空间
    */
   protected string $prefix = '';
   /**
-   * @var int 缓存默认的过期时间
+   * @var int 默认缓存过期时间（秒），0 表示永不过期
    */
   protected int $expire = 0;
   /**
-   * @var string 缓存标签库名称
+   * @var string 标签仓库的缓存键名，用于存储所有已注册标签的集合
    */
   protected string $tag_store = 'TAG_STORE';
   /**
-   * @var string 标签前缀
+   * @var string 标签键前缀，用于区分标签键与普通缓存键
    */
   protected string $tag_prefix = 'tag:';
   /**
-   * @var array 序列化
+   * @var array{get:callable,set:callable} 序列化与反序列化回调配置
    */
   protected array $serialize = [
     'get' => 'unserialize',
@@ -53,10 +58,12 @@ abstract class Driver implements CacheDriverInterface
   ];
 
   /**
-   * @param string $prefix 缓存前缀
-   * @param string $tag_prefix 缓存标签前缀标识
-   * @param string $tag_store 标签仓库
-   * @param int $expire 缓存过期时间
+   * 初始化缓存驱动通用配置
+   *
+   * @param string $prefix 缓存键前缀，用于命名空间隔离
+   * @param string $tag_prefix 标签键前缀标识
+   * @param string $tag_store 标签仓库键名，存储所有已注册标签集合
+   * @param int $expire 默认过期时间（秒），0 表示永不过期
    */
   public function __construct(
     string $prefix = '',
@@ -72,12 +79,15 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 设置序列化方法
+   * 自定义序列化与反序列化回调
    *
-   * @access public
-   * @param string|Closure $set
-   * @param string|Closure $get
-   * @return $this
+   * 用于替换默认的 PHP serialize/unserialize，例如切换为 JSON 或 igBinary。
+   * 传入的回调必须为可调用结构，否则抛出异常。
+   *
+   * @param string|Closure $set 序列化回调，将值转为可存储的字符串
+   * @param string|Closure $get 反序列化回调，将存储的字符串还原为原始值
+   * @return $this 支持链式调用
+   * @throws InvalidArgumentException 回调不可调用时抛出
    */
   #[Override] public function setSerialize(
     string|Closure $set = 'serialize',
@@ -97,11 +107,10 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 获取实际标签名
+   * 根据标签名生成带前缀的标签键
    *
-   * @access public
-   * @param string $tag 标签名
-   * @return string
+   * @param string $tag 原始标签名
+   * @return string 带前缀的标签键
    */
   #[Override] public function getTagKey(string $tag): string
   {
@@ -109,11 +118,10 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 标签
+   * 创建缓存标签实例，用于按标签批量管理缓存
    *
-   * @access public
-   * @param string|array $tag
-   * @return CacheTagInterface
+   * @param string|array $tag 一个或多个标签名
+   * @return CacheTagInterface 标签操作实例
    */
   #[Override] public function tag(array|string $tag): CacheTagInterface
   {
@@ -121,10 +129,9 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 获取所有缓存标签
+   * 获取所有已注册的缓存标签集合
    *
-   * @access public
-   * @return array|false
+   * @return array|false 标签列表，标签仓库不存在时返回 false
    */
   #[Override] public function getTags(): array|false
   {
@@ -132,9 +139,9 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 获取标签仓库名称
+   * 获取标签仓库的完整缓存键名（含前缀）
    *
-   * @return string
+   * @return string 标签仓库键名
    */
   #[Override] public function getTagStoreName(): string
   {
@@ -142,7 +149,7 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 销毁时自动调用close方法关闭句柄
+   * 析构时自动关闭连接句柄，释放资源
    */
   #[Override] public function __destruct()
   {
@@ -150,10 +157,10 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 序列化数据
-   * @access protected
-   * @param mixed $data 缓存数据
-   * @return mixed
+   * 使用配置的序列化回调将数据转为可存储格式
+   *
+   * @param mixed $data 待序列化的缓存数据
+   * @return mixed 序列化后的数据
    */
   protected function serialize(mixed $data): mixed
   {
@@ -162,10 +169,10 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 反序列化数据
-   * @access protected
-   * @param mixed $data 缓存数据
-   * @return mixed
+   * 使用配置的反序列化回调将存储数据还原为原始值
+   *
+   * @param mixed $data 已序列化的缓存数据
+   * @return mixed 反序列化后的原始数据
    */
   protected function unserialize(mixed $data): mixed
   {
@@ -174,10 +181,10 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 获取锁缓存名
+   * 根据锁场景生成带前缀的锁缓存键
    *
-   * @param string $scene
-   * @return string
+   * @param string $scene 业务场景标识
+   * @return string 锁缓存键
    */
   protected function getLockKey(string $scene): string
   {
@@ -185,11 +192,10 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 获取实际的缓存标识
+   * 根据缓存键生成带前缀的完整缓存标识
    *
-   * @access public
-   * @param string $key 缓存名
-   * @return string
+   * @param string $key 原始缓存键
+   * @return string 含前缀的完整缓存键
    */
   #[Override] public function getCacheKey(string $key): string
   {
@@ -197,11 +203,12 @@ abstract class Driver implements CacheDriverInterface
   }
 
   /**
-   * 获取有效期
+   * 将过期时间统一转换为秒数
    *
-   * @access protected
-   * @param DateTime|int $expire 有效期
-   * @return int 秒
+   * 支持 DateTime 对象（计算距当前时间的剩余秒数）和整数秒数两种格式。
+   *
+   * @param DateTime|int $expire 过期时间，DateTime 表示绝对时间点，int 表示相对秒数
+   * @return int 过期秒数
    */
   protected function formatExpireTime(DateTime|int $expire): int
   {

@@ -22,7 +22,11 @@ use Viswoole\Database\Model\RelationQuery;
 use Viswoole\Database\Query\RunInfo;
 
 /**
- * 模型基类
+ * 数据模型基类
+ *
+ * 提供ORM核心能力：自动推断表名、软删除、时间戳自动写入、关联查询、获取器等。
+ * 子类通过定义属性来声明表名、主键、软删除字段等元信息，框架自动处理查询与写入逻辑。
+ * 静态方法通过 __callStatic 转发到 Query 实例，支持链式调用。
  *
  * @method static DataSet create(array $data, array $columns = []) 创建一条数据，并返回数据集
  * @method static Raw|int delete(bool $real = false) 删除记录
@@ -85,40 +89,41 @@ use Viswoole\Database\Query\RunInfo;
  * @method static array|Raw getArray() 执行查询，并以数组方式返回查询结果
  * @method static Generator cursor() 游标查询
  * @method static Query strict(bool $flag = true) 如果关闭严格模式，则会忽略写入不存在的字段。
+ * @see Query
  */
 abstract class Model
 {
-  /** @var Query 模型查询实例 */
+  /** @var Query 模型查询实例，通过该实例执行所有数据库操作 */
   public readonly Query $query;
-  /** @var array 隐藏字段，不对外暴露 */
+  /** @var array 对外输出时需隐藏的字段名列表 */
   protected array $hidden = [];
-  /** @var bool 是否启用软删除 */
+  /** @var bool 是否启用软删除功能 */
   protected bool $enableSoftDelete = false;
-  /** @var string 软删除字段 */
+  /** @var string 软删除标记字段名 */
   protected string $softDeleteFieldName = 'delete_time';
   /** @var string 软删除字段类型 datetime|timestamp|date|int */
   protected string $softDeleteFieldType = 'datetime';
-  /** @var string|int|null 软删除默认记录值 */
+  /** @var string|int|null 软删除字段的默认值（未删除状态），null 表示字段为NULL时未删除 */
   protected null|string|int $softDeleteFieldDefaultValue = null;
-  /** @var int 自动写入时间戳0关闭1写入创建时间，2写入更新时间，3写入创建和更新时间 */
+  /** @var int 自动写入时间戳模式：0=关闭，1=仅创建时间，2=仅更新时间，3=创建和更新时间 */
   protected int $autoWriteTimestamp = 0;
-  /** @var string 创建时间字段 */
+  /** @var string 创建时间字段名 */
   protected string $createTimeFieldName = 'create_time';
-  /** @var string 创建时间字段类型：datetime|timestamp|date */
+  /** @var string 创建时间字段类型 datetime|timestamp|date */
   protected string $createTimeFormatType = 'datetime';
-  /** @var string 更新时间字段名称 */
+  /** @var string 更新时间字段名 */
   protected string $updateTimeFieldName = 'update_time';
-  /** @var string 更新时间字段类型：datetime|timestamp|date|日期格式表达式 */
+  /** @var string 更新时间字段类型 datetime|timestamp|date|日期格式表达式 */
   protected string $updateTimeFormatType = 'datetime';
-  /** @var string 自动去除类名后缀 */
+  /** @var string 自动去除的类名后缀，用于从类名推断表名 */
   protected string $suffix = 'Model';
-  /** @var string 完整表名 */
+  /** @var string 完整表名，未设置时由类名自动推断 */
   protected string $table;
-  /** @var string 表主键 */
+  /** @var string 表主键字段名 */
   protected string $pk = 'id';
-  /** @var string|null 数据库通道名称，为null则使用默认通道 */
+  /** @var string|null 数据库通道名称，为 null 时使用默认通道 */
   protected ?string $channelName = null;
-  /** @var bool 自动写入主键 */
+  /** @var bool 是否自动生成主键值并写入 */
   protected bool $autoWritePk = false;
 
   public function __construct()
@@ -136,11 +141,11 @@ abstract class Model
   }
 
   /**
-   * 创建构造器
+   * 创建模型查询构造器实例
    *
-   * 如果需要重写构造器中的方法，可以重写该方法，并返回你自定义的构造器。
+   * 子类可重写此方法以使用自定义的 Query 类。
    *
-   * @return Query
+   * @return Query 模型查询构造器
    */
   protected function createQuery(): Query
   {
@@ -148,11 +153,11 @@ abstract class Model
   }
 
   /**
-   * 静态方法转发调用
+   * 将静态方法调用转发到 Query 实例，实现 Model::where() 等链式调用
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed Query 方法的返回值
    */
   public static function __callStatic(string $name, array $arguments)
   {
@@ -160,9 +165,7 @@ abstract class Model
   }
 
   /**
-   * 获取查询器
-   *
-   * 该方法主要是为了实现动态调用智能提示
+   * 获取查询器实例，用于 IDE 智能提示的动态调用入口
    *
    * 示例：
    * ```
@@ -185,7 +188,7 @@ abstract class Model
    * self::select();
    * ```
    *
-   * @return Query
+   * @return Query 模型查询构造器实例
    */
   public function query(): Query
   {
@@ -198,10 +201,10 @@ abstract class Model
   }
 
   /**
-   * 获取模型中的属性
+   * 获取模型中的属性值，属性不存在时返回 null
    *
-   * @param string $key
-   * @return mixed
+   * @param string $key 属性名
+   * @return mixed 属性值，不存在时返回 null
    */
   public function __properties(string $key): mixed
   {
@@ -218,11 +221,11 @@ abstract class Model
   }
 
   /**
-   * 转发调用到查询器
+   * 将实例方法调用转发到 Query 实例
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed Query 方法的返回值
    */
   public function __call(string $name, array $arguments)
   {
@@ -230,12 +233,12 @@ abstract class Model
   }
 
   /**
-   * 1对1关联
+   * 定义一对一关联关系
    *
-   * @param Model|string $relationModel 要关联的模型实例，或类名
-   * @param string|null $foreignKey 当前模型在关联模型中的关联外键（为空时为当前模型表名+当前模型主键）
-   * @param string|null $localKey 当前模型主键（为空时为当前模型$pk属性）
-   * @return RelationQuery
+   * @param Model|string $relationModel 关联模型实例或类名
+   * @param string|null $foreignKey 关联模型中的外键名，为空时自动推断为"当前表名_当前主键"
+   * @param string|null $localKey 当前模型的主键名，为空时使用 $pk 属性值
+   * @return RelationQuery 关联查询实例
    */
   protected function hasOne(
     Model|string $relationModel,
@@ -247,13 +250,13 @@ abstract class Model
   }
 
   /**
-   * 关联模型
+   * 构建关联查询实例
    *
-   * @param Model|string $relationModel
-   * @param string|null $foreignKey
-   * @param string|null $localKey
-   * @param bool $many
-   * @return RelationQuery
+   * @param Model|string $relationModel 关联模型实例或类名
+   * @param string|null $foreignKey 关联模型中的外键名
+   * @param string|null $localKey 当前模型的主键名
+   * @param bool $many 是否为一对多关联
+   * @return RelationQuery 关联查询实例
    */
   private function _relation(
     Model|string $relationModel,
@@ -269,12 +272,12 @@ abstract class Model
   }
 
   /**
-   * 1对多关联
+   * 定义一对多关联关系
    *
-   * @param Model|string $relationModel 要关联的模型实例，，或类名
-   * @param string|null $foreignKey 当前模型在关联模型中的关联外键（为空时为当前模型表名+当前模型主键）
-   * @param string|null $localKey 当前模型主键（为空时为当前模型$pk属性）
-   * @return RelationQuery
+   * @param Model|string $relationModel 关联模型实例或类名
+   * @param string|null $foreignKey 关联模型中的外键名，为空时自动推断为"当前表名_当前主键"
+   * @param string|null $localKey 当前模型的主键名，为空时使用 $pk 属性值
+   * @return RelationQuery 关联查询实例
    */
   protected function hasMany(
     Model|string $relationModel,

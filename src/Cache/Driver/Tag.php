@@ -23,18 +23,26 @@ use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Cache\Exception\CacheErrorException;
 
 /**
- * 标签
+ * 缓存标签实现，支持按标签分组管理缓存键的写入、清除与移除
+ *
+ * 每个标签维护一个 Set 集合存储属于该标签的所有缓存键，
+ * 标签仓库（TagStore）则维护所有已注册标签的集合，用于全局标签查询。
+ *
+ * @see CacheTagInterface
  */
 class Tag implements CacheTagInterface
 {
   /**
-   * @var array<string,string> - 标签映射
+   * @var array<string,string> 标签名到标签键的映射（原始标签名 → 带前缀的标签键）
    */
   protected array $tags;
 
   /**
-   * @param string|array $tags 标签
-   * @param CacheDriverInterface $driver 驱动
+   * 初始化标签实例，将标签名转换为带前缀的标签键
+   *
+   * @param string|array $tags 一个或多个标签名
+   * @param CacheDriverInterface $driver 缓存驱动实例
+   * @throws InvalidArgumentException 标签为空时抛出
    */
   public function __construct(
     string|array                   $tags,
@@ -53,10 +61,9 @@ class Tag implements CacheTagInterface
   }
 
   /**
-   * 清除标签缓存
+   * 清除所有标签下的缓存数据及标签本身
    *
-   * @access public
-   * @return void
+   * 遍历每个标签：删除标签关联的缓存键、删除标签集合、从标签仓库中移除标签。
    */
   #[Override] public function clear(): void
   {
@@ -72,14 +79,13 @@ class Tag implements CacheTagInterface
   }
 
   /**
-   * 写入缓存
+   * 写入缓存值并自动将其键追加到当前标签集合中
    *
-   * @access public
-   * @param string $key 缓存变量名
-   * @param mixed $value 存储数据
-   * @param DateTime|int|null $expire 有效时间（秒）
-   * @param bool $NX
-   * @return bool
+   * @param string $key 缓存键
+   * @param mixed $value 缓存值
+   * @param DateTime|int|null $expire 过期时间（秒），null 使用驱动默认值
+   * @param bool $NX 是否仅在缓存不存在时写入
+   * @return bool 写入成功返回 true
    */
   #[Override] public function set(
     string            $key,
@@ -95,11 +101,9 @@ class Tag implements CacheTagInterface
   }
 
   /**
-   * 追加缓存标识到标签
+   * 将缓存键追加到所有当前标签的集合中，并注册标签到标签仓库
    *
-   * @access public
-   * @param string $key - 缓存键
-   * @return void
+   * @param string $key 缓存键
    */
   #[Override] public function push(string $key): void
   {

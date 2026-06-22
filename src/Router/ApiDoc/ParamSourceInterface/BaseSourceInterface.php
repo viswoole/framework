@@ -18,7 +18,7 @@ namespace Viswoole\Router\ApiDoc\ParamSourceInterface;
 use Viswoole\Core\Contract\PreInjectInterface;
 
 /**
- * 该接口为文档解析请求参数声明提供了一个标记。
+ * 参数来源基础接口，标记参数为 API 文档可解析的请求参数
  */
 interface BaseSourceInterface extends PreInjectInterface
 {

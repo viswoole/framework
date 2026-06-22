@@ -24,8 +24,11 @@ use Viswoole\Core\Exception\ConnectionPoolException;
 use Viswoole\Core\Server\ServerEventHook;
 
 /**
- * Abstract ConnectionPool.
- * 连接池抽象类，基于\Swoole\Coroutine\Channel通道实现了连接池的基本功能
+ * 连接池抽象基类
+ *
+ * 基于 Swoole\Coroutine\Channel 实现连接的借出、归还、填充和销毁，
+ * 子类需实现 createConnection() 和 connectionDetection() 定义连接创建与可用性检测逻辑。
+ * 内置递归深度限制防止无效连接导致无限递归。
  */
 abstract class ConnectionPool implements ConnectionPoolInterface
 {
@@ -42,8 +45,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   private int $makeDepth = 0;
 
   /**
-   * @param int $max_size 连接池长度
-   * @param int|null $default_fill 默认填充长度,null为不填充
+   * @param int $max_size 连接池最大容量
+   * @param int|null $default_fill 初始填充连接数，为 null 时不自动填充
    */
   public function __construct(
     protected int $max_size = self::DEFAULT_SIZE,
@@ -76,9 +79,9 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   }
 
   /**
-   * 判断是否在协程环境
+   * 判断当前是否在协程环境中运行
    *
-   * @return bool
+   * @return bool 在协程中返回 true
    */
   private function isCoroutine(): bool
   {
@@ -98,9 +101,9 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   }
 
   /**
-   * 往连接池中新增一个连接
+   * 创建新连接并放入池中，递归深度超过 3 次时抛出异常防止无限递归
    *
-   * @return void
+   * @throws ConnectionPoolException 创建连接重试超过 3 次时抛出
    */
   protected function make(): void
   {
@@ -122,9 +125,9 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   }
 
   /**
-   * 必须实现创建连接方法
+   * 创建一个新连接，子类必须实现
    *
-   * @return mixed 返回一个可用的连接对象
+   * @return mixed 可用的连接对象
    */
   abstract protected function createConnection(): mixed;
 
@@ -153,10 +156,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   }
 
   /**
-   * 可实现此方法在获取或归还连接时检测连接是否可用
+   * 检测连接是否可用，子类必须实现，在借出和归还时调用
    *
-   * @param mixed $connection
-   * @return bool 如果返回true则代表连接可用
+   * @param mixed $connection 待检测的连接
+   * @return bool 可用返回 true
    */
   abstract protected function connectionDetection(mixed $connection): bool;
 

@@ -29,7 +29,10 @@ use Viswoole\Core\Exception\ServerNotFoundException;
 use Viswoole\Core\Server\ServerEventHook;
 
 /**
- * Swoole服务代理类
+ * Swoole 服务器代理类
+ *
+ * 封装 Swoole\Server 的创建、配置和启动流程，通过 __call 魔术方法代理原始 Swoole 方法调用。
+ * 支持多服务器配置、事件钩子、进程守护和 PID 文件管理。
  *
  * @link https://wiki.swoole.com/zh-cn/#/server/methods
  *
@@ -82,10 +85,9 @@ class Server
 {
   /**
    * @var string 默认异常处理类
-   */
-  const string DEFAULT_EXCEPTION_HANDLE = Handle::class;
+   */  const string DEFAULT_EXCEPTION_HANDLE = Handle::class;
   /**
-   * @var array 默认构造参数
+   * @var array Swoole\Server 构造参数默认值（host/port/mode/sock_type）
    */
   const array DEFAULT_CONSTRUCT_ARGUMENTS = [
     //指定监听的 ip 地址。
@@ -99,16 +101,18 @@ class Server
   ];
   // 修复#8: 类常量依赖BASE_PATH存在加载顺序风险，改为静态方法延迟计算
   /**
-   * 获取PID默认存储目录
-   * @return string
+   * 获取 PID 文件默认存储目录
+   *
+   * @return string PID 目录绝对路径
    */
   public static function getDefaultPidStoreDir(): string
   {
     return BASE_PATH . '/runtime/server_pid';
   }
   /**
-   * 获取默认全局配置
-   * @return array
+   * 获取 Swoole 全局默认配置项
+   *
+   * @return array Swoole Server 全局选项默认值
    */
   public static function getDefaultGlobalOption(): array
   {
@@ -136,26 +140,26 @@ class Server
     ];
   }
   /**
-   * @var string 服务名称
+   * @var string 当前服务名称
    */
   public readonly string $serverName;
   /**
-   * @var array 服务配置
+   * @var array 合并后的服务配置（construct/options/events/exception_handle/type）
    */
   protected array $config;
   /**
-   * @var bool 服务是否已启动
+   * @var bool 服务是否已启动，防止重复启动
    */
   private bool $isStart = false;
   /**
-   * @var SwooleServer swoole服务实例
+   * @var SwooleServer Swoole 原始服务实例
    */
   private SwooleServer $server;
 
   /**
-   * @param string $server_name 服务名称
+   * @param string $server_name 服务名称，对应 config/server.php 中的键名
    * @param Event $event 事件管理器实例
-   * @throws ServerNotFoundException
+   * @throws ServerNotFoundException 服务配置不存在时抛出
    */
   public function __construct(string $server_name, protected Event $event)
   {
@@ -177,11 +181,11 @@ class Server
   }
 
   /**
-   * 加载服务配置
+   * 加载并合并服务配置，包括构造参数、全局选项、事件钩子和 PID 文件路径
    *
-   * @return array{construct: array, options: array,events: array,exception_handle: string,type:string}
-   * @throws ServerNotFoundException 服务未找到
-   * @throws Exception
+   * @return array{construct:array,options:array,events:array,exception_handle:string,type:string} 完整服务配置
+   * @throws ServerNotFoundException 服务未定义或 type 配置错误时抛出
+   * @throws Exception PID 目录创建失败时抛出
    */
   public function getConfig(): array
   {
@@ -235,9 +239,9 @@ class Server
   }
 
   /**
-   * 创建swoole服务
+   * 根据配置创建 Swoole\Server 实例，设置选项并注册事件监听
    *
-   * @return SwooleServer
+   * @return SwooleServer 已初始化的 Swoole 服务实例
    */
   protected function createSwooleServer(): SwooleServer
   {
@@ -256,10 +260,9 @@ class Server
   }
 
   /**
-   * 判断服务是否已经启动
+   * 判断服务是否已启动
    *
-   * @access public
-   * @return bool
+   * @return bool 已启动返回 true
    */
   public function isStart(): bool
   {
@@ -269,7 +272,7 @@ class Server
   /**
    * 获取服务名称
    *
-   * @return string
+   * @return string 服务名称
    */
   public function getName(): string
   {
@@ -277,12 +280,10 @@ class Server
   }
 
   /**
-   * 启动服务
+   * 启动 Swoole 服务，支持进程守护模式
    *
-   * @access public
-   * @param bool $daemonize 进程守护
-   * @return void
-   * @throws ServerException
+   * @param bool $daemonize 是否以守护进程方式运行
+   * @throws ServerException 服务已在运行或启动失败时抛出
    */
   public function start(bool $daemonize = false): void
   {
@@ -299,11 +300,11 @@ class Server
   }
 
   /**
-   * 转发调用至Swoole\Server实例
+   * 将未定义方法调用代理到 Swoole\Server 原始实例
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed Swoole\Server 方法返回值
    */
   public function __call(string $name, array $arguments)
   {
@@ -311,12 +312,9 @@ class Server
   }
 
   /**
-   * 获取Swoole\Server原型实例
+   * 获取 Swoole\Server 原始实例，必须在服务创建完成后调用
    *
-   * 必须在服务创建完成之后才能调用此方法
-   *
-   * @access public
-   * @return SwooleServer
+   * @return SwooleServer Swoole 原始服务实例
    */
   public function getServer(): SwooleServer
   {

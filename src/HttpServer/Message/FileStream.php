@@ -17,10 +17,16 @@ namespace Viswoole\HttpServer\Message;
 
 use RuntimeException;
 
+/**
+ * 文件流封装
+ *
+ * 对 PHP 文件资源流的面向对象封装，提供读取、写入、定位、
+ * 元数据查询等操作，析构时自动关闭底层资源。
+ */
 class FileStream
 {
   /**
-   * @var resource 资源流
+   * @var resource 底层 PHP 文件资源流
    */
   protected $stream;
 
@@ -32,12 +38,11 @@ class FileStream
   }
 
   /**
-   * 创建流实例
+   * 工厂方法：创建流实例
    *
-   * @access public
    * @param string $filePath 文件路径
-   * @param string $mode 参考https://www.php.net/manual/zh/function.fopen.php
-   * @return static
+   * @param string $mode 打开模式，参考 https://www.php.net/manual/zh/function.fopen.php
+   * @return static 新创建的流实例
    */
   public static function create(string $filePath, string $mode = 'r'): static
   {
@@ -45,9 +50,9 @@ class FileStream
   }
 
   /**
-   * 将整个流内容作为字符串返回
+   * 读取整个流内容并作为字符串返回
    *
-   * @return string
+   * @return string 流内容，资源已分离时返回空字符串
    */
   public function __toString(): string
   {
@@ -58,9 +63,9 @@ class FileStream
   }
 
   /**
-   * 从流中分离底层资源，返回分离的资源（如果有）
+   * 分离并返回底层 PHP 资源流，此后本对象不再可用
    *
-   * @return resource|null Underlying PHP stream, if any
+   * @return resource|null 底层资源流，已分离时返回 null
    */
   public function detach()
   {
@@ -75,9 +80,7 @@ class FileStream
   }
 
   /**
-   * 关闭数据流，释放底层资源（如文件句柄、网络连接等）。
-   *
-   * @return void
+   * 关闭底层资源流并释放文件句柄
    */
   public function close(): void
   {
@@ -85,10 +88,9 @@ class FileStream
   }
 
   /**
-   * 获取流资源
+   * 获取底层 PHP 资源流
    *
-   * @access public
-   * @return resource
+   * @return resource|null 资源流
    */
   public function getStream()
   {
@@ -96,10 +98,9 @@ class FileStream
   }
 
   /**
-   * 获取流的大小（字节数），如果不可知则返回 null
+   * 获取流的大小（字节数）
    *
-   * @access public
-   * @return int|null Returns the size in bytes if known, or null of unknown.
+   * @return int|null 字节数，资源已分离或不可知时返回 null
    */
   public function getSize(): ?int
   {
@@ -109,11 +110,10 @@ class FileStream
   }
 
   /**
-   * 返回当前流的读/写指针位置。
+   * 获取当前读写指针位置
    *
-   * @access public
-   * @return int Position of the file pointer
-   * @throws RuntimeException on error.
+   * @return int 指针偏移量
+   * @throws RuntimeException 资源已分离时抛出
    */
   public function tell(): int
   {
@@ -125,10 +125,9 @@ class FileStream
   }
 
   /**
-   * 检查是否已到达流的末尾。
+   * 判断是否到达流末尾
    *
-   * @access public
-   * @return bool
+   * @return bool 资源已分离时返回 true，否则返回 feof 结果
    */
   public function eof(): bool
   {
@@ -140,14 +139,9 @@ class FileStream
   }
 
   /**
-   * 将读/写指针重置到流的开头
+   * 将指针重置到流开头（等价于 seek(0)）
    *
-   * If the stream is not seekable, this method will raise an exception;
-   * otherwise, it will perform a seek(0).
-   *
-   * @throws RuntimeException on failure.
-   * @link http://www.php.net/manual/en/function.fseek.php
-   * @see seek()
+   * @throws RuntimeException 流不可定位时抛出
    */
   public function rewind(): void
   {
@@ -155,12 +149,12 @@ class FileStream
   }
 
   /**
-   * 将读/写指针移动到流中的指定位置。
+   * 将读写指针移动到指定位置
    *
+   * @param int $offset 偏移量
+   * @param int $whence 定位方式（SEEK_SET、SEEK_CUR、SEEK_END）
+   * @throws RuntimeException 流不可定位时抛出
    * @link http://www.php.net/manual/en/function.fseek.php
-   * @param int $offset FileStream offset
-   * @param int $whence Specifies how the cursor position will be calculated
-   * @throws RuntimeException on failure.
    */
   public function seek(int $offset, int $whence = SEEK_SET): void
   {
@@ -172,9 +166,9 @@ class FileStream
   }
 
   /**
-   * 检查流是否支持随机访问（seek）
+   * 判断流是否支持随机定位（seek）
    *
-   * @return bool
+   * @return bool 可定位返回 true
    */
   public function isSeekable(): bool
   {
@@ -183,11 +177,11 @@ class FileStream
   }
 
   /**
-   * 向流中写入数据，并返回写入的字节数。
+   * 向流中写入数据
    *
-   * @param string $string 要写入的字符串.
-   * @return int 返回写入流的字节数。
-   * @throws RuntimeException on failure.
+   * @param string $string 待写入的字符串
+   * @return int 实际写入的字节数
+   * @throws RuntimeException 流不可写时抛出
    */
   public function write(string $string): int
   {
@@ -199,9 +193,9 @@ class FileStream
   }
 
   /**
-   * 检查流是否可写。
+   * 判断流是否可写
    *
-   * @return bool
+   * @return bool 可写返回 true
    */
   public function isWritable(): bool
   {
@@ -213,14 +207,11 @@ class FileStream
   }
 
   /**
-   * 从流中读取指定长度的数据。
+   * 从流中读取指定长度的数据
    *
-   * @param int $length Read up-to-$length bytes from the object and return
-   *     Then. Fewer than $length bytes may be returned if underlying stream
-   *     call returns fewer bytes.
-   * @return string Returns the data read from the stream, or an empty string
-   *     if no bytes are available.
-   * @throws RuntimeException if an error occurs.
+   * @param int $length 最大读取字节数
+   * @return string 读取到的数据，无可读数据时返回空字符串
+   * @throws RuntimeException 流不可读时抛出
    */
   public function read(int $length): string
   {
@@ -232,9 +223,9 @@ class FileStream
   }
 
   /**
-   * 检查流是否可读。
+   * 判断流是否可读
    *
-   * @return bool
+   * @return bool 可读返回 true
    */
   public function isReadable(): bool
   {
@@ -246,11 +237,10 @@ class FileStream
   }
 
   /**
-   * 读取整个流的内容并返回。
+   * 从当前位置读取全部剩余内容
    *
-   * @access public
-   * @return string
-   * @throws RuntimeException if unable to read or an error occurs while reading.
+   * @return string 流内容
+   * @throws RuntimeException 流不可读时抛出
    */
   public function getContents(): string
   {
@@ -262,13 +252,10 @@ class FileStream
   }
 
   /**
-   * 获取流的元数据信息，可以传递一个键来获取特定的元数据。
+   * 获取流的元数据信息
    *
-   * @access public
-   * @param string|null $key Specific metadata to retrieve.
-   * @return array|mixed|null 如果未提供键，则返回关联数组。
-   * 如果提供了键并且找到了值，则返回特定的键值；
-   * 如果找不到键，则返回null。
+   * @param string|null $key 指定键名则返回对应值，不传则返回完整元数据数组
+   * @return array|mixed|null 键存在时返回对应值，不存在返回 null；不传 key 时返回完整数组
    */
   public function getMetadata(?string $key = null): mixed
   {

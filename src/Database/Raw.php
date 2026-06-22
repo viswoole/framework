@@ -19,22 +19,25 @@ use JsonSerializable;
 use Override;
 
 /**
- * 原生SQL
+ * 原生SQL表达式
+ *
+ * 用于在查询构建器中嵌入不被参数绑定的SQL片段，
+ * 如函数调用、子查询等。支持位置占位符(?)和命名占位符(:name)。
  */
 class Raw implements JsonSerializable
 {
   /**
-   * @param string $sql
-   * @param array $bindings
+   * @param string $sql SQL语句，支持占位符
+   * @param array $bindings 绑定参数
    */
   public function __construct(public string $sql, public array $bindings = [])
   {
   }
 
   /**
-   * 转换为字符串
+   * 将绑定参数合并到SQL语句中，返回完整的SQL字符串
    *
-   * @return string
+   * @return string 合并参数后的SQL语句
    */
   public function __toString(): string
   {
@@ -42,11 +45,13 @@ class Raw implements JsonSerializable
   }
 
   /**
-   * 合并参数
+   * 将绑定参数合并到SQL语句中的静态方法
    *
-   * @param string $sql
-   * @param array $bindings
-   * @return string
+   * 自动识别位置占位符(?)和命名占位符(:name)，对字符串值进行转义。
+   *
+   * @param string $sql SQL语句
+   * @param array $bindings 绑定参数
+   * @return string 合并参数后的SQL语句
    */
   public static function merge(string $sql, array $bindings): string
   {
@@ -93,10 +98,9 @@ class Raw implements JsonSerializable
   }
 
   /**
-   * 将绑定的参数合并到sql语句中
+   * 将绑定参数合并到SQL语句中，返回可读的SQL字符串
    *
-   * @access public
-   * @return string
+   * @return string 合并参数后的SQL语句
    */
   public function toString(): string
   {

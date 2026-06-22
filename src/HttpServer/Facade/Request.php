@@ -22,7 +22,9 @@ use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\HttpServer\Message\Uri;
 
 /**
- * HTTP请求对象
+ * HTTP 请求对象静态代理
+ *
+ * 提供对 Request 实例的静态调用入口，简化请求参数、标头、文件等读取操作。
  *
  * @method static Uri getUri() 检索 URI 实例。
  * @method static array|string|null getHeader(?string $key = null, mixed $default = null) 获取请求标头, 所有标头均为小写
@@ -57,7 +59,7 @@ use Viswoole\HttpServer\Message\Uri;
 class Request extends Facade
 {
   /**
-   * @inheritDoc
+   * 获取当前 Facade 代理的底层类名
    */
   #[Override] protected static function getMappingClass(): string
   {

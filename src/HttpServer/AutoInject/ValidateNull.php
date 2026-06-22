@@ -18,17 +18,21 @@ namespace Viswoole\HttpServer\AutoInject;
 use Viswoole\Core\Exception\ValidateException;
 
 /**
- * 验证是否为空
+ * 参数空值校验复用 Trait
+ *
+ * 为 Inject* 注解类提供统一的空值校验逻辑，
+ * 不允许为空时抛出 ValidateException。
  */
 trait ValidateNull
 {
   /**
-   * 验证是否为空
+   * 校验注入值是否为空，不允许为空时抛出验证异常
    *
-   * @param mixed $value 处理好的值
-   * @param bool $allowNull 是否允许为空
-   * @param string $message 如果为空的提示信息
-   * @return mixed
+   * @param mixed $value 已获取的参数值
+   * @param bool $allowNull 是否允许为 null
+   * @param string $message 为空时的错误提示
+   * @return mixed 原值
+   * @throws ValidateException 不允许为空且值为 null 时抛出
    */
   protected function validateEmpty(mixed $value, bool $allowNull, string $message): mixed
   {

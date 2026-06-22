@@ -18,43 +18,39 @@ namespace Viswoole\Core\Service;
 use Viswoole\Core\App;
 
 /**
- * 服务提供者抽象类
+ * 服务提供者抽象基类，定义服务的注册与启动生命周期
  */
 abstract class Provider
 {
   /**
-   * @var string[] 重写该属性，可批量注册服务
+   * @var string[] 批量绑定的服务映射，键为服务名，值为实现类名
    */
   public array $bindings = [];
 
   /**
-   * @param App $app
+   * @param App $app 应用容器实例
    */
   public function __construct(protected App $app)
   {
   }
 
   /**
-   * 该方法用于启动/初始化服务
+   * 启动服务，在所有服务注册完成后调用，用于初始化或解析已注册的服务
    *
-   * Example:
+   * 示例：
    * ```php
    * $this->app->make('服务名');
    * ```
-   *
-   * @return void
    */
   abstract public function boot(): void;
 
   /**
-   * 该方法用于向应用容器中注册服务
+   * 注册服务绑定到容器，在启动之前调用
    *
-   * Example:
+   * 示例：
    * ```php
    * $this->app->bind('服务名', '类名');
    * ```
-   *
-   * @return void
    */
   abstract public function register(): void;
 }

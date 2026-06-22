@@ -22,9 +22,11 @@ use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\FileParamInterface;
 
 /**
- * 注入上传的文件
+ * 上传文件自动注入属性
  *
- * 多个文件为数组`UploadedFile[]`, 单个文件为`UploadedFile`对象
+ * 标注到控制器参数或属性上，框架自动从上传文件中注入值，
+ * 单文件返回 UploadedFile，多文件返回 UploadedFile[]，
+ * 不允许为空时缺失文件将抛出验证异常。
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InjectFile implements FileParamInterface
@@ -32,7 +34,12 @@ class InjectFile implements FileParamInterface
   use ValidateNull;
 
   /**
-   * @inheritDoc
+   * 从上传文件中获取值并校验空值
+   *
+   * @param string $name 表单字段名
+   * @param mixed $value 默认值
+   * @param bool $allowNull 是否允许为 null
+   * @return array|UploadedFile|null 文件实例
    */
   #[Override] public function inject(
     string $name,

@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\Route;
 
 /**
- * 路由api文档相关配置
+ * 路由 API 文档相关配置 trait，提供标题、描述、排序、隐藏等文档元数据
  */
 trait ApiDoc
 {

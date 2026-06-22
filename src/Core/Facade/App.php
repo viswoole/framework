@@ -20,7 +20,7 @@ use Override;
 use Viswoole\Core\Facade;
 
 /**
- * App应用管理中心
+ * 应用容器门面，静态代理 App 核心方法
  *
  * @method static string getVendorPath() 获取vendor路径
  * @method static string getRootPath() 获取项目根路径
@@ -50,7 +50,7 @@ use Viswoole\Core\Facade;
 class App extends Facade
 {
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
    */
   #[Override] protected static function getMappingClass(): string
   {

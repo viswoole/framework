@@ -16,9 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\ParamSourceInterface;
 
 /**
- * 参数需带有实现了该接口的注解声明，文档才能解析参数类型为请求头。
- *
- * 使用路由的服务应该实现该接口，并在inject方法中注入对应的请求头。
+ * 请求头参数来源接口，实现此接口的注解将参数标记为 Header 参数
  */
 interface HeaderParamInterface extends BaseSourceInterface
 {

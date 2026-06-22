@@ -20,14 +20,14 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 日期验证，验证日期必须大于datetime
+ * 日期晚于验证规则，校验日期字符串是否晚于指定的时间基准点
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class DateAfter extends BaseValidateRule
 {
   /**
-   * @param string|int $datetime datetime,接收Y-m-d H:i:s格式的日期时间字符串，支持传入+N或-N表示从当前时间偏移N秒
-   * @param string $message
+   * @param string|int $datetime 时间基准点，支持 Y-m-d H:i:s 格式字符串、时间戳，以及 "+N"/"-N" 偏移语法（相对当前时间偏移 N 秒）
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public string|int $datetime,
@@ -47,7 +47,7 @@ class DateAfter extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验日期是否晚于基准时间点
    */
   #[Override] public function validate(mixed $value): mixed
   {

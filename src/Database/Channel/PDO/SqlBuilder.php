@@ -26,10 +26,16 @@ use Viswoole\Database\Query\WhereGroup;
 use Viswoole\Database\Raw;
 
 /**
- * sql构造器
+ * SQL 语句构建器
+ *
+ * 根据查询选项（Options）生成参数化 SQL 并收集绑定参数，
+ * 支持 SELECT / INSERT / UPDATE / DELETE 四种操作及各类子句。
  */
 class SqlBuilder
 {
+  /**
+   * @var array<string,array{columns:string[]}> 各驱动对应的标识符包裹符号
+   */
   const array TAG = [
     DriverType::MYSQL->name => [
       'left' => '`',
@@ -53,17 +59,17 @@ class SqlBuilder
     ]
   ];
   /**
-   * @var array 缓存表字段列表
+   * @var array<string,string[]> 表字段列表缓存，键为表名
    */
   private static array $tableColumns = [];
   /**
-   * @var array sql参数列表
+   * @var array<int,mixed> 预编译参数绑定列表
    */
   protected array $params = [];
 
   /**
-   * @param PDOChannel $channel 数据库类型
-   * @param Options $options
+   * @param PDOChannel $channel 数据库通道实例，用于获取驱动类型与连接
+   * @param Options $options 查询选项
    */
   public function __construct(protected PDOChannel $channel, protected Options $options)
   {
@@ -136,10 +142,10 @@ class SqlBuilder
   }
 
   /**
-   * 用标识符包裹字段
+   * 用数据库标识符包裹字段名，已包含特殊字符或空格的字符串不做处理
    *
-   * @param string $str
-   * @return string
+   * @param string $str 待包裹的标识符
+   * @return string 包裹后的标识符
    */
   protected function quote(string $str): string
   {
@@ -152,10 +158,10 @@ class SqlBuilder
   }
 
   /**
-   * 获取表字段列表
+   * 获取当前表的字段名列表，结果会按表名缓存
    *
-   * @return array
-   * @throws DbException
+   * @return string[] 字段名列表
+   * @throws DbException 查询表结构失败时抛出
    */
   protected function getTableColumns(): array
   {
@@ -196,11 +202,11 @@ class SqlBuilder
   }
 
   /**
-   * 解析数据为values
+   * 将一行数据按指定字段顺序转为占位符值列表，同时收集绑定参数
    *
-   * @param array $keys
-   * @param array $row
-   * @return array
+   * @param string[] $keys 字段名列表
+   * @param array $row 单行数据
+   * @return string[] 占位符值列表（? 或 Raw SQL）
    */
   private function parseDataToValues(array $keys, array $row): array
   {
@@ -219,10 +225,10 @@ class SqlBuilder
   }
 
   /**
-   * 打包更新语句
+   * 构建 UPDATE 语句
    *
-   * @return string
-   * @throws DbException
+   * @return string 生成的 UPDATE SQL
+   * @throws DbException 获取表字段失败时抛出
    */
   public function buildUpdate(): string
   {
@@ -245,10 +251,11 @@ class SqlBuilder
   }
 
   /**
-   * 解析更新数据
+   * 解析更新数据为 SET 子句，若无 WHERE 条件则尝试用主键自动补充
    *
-   * @return string
-   * @throws DbException
+   * @return string SET 子句内容
+   * @throws DbException 获取表字段失败时抛出
+   * @throws InvalidArgumentException 既无 WHERE 条件也无主键值时抛出
    */
   protected function parseUpdateData(): string
   {
@@ -285,9 +292,9 @@ class SqlBuilder
   }
 
   /**
-   * 解析Where语句
+   * 解析 WHERE 子句，将条件列表拼接为 WHERE ... 字符串
    *
-   * @return string
+   * @return string WHERE 子句，无条件时返回空字符串
    */
   public function parseWhere(): string
   {
@@ -350,10 +357,10 @@ class SqlBuilder
   }
 
   /**
-   * 解析WhereGroup
+   * 解析 WHERE 条件组，将组内条件用括号包裹
    *
-   * @param WhereGroup $where
-   * @return string
+   * @param WhereGroup $where 条件分组
+   * @return string 拼接后的 SQL 片段（含前导连接符 AND / OR）
    */
   protected function parseWhereGroup(WhereGroup $where): string
   {
@@ -488,9 +495,9 @@ class SqlBuilder
   }
 
   /**
-   * 强制索引
+   * 解析强制索引子句，仅 MySQL 和 SQLite 支持
    *
-   * @return string
+   * @return string FORCE INDEX / INDEXED BY 子句，未指定时返回空字符串
    */
   protected function parseForce(): string
   {
@@ -505,9 +512,9 @@ class SqlBuilder
   }
 
   /**
-   * 解析Join语句
+   * 解析 JOIN 子句列表
    *
-   * @return string
+   * @return string 拼接后的 JOIN 子句，无 JOIN 时返回空字符串
    */
   protected function parseJoin(): string
   {
@@ -528,9 +535,9 @@ class SqlBuilder
   }
 
   /**
-   * 解析union 语句
+   * 解析 UNION 合并查询子句
    *
-   * @return string
+   * @return string 拼接后的 UNION 子句，无合并查询时返回空字符串
    */
   private function parseUnion(): string
   {
@@ -550,9 +557,9 @@ class SqlBuilder
   }
 
   /**
-   * 解析Group语句
+   * 解析 GROUP BY 子句
    *
-   * @return string
+   * @return string GROUP BY 子句，未分组时返回空字符串
    */
   protected function parseGroupBy(): string
   {
@@ -567,9 +574,9 @@ class SqlBuilder
   }
 
   /**
-   * 解析Having语句
+   * 解析 HAVING 子句
    *
-   * @return string
+   * @return string HAVING 子句，无条件时返回空字符串
    */
   protected function parseHaving(): string
   {
@@ -589,9 +596,9 @@ class SqlBuilder
   }
 
   /**
-   * 解析排序语句
+   * 解析 ORDER BY 子句，支持 Raw 原始排序表达式
    *
-   * @return string
+   * @return string ORDER BY 子句，未排序时返回空字符串
    */
   protected function parseOrderBy(): string
   {
@@ -624,9 +631,9 @@ class SqlBuilder
   }
 
   /**
-   * 共享锁
+   * 解析共享锁（LOCK IN SHARE MODE）子句
    *
-   * @return string
+   * @return string LOCK IN SHARE MODE 后缀，未启用时返回空字符串
    */
   protected function parseSharedLock(): string
   {

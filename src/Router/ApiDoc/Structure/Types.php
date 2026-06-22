@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 /**
- * 内置类型枚举
+ * 内置类型枚举，定义 API 文档中支持的数据类型
  */
 enum Types
 {

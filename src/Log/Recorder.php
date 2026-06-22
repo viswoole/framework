@@ -19,14 +19,19 @@ use Stringable;
 use Viswoole\Log\Contract\DriveInterface;
 
 /**
- * 日志记录器
+ * 协程日志记录器，在协程生命周期内缓存日志并在析构时批量写入
+ *
+ * 每个协程持有独立的 Recorder 实例，析构时将缓存的日志通过驱动批量持久化，
+ * 避免每条日志都触发 IO 操作。
+ *
+ * @see Drive 日志驱动基类
  */
 class Recorder
 {
   protected array $records = [];
 
   /**
-   * @param DriveInterface $drive
+   * @param DriveInterface $drive 关联的日志驱动，析构时调用其 save 方法
    */
   public function __construct(protected DriveInterface $drive)
   {
@@ -34,12 +39,11 @@ class Recorder
   }
 
   /**
-   * 添加日志到记录器
+   * 将一条日志追加到缓存队列
    *
-   * @param string $level 日志等级
-   * @param string|Stringable $message 日志内容
-   * @param array $context 日志上下文
-   * @return void
+   * @param string $level 日志级别
+   * @param string|Stringable $message 日志消息
+   * @param array $context 附加上下文信息
    */
   public function push(string $level, string|Stringable $message, array $context = []): void
   {
@@ -47,9 +51,9 @@ class Recorder
   }
 
   /**
-   * 获取缓存的日志数据
+   * 获取当前缓存的所有日志记录
    *
-   * @return array
+   * @return array 日志记录数组
    */
   public function get(): array
   {
@@ -57,7 +61,7 @@ class Recorder
   }
 
   /**
-   * 销毁时保存日志
+   * 析构时将缓存的日志批量写入驱动并清空缓存
    */
   public function __destruct()
   {
@@ -66,9 +70,7 @@ class Recorder
   }
 
   /**
-   * 清除缓存的日志
-   *
-   * @return void
+   * 清空已缓存的日志记录
    */
   public function clear(): void
   {

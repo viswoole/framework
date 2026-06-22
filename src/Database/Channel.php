@@ -22,16 +22,21 @@ use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\Options;
 
 /**
- * 数据库通道
+ * 数据库通道抽象基类
+ *
+ * 定义数据库通道的标准接口：查询构建、SQL执行、连接获取与归还。
+ * 具体实现（如 PDOChannel）负责连接池管理和驱动适配。
+ *
+ * @see \Viswoole\Database\Channel\PDO\PDOChannel
  */
 abstract class Channel
 {
   /**
-   * 选择要查询的表
+   * 创建指定表的查询构建器
    *
-   * @param string $table 表
-   * @param string $pk 表主键名称
-   * @return BaseQuery
+   * @param string $table 表名
+   * @param string $pk 主键字段名，默认 'id'
+   * @return BaseQuery 查询构建器实例
    */
   public function table(string $table, string $pk = 'id'): BaseQuery
   {
@@ -39,13 +44,13 @@ abstract class Channel
   }
 
   /**
-   * 执行
+   * 执行SQL语句
    *
-   * @param string|Raw $sql SQL语句,或者Raw对象
-   * @param array $bindings 参数
-   * @param false|string $getId 如果传入字符串，则返回该字段的自增ID
-   * @return mixed|PDOStatementProxy|PDOStatement 执行成功返回结果，假设是PDOChannel则返回PDOStatement|PDOStatementProxy对象
-   * @throws DbException 如果执行失败，抛出 DbException 异常
+   * @param string|Raw $sql SQL语句或 Raw 对象
+   * @param array $bindings 绑定参数
+   * @param false|string $getId 传入字段名时返回该字段的自增ID，false 时不获取
+   * @return mixed PDO 通道返回 PDOStatement 对象，其他通道返回执行结果
+   * @throws DbException SQL执行失败时抛出
    */
   abstract public function execute(
     string|Raw   $sql,
@@ -54,26 +59,25 @@ abstract class Channel
   ): mixed;
 
   /**
-   * 获取连接
+   * 从连接池获取一个可用连接
    *
-   * @param string $type 可选值`read`|`write`
-   * @return mixed
+   * @param string $type 连接类型 read|write
+   * @return mixed 数据库连接实例
    */
   abstract public function pop(string $type): mixed;
 
   /**
-   * 归还连接
+   * 归还连接到连接池，连接损坏时归还 null
    *
-   * @param mixed $connect
-   * @return void
+   * @param mixed $connect 数据库连接实例
    */
   abstract public function put(mixed $connect): void;
 
   /**
-   * 构建sql
+   * 根据查询选项构建SQL语句
    *
-   * @param Options $options
-   * @return Raw
+   * @param Options $options 查询选项
+   * @return Raw 构建后的SQL表达式
    */
   abstract public function build(Options $options): Raw;
 }

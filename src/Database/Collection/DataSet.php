@@ -21,28 +21,26 @@ use RuntimeException;
 use Viswoole\Database\Exception\DbException;
 
 /**
- * 数据行，键为字段名，值为字段值，支持快捷更新
+ * 单行数据集，键为字段名，值为字段值
  *
- * 继承ArrayObject，支持数组、属性方式的读取和写入
+ * 继承 BaseCollection，支持数组、属性方式的读写，自动追踪字段变更，
+ * 可通过 save() 方法将变更持久化到数据库。
  *
- * 实现了JsonSerializable接口，可以安全的转换为json
+ * @see BaseCollection
  */
 class DataSet extends BaseCollection
 {
   protected int $flags = ArrayObject::STD_PROP_LIST | ArrayObject::ARRAY_AS_PROPS;
-  /**
-   * @var array 修改过的字段
-   */
+  /** @var array 已修改的字段名列表，用于 save() 时增量更新 */
   protected array $change = [];
 
   /**
-   * 删除集合中的所有记录
+   * 删除当前行记录
    *
-   * @param bool $real 是否为硬删除，默认为false，仅模型查询结果支持$real参数。
-   * @return int 成功返回1，失败返回0
-   * @throws RuntimeException 如果缺少主键字段
-   * @throws DbException
-   * @throws DbException
+   * @param bool $real 是否硬删除，默认 false；仅模型查询结果支持 $real 参数
+   * @return int 成功返回 1，失败返回 0
+   * @throws RuntimeException 缺少主键字段时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   #[Override] public function delete(bool $real = false): int
   {
@@ -57,7 +55,10 @@ class DataSet extends BaseCollection
   }
 
   /**
-   * @inheritDoc
+   * 设置字段值，自动追踪变更字段
+   *
+   * @param mixed $key 字段名
+   * @param mixed $value 字段值
    */
   public function offsetSet(mixed $key, mixed $value): void
   {
@@ -68,10 +69,12 @@ class DataSet extends BaseCollection
   }
 
   /**
-   * 合并数据，相同的字段将被新数据覆盖，如果需要保存数据则接着调用一次save方法即可
+   * 合并数据到当前行，相同字段被新数据覆盖
    *
-   * @param array $data
-   * @return static
+   * 合并后需调用 save() 才能持久化到数据库。
+   *
+   * @param array $data 要合并的键值对
+   * @return static 支持链式调用
    */
   public function merge(array $data): static
   {
@@ -82,12 +85,13 @@ class DataSet extends BaseCollection
   }
 
   /**
-   * 保存数据到数据库
+   * 将变更的字段持久化到数据库
    *
-   * @return bool 保存成功返回true，失败返回false，无数据更新也会返回false
-   * @throws DbException
-   * @throws DbException
-   * @throws DbException
+   * 仅更新被修改过的字段，无变更时返回 false。
+   *
+   * @return bool 更新成功返回 true，无变更或失败返回 false
+   * @throws RuntimeException 缺少主键字段时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function save(): bool
   {
@@ -115,10 +119,10 @@ class DataSet extends BaseCollection
   }
 
   /**
-   * 获取某一列的值
+   * 获取指定列的值
    *
-   * @param string $column
-   * @return mixed
+   * @param string $column 列名
+   * @return mixed 列值
    */
   public function value(string $column): mixed
   {

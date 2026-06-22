@@ -15,6 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Exception;
 
+/**
+ * 容器解析时资源未找到的异常基类，涵盖类、方法、函数等未找到场景
+ */
 class NotFoundException extends ContainerException
 {
 

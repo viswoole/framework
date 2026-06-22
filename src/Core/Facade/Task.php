@@ -20,7 +20,7 @@ use Viswoole\Core\Facade;
 use Viswoole\Core\Server\TaskManager;
 
 /**
- * 任务管理器门面类
+ * 任务管理门面，静态代理 TaskManager 核心方法
  *
  * 注意：使用任务管理服务必须配置服务选项：
  * `Constant::OPTION_TASK_USE_OBJECT => true` 或 `Constant::OPTION_TASK_ENABLE_COROUTINE => true`
@@ -37,7 +37,7 @@ class Task extends Facade
 {
 
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
    */
   #[Override] protected static function getMappingClass(): string
   {

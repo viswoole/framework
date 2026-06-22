@@ -20,7 +20,9 @@ use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
 
 /**
- * 路由线路
+ * 路由映射注解，用于方法级别定义单条路由及其文档元数据
+ *
+ * 支持设置路径、方法、中间件、标签、状态等，创建 Route 实例时自动写入文档信息。
  */
 #[Attribute(Attribute::TARGET_METHOD)]
 class RouteMapping extends RouteAnnotation

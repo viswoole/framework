@@ -19,7 +19,7 @@ use Override;
 use Viswoole\Core\Facade;
 
 /**
- * 配置文件管理类
+ * 配置管理门面，静态代理 Config 核心方法
  *
  * @method static string formatConfigKey(string $key) 格式化key
  * @method static bool has(string $name) 检测配置是否存在
@@ -32,7 +32,7 @@ class Config extends Facade
 {
 
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
    */
   #[Override] protected static function getMappingClass(): string
   {

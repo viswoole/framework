@@ -34,8 +34,8 @@ class TypeStructure
   public readonly string $type;
 
   /**
-   * @param Types $type 基本类型
-   * @param string|null $name 类型名称
+   * @param Types $type 基本类型枚举
+   * @param string|null $name 类型显示名称，null 时使用类型枚举名
    */
   public function __construct(
     Types  $type = Types::Mixed,

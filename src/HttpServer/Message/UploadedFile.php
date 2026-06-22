@@ -20,46 +20,49 @@ use InvalidArgumentException;
 use RuntimeException;
 
 /**
- * 客户端上传的文件
+ * 客户端上传文件的价值对象
+ *
+ * 封装 Swoole 上传文件信息，提供文件流获取、文件移动、
+ * 错误码查询等能力，移动后不可再获取流。
  */
 class UploadedFile
 {
 
   /**
-   * @var string 缓存路径
+   * @var string 临时文件路径
    */
   public readonly string $tmp_path;
   /**
-   * @var FileStream 资源流
+   * @var FileStream|null 延迟初始化的文件流（首次访问时创建）
    */
   protected FileStream $stream;
   /**
-   * @var string 媒体类型
+   * @var string 客户端声明的 MIME 类型
    */
   protected string $type;
   /**
-   * @var int 文件大小
+   * @var int 文件大小（字节）
    */
   protected int $size;
   /**
-   * @var string 文件名称
+   * @var string 客户端原始文件名
    */
   protected string $name;
   /**
-   * @var int 状态码
+   * @var int 上传错误码，UPLOAD_ERR_OK 表示正常
    */
   protected int $error;
   /**
-   * @var bool 是否移动
+   * @var bool 文件是否已移动
    */
   protected bool $moved = false;
 
   /**
-   * @param string $type 媒体类型
-   * @param string $name 文件名称
-   * @param int $size 文件大小
-   * @param string $tmp_name 缓存路径
-   * @param int $error 状态码
+   * @param string $type 客户端声明的 MIME 类型
+   * @param string $name 客户端原始文件名
+   * @param int $size 文件大小（字节）
+   * @param string $tmp_name 临时文件路径
+   * @param int $error 上传错误码，UPLOAD_ERR_OK 表示正常
    */
   public function __construct(string $type, string $name, int $size, string $tmp_name, int $error)
   {
@@ -71,10 +74,11 @@ class UploadedFile
   }
 
   /**
-   * 获取文件流
+   * 获取文件流（延迟初始化）
    *
-   * @access public
-   * @return FileStream
+   * 首次调用时以二进制只读模式打开临时文件。
+   *
+   * @return FileStream 文件流实例
    */
   public function getStream(): FileStream
   {
@@ -85,11 +89,14 @@ class UploadedFile
   }
 
   /**
-   * 移动文件到指定目录
+   * 将上传文件移动到指定路径
    *
-   * @access public
-   * @param string $targetPath 目标路径需要包含文件名
-   * @return void
+   * CLI 模式使用 rename，其它模式使用 move_uploaded_file。
+   * 目标目录不存在时自动递归创建。
+   *
+   * @param string $targetPath 目标路径（含文件名）
+   * @throws InvalidArgumentException 路径为空时抛出
+   * @throws RuntimeException 目录创建失败、文件移动失败或文件已移动/上传异常时抛出
    */
   public function moveTo(string $targetPath): void
   {
@@ -122,7 +129,9 @@ class UploadedFile
   }
 
   /**
-   * @throws RuntimeException 如果被移动或不正常
+   * 校验文件是否可操作（未移动且上传正常）
+   *
+   * @throws RuntimeException 文件已移动或上传异常时抛出
    */
   private function validateActive(): void
   {
@@ -136,8 +145,9 @@ class UploadedFile
   }
 
   /**
-   * 如果没有上传错误，则返回 true
-   * @return bool
+   * 判断上传是否无错误
+   *
+   * @return bool UPLOAD_ERR_OK 时返回 true
    */
   private function isOk(): bool
   {
@@ -147,7 +157,7 @@ class UploadedFile
   /**
    * 判断文件是否已移动
    *
-   * @return bool
+   * @return bool 已移动返回 true
    */
   public function isMoved(): bool
   {
@@ -155,10 +165,9 @@ class UploadedFile
   }
 
   /**
-   * 获取错误码 0为正常
+   * 获取上传错误码
    *
-   * @access public
-   * @return int
+   * @return int 错误码，UPLOAD_ERR_OK(0) 表示正常
    */
   public function getError(): int
   {
@@ -168,8 +177,7 @@ class UploadedFile
   /**
    * 获取文件大小
    *
-   * @access public
-   * @return int|null
+   * @return int|null 文件字节数
    */
   public function getSize(): ?int
   {
@@ -177,10 +185,9 @@ class UploadedFile
   }
 
   /**
-   * 获取文件名
+   * 获取客户端原始文件名
    *
-   * @access public
-   * @return string|null
+   * @return string|null 文件名
    */
   public function getClientFilename(): ?string
   {
@@ -188,10 +195,9 @@ class UploadedFile
   }
 
   /**
-   * 获取媒体类型
+   * 获取客户端声明的 MIME 类型
    *
-   * @access public
-   * @return string|null
+   * @return string|null MIME 类型
    */
   public function getClientMediaType(): ?string
   {

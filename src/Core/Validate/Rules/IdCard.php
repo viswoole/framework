@@ -20,9 +20,7 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 身份证验证器
- * 修复: 原实现仅用正则验证格式，缺少第18位校验码验证算法。
- * 现改为继承 BaseValidateRule，在正则通过后增加校验位验证。
+ * 身份证号验证规则，支持 15 位和 18 位格式，18 位含校验位算法验证
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class IdCard extends BaseValidateRule
@@ -56,7 +54,7 @@ class IdCard extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验身份证号格式与校验位
    */
   #[Override] public function validate(mixed $value): mixed
   {

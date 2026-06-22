@@ -19,7 +19,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * 路由不存在异常
+ * 路由未找到异常，请求路径无匹配路由且无 miss 兜底时抛出
  */
 class RouteNotFoundException extends RuntimeException
 {

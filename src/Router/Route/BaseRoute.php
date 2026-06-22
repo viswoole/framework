@@ -22,7 +22,13 @@ use Viswoole\Core\Middleware;
 use Viswoole\Router\RouterTool;
 
 /**
- * 路由基类
+ * 路由基类，封装路径、方法、中间件、域名、后缀等通用配置
+ *
+ * 所有路由项（Route）和路由组（Group）共享此基类，
+ * 支持从父级路由继承配置，并通过引用链路建立层级关系。
+ *
+ * @see Route 路由项
+ * @see Group 路由组
  */
 abstract class BaseRoute
 {
@@ -113,9 +119,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 获取完整的引用链路
+   * 获取从根到当前路由的完整引用链路（以点号分隔的 ID 路径）
    *
-   * @return string|null
+   * @return string|null 引用链路，无父级时等于自身 ID
    */
   public function getCiteLink(): ?string
   {
@@ -137,9 +143,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 设置父级路由ID
+   * 设置父级路由 ID
    *
-   * @param ?string $parentId
+   * @param string|null $parentId 父级路由 ID
    * @return $this
    */
   public function setParentId(?string $parentId): static
@@ -149,10 +155,12 @@ abstract class BaseRoute
   }
 
   /**
-   * 路由path
+   * 解析并规范化路径列表，提取动态变量正则约束
    *
-   * @param string|array $paths
-   * @return array{paths:array,pattern:array}
+   * 处理路径前缀补全、大小写转换、与父级路径合并，并从路径中提取动态变量约束。
+   *
+   * @param string|array $paths 原始路径
+   * @return array{paths:array,pattern:array} [0=>规范化后的路径列表, 1=>变量名到正则的映射]
    */
   private function handelPaths(string|array $paths): array
   {
@@ -227,9 +235,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 获取handler
+   * 获取路由处理函数
    *
-   * @return callable|array
+   * @return callable|array 处理函数
    */
   public function getHandler(): callable|array
   {
@@ -237,9 +245,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 获取访问路径
+   * 获取访问路径列表
    *
-   * @return array 访问路径
+   * @return array 路径列表
    */
   public function getPaths(): array
   {
@@ -292,10 +300,11 @@ abstract class BaseRoute
   }
 
   /**
-   * 设置中间件列表
+   * 追加中间件到列表，校验每个中间件的有效性
    *
-   * @param array<callable|string|array> $middlewares
+   * @param array<callable|string|array> $middlewares 中间件列表
    * @return $this
+   * @throws InvalidArgumentException 中间件格式无效时抛出
    */
   public function setMiddlewares(array $middlewares): static
   {
@@ -313,9 +322,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 获取动态路径变量正则表达式
+   * 获取动态路径变量的正则约束映射
    *
-   * @return array 动态路径变量正则表达式
+   * @return array 变量名到正则的映射
    */
   public function getPatterns(): array
   {
@@ -323,10 +332,11 @@ abstract class BaseRoute
   }
 
   /**
-   * 设置动态路径变量正则表达式
+   * 追加动态路径变量的正则约束，校验每个正则的有效性
    *
-   * @param array $patterns
+   * @param array<string,string> $patterns 变量名到正则的映射
    * @return $this
+   * @throws InvalidArgumentException 正则为空或语法错误时抛出
    */
   public function setPatterns(array $patterns): static
   {
@@ -369,9 +379,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 获取后缀校验
+   * 获取允许的伪静态后缀列表
    *
-   * @return array 后缀校验
+   * @return array 后缀列表
    */
   public function getSuffix(): array
   {
@@ -401,9 +411,9 @@ abstract class BaseRoute
   }
 
   /**
-   * 设置域名校验
+   * 设置允许的域名列表
    *
-   * @param string ...$domain
+   * @param string ...$domain 域名
    * @return $this
    */
   public function setDomain(string ...$domain): static

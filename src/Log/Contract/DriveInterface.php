@@ -18,39 +18,40 @@ namespace Viswoole\Log\Contract;
 use Stringable;
 
 /**
- * 日志驱动接口
+ * 日志驱动接口，定义日志的缓存、读取与持久化契约
+ *
+ * 继承 CollectorInterface 以获得各级别快捷方法，额外定义记录缓存管理
+ * 和持久化写入能力，供 Drive 抽象类实现。
+ *
+ * @see CollectorInterface 收集器接口
  */
 interface DriveInterface extends CollectorInterface
 {
   /**
-   * 清除日志
-   *
-   * @return void
+   * 清空当前协程缓存的日志记录
    */
   public function clearRecord(): void;
 
   /**
-   * 获取缓存日志
+   * 获取当前协程缓存的日志记录
    *
-   * @return array
+   * @return array 缓存的日志记录列表
    */
   public function getRecord(): array;
 
   /**
-   * 保存日志(协程结束，日志记录器销毁时会自动调用该方法存储日志)
+   * 批量持久化日志记录（协程结束时由 Recorder 自动调用）
    *
-   * @param array<int,array{timestamp:int,level:string,message:string,context:array,source:string}> $logRecords 需要写入日志的记录
-   * @return void
+   * @param array<int,array{timestamp:int,level:string,message:string,context:array,source:string}> $logRecords 待持久化的日志记录列表
    */
   public function save(array $logRecords): void;
 
   /**
-   * 记录日志缓存
+   * 缓存一条日志记录，协程环境下延迟到协程结束时批量写入
    *
-   * @param string $level 日志等级
+   * @param string $level 日志级别
    * @param Stringable|string $message 日志消息
-   * @param array $context 日志附加信息
-   * @return void
+   * @param array $context 附加上下文信息
    */
   public function record(
     string            $level,
@@ -59,12 +60,11 @@ interface DriveInterface extends CollectorInterface
   ): void;
 
   /**
-   * 实时写入日志
+   * 绕过缓存立即写入一条日志
    *
-   * @param string $level 日志等级
+   * @param string $level 日志级别
    * @param Stringable|string $message 日志消息
-   * @param array $context 日志附加信息
-   * @return void
+   * @param array $context 附加上下文信息
    */
   public function write(
     string            $level,

@@ -20,16 +20,20 @@ use Exception;
 use Override;
 
 /**
- * Env管理类
+ * 环境变量管理器
+ *
+ * 加载 .env 文件并提供对环境变量的统一读写访问，
+ * 自动将字符串 'true'/'false'/'on'/'off' 转换为布尔值，
+ * 优先读取 .env 文件定义，回退到系统环境变量（getenv）。
  */
 class Env implements ArrayAccess
 {
   /**
-   * @var array 环境变量数据
+   * @var array 已加载的环境变量数据，键名统一大写
    */
   protected array $data = [];
   /**
-   * @var array 数据转换映射
+   * @var array 字符串到布尔值的自动转换映射
    */
   protected array $convert = [
     'true' => true,
@@ -39,7 +43,7 @@ class Env implements ArrayAccess
   ];
 
   /**
-   * 构造函数
+   * 初始化时加载 $_ENV 和 .env 文件
    */
   public function __construct()
   {
@@ -48,10 +52,9 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 读取环境变量定义文件
-   * @access public
-   * @param string $file 环境变量定义文件
-   * @return void
+   * 解析 .env 文件（INI 格式）并合并到环境变量数据中
+   *
+   * @param string $file .env 文件路径
    */
   protected function load(string $file): void
   {
@@ -64,11 +67,12 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 设置环境变量值
-   * @access public
-   * @param array|string $env 环境变量 默认为根目录.env文件
-   * @param mixed|null $value 值
-   * @return void
+   * 设置环境变量值，支持批量设置和单条设置
+   *
+   * 批量设置时键名自动转大写，INI 分节键以 下划线 连接（如 SECTION_KEY）
+   *
+   * @param array|string $env 键值对数组或变量名
+   * @param mixed|null $value 变量值（仅单条设置时使用）
    */
   public function set(array|string $env, mixed $value = null): void
   {
@@ -100,10 +104,10 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 检测是否存在环境变量
-   * @access public
-   * @param string $name 参数名
-   * @return bool
+   * 检测环境变量是否存在（值为 null 视为不存在）
+   *
+   * @param string $name 变量名
+   * @return bool 存在且非 null 返回 true
    */
   public function __isset(string $name): bool
   {
@@ -111,11 +115,10 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 检测是否存在环境变量
+   * 检测环境变量是否存在
    *
-   * @access public
-   * @param string $name 参数名
-   * @return bool
+   * @param string $name 变量名
+   * @return bool 存在且非 null 返回 true
    */
   public function has(string $name): bool
   {
@@ -123,12 +126,11 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 获取环境变量值(可获取用户环境变量和系统环境变量)
+   * 获取环境变量值，优先从 .env 数据取，未命中则回退到系统环境变量
    *
-   * @access public
-   * @param string|null $name 环境变量名
+   * @param string|null $name 变量名，为 null 时返回全部数据
    * @param mixed|null $default 默认值
-   * @return mixed
+   * @return mixed 变量值、默认值或全部数据
    */
   public function get(string $name = null, mixed $default = null): mixed
   {
@@ -146,11 +148,11 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 获取环境变量(仅能获取系统缓存变量)
+   * 通过 getenv() 获取系统级环境变量，命中后缓存到 $data 避免重复调用
    *
-   * @param string $name
-   * @param $default
-   * @return mixed
+   * @param string $name 变量名（大写）
+   * @param mixed $default 默认值
+   * @return mixed 系统环境变量值或默认值
    */
   public function getEnv(string $name, $default = null): mixed
   {
@@ -185,7 +187,7 @@ class Env implements ArrayAccess
   }
 
   /**
-   * @throws Exception 未实现该方法
+   * @throws Exception 环境变量不支持 unset 操作
    */
   #[Override] public function offsetUnset(mixed $offset): void
   {

@@ -22,14 +22,14 @@ use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
 /**
- * 跨域中间件
+ * 跨域请求中间件，自动处理 OPTIONS 预检请求并添加 CORS 响应头
  */
 class AllowCrossDomain implements MiddlewareInterface
 {
 
   /**
-   * @param RequestInterface $request
-   * @param ResponseInterface $response
+   * @param RequestInterface $request HTTP 请求实例
+   * @param ResponseInterface $response HTTP 响应实例
    */
   public function __construct(
     protected RequestInterface  $request,
@@ -39,10 +39,10 @@ class AllowCrossDomain implements MiddlewareInterface
   }
 
   /**
-   * 中间件处理方法
+   * 处理跨域请求：OPTIONS 预检请求直接返回 CORS 头，其他请求放行至下一中间件
    *
-   * @param Closure $handler 下一个处理程序
-   * @return mixed
+   * @param Closure $handler 下一个中间件的处理闭包
+   * @return mixed OPTIONS 请求返回响应对象，其他请求返回后续处理结果
    */
   #[Override] public function process(Closure $handler): mixed
   {

@@ -27,29 +27,32 @@ use function Swoole\Coroutine\run;
 /**
  * 连接池通道管理基类
  *
- * @method mixed get(float $timeout = -1) 从连接池中获取一个连接
- * @method void put(mixed $connection) 归还一个连接到连接池中（必须实现）
- * @method bool isEmpty() 判断连接池中连接是否已经被取完或者为空
- * @method bool close() 关闭连接池
- * @method bool isFull() 判断当前连接池是否已满
- * @method void fill(int $size = null) 填充连接
- * @method int length() 获取连接池中当前剩余连接数量
- * @method array stats() 获取连接池统计信息
+ * 管理多个命名的连接池实例，支持默认通道切换和代理调用。
+ * 通道名称统一转为蛇形命名存储。
+ *
+ * @method mixed get(float $timeout = -1) 从默认连接池中获取一个连接
+ * @method void put(mixed $connection) 归还一个连接到默认连接池
+ * @method bool isEmpty() 判断默认连接池是否为空
+ * @method bool close() 关闭默认连接池
+ * @method bool isFull() 判断默认连接池是否已满
+ * @method void fill(int $size = null) 填充默认连接池
+ * @method int length() 获取默认连接池中当前连接数量
+ * @method array stats() 获取默认连接池统计信息
  */
 abstract class ChannelManager implements ChannelManagerInterface
 {
   /**
-   * @var array{string:ConnectionPoolInterface}
+   * @var array<string,ConnectionPoolInterface> 已注册的连接池实例，键为蛇形命名的通道名
    */
   protected array $channels = [];
   /**
-   * @var string 默认连接池
+   * @var string 默认连接池名称
    */
   protected string $defaultChannel;
 
   /**
-   * @param array $channels 通道名称
-   * @param string $defaultChannel
+   * @param array $channels 通道配置，键为通道名，值为连接池配置
+   * @param string $defaultChannel 默认通道名称
    */
   public function __construct(
     array  $channels,
@@ -73,10 +76,10 @@ abstract class ChannelManager implements ChannelManagerInterface
   }
 
   /**
-   * 创建连接池
+   * 根据配置创建连接池实例，子类必须实现
    *
-   * @param mixed $config 配置
-   * @return ConnectionPoolInterface
+   * @param mixed $config 连接池配置
+   * @return ConnectionPoolInterface 创建的连接池实例
    */
   abstract protected function createPool(mixed $config): ConnectionPoolInterface;
 

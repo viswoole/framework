@@ -22,13 +22,16 @@ use Throwable;
 use Viswoole\Core\Channel\ConnectionPool;
 
 /**
- * PDO连接池
+ * PDO 连接池
+ *
+ * 基于 Swoole 协程连接池管理 PDO 连接的生命周期，
+ * 支持连接健康检测与自动重建。
  */
 class PDOPool extends ConnectionPool
 {
 
   /**
-   * @param PDOConfig $PDOConfig
+   * @param PDOConfig $PDOConfig 连接配置，同时包含池容量参数
    */
   public function __construct(protected PDOConfig $PDOConfig)
   {
@@ -36,9 +39,9 @@ class PDOPool extends ConnectionPool
   }
 
   /**
-   * 获取配置
+   * 获取当前连接配置
    *
-   * @return PDOConfig
+   * @return PDOConfig 连接配置实例
    */
   #[Override] public function getConfig(): PDOConfig
   {
@@ -68,10 +71,10 @@ class PDOPool extends ConnectionPool
   }
 
   /**
-   * 创建连接
+   * 创建新的 PDO 代理连接
    *
-   * @return PDOProxy
-   * @throws Exception
+   * @return PDOProxy 新建的 PDO 代理连接
+   * @throws Exception 驱动不支持时抛出
    */
   #[Override] protected function createConnection(): PDOProxy
   {
@@ -133,10 +136,10 @@ class PDOPool extends ConnectionPool
   }
 
   /**
-   * 检测连接是否可用
+   * 通过执行 SELECT 1 检测连接是否仍然可用
    *
-   * @param PDO|PDOProxy $connection
-   * @return bool
+   * @param PDO|PDOProxy $connection 待检测的连接
+   * @return bool 连接可用返回 true
    */
   #[Override] protected function connectionDetection(mixed $connection): bool
   {

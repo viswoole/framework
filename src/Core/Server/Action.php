@@ -22,18 +22,20 @@ use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Server;
 
 /**
- * Swoole服务操作类
+ * Swoole 服务器操作类
+ *
+ * 提供服务的启动、停止、重启和状态查询等命令行操作，
+ * 通过 PID 文件跟踪服务进程状态，支持强制关闭和安全停止。
  */
 class Action
 {
   /**
-   * 启动服务
+   * 启动服务，支持强制重启和进程守护模式
    *
    * @param string $server_name 服务名称
-   * @param bool $forceStart 强制启动，自动关闭正在运行的进程
-   * @param bool $daemonize 进程守护后台运行
-   * @return void
-   * @throws ServerException
+   * @param bool $forceStart 是否强制启动（自动关闭已有进程）
+   * @param bool $daemonize 是否以守护进程方式运行
+   * @throws ServerException 服务已在运行或强制关闭失败时抛出
    */
   public static function start(
     string $server_name,
@@ -73,11 +75,10 @@ class Action
   }
 
   /**
-   * 获取服务进程PID
+   * 获取服务进程 PID，通过读取 PID 文件并验证进程是否存活
    *
-   * @access public
    * @param string $server_name 服务名称
-   * @return false|int 如果未运行返回false
+   * @return false|int 进程 PID，服务未运行返回 false
    */
   public static function getServerPid(string $server_name): false|int
   {
@@ -101,10 +102,10 @@ class Action
   }
 
   /**
-   * 获取PID存储目录
+   * 获取 PID 文件存储目录，优先使用服务配置中的路径
    *
-   * @param string|null $server_name
-   * @return string
+   * @param string|null $server_name 服务名称，为 null 时使用默认目录
+   * @return string PID 目录绝对路径
    */
   public static function getPidStore(?string $server_name): string
   {
@@ -115,10 +116,10 @@ class Action
   }
 
   /**
-   * 判断pid是否正在运行
+   * 判断指定 PID 对应的进程是否正在运行
    *
-   * @param int|false|string $pid
-   * @return bool
+   * @param int|false|string $pid 进程ID
+   * @return bool 进程存活返回 true
    */
   private static function checkPidStatus(int|false|string $pid): bool
   {
@@ -131,11 +132,10 @@ class Action
   }
 
   /**
-   * 获取服务状态
+   * 获取服务运行状态
    *
-   * @access public
    * @param string $server_name 服务名称
-   * @return bool
+   * @return bool 服务正在运行返回 true
    */
   public static function getStatus(string $server_name): bool
   {
@@ -143,12 +143,12 @@ class Action
   }
 
   /**
-   * 安全停止服务
+   * 安全停止服务，发送 SIGINT 信号以触发 ServerShutdownBefore 事件清理资源
    *
-   * @access public
-   * @param string|null $server_name
-   * @return void
-   * @throws ServerException
+   * 不指定服务名时尝试关闭所有服务
+   *
+   * @param string|null $server_name 服务名称，为 null 时关闭所有服务
+   * @throws ServerException 发送信号失败时抛出
    */
   public static function close(string $server_name = null): void
   {
@@ -193,13 +193,11 @@ class Action
   }
 
   /**
-   * 重启服务
+   * 重启服务 Worker 进程，SIGUSR1 重启所有 Worker，SIGUSR2 仅重启 Task Worker
    *
-   * @access public
-   * @param string $server_name
-   * @param bool $only_reload_task_worker 是否只重启任务进程
-   * @return void
-   * @throws ServerException
+   * @param string $server_name 服务名称
+   * @param bool $only_reload_task_worker 是否仅重启 Task Worker 进程
+   * @throws ServerException 发送信号失败时抛出
    */
   public static function reload(string $server_name, bool $only_reload_task_worker = false): void
   {

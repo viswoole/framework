@@ -24,44 +24,45 @@ use Viswoole\Core\Console\Output;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
 /**
- * HTTP响应对象
+ * Swoole HTTP 响应的代理封装
  *
- * 该类封装了Swoole\Http\Response类，并提供了一些额外的方法。
+ * 对 Swoole\Http\Response 进行面向对象封装，提供状态码设置、标头操作、
+ * 内容写入、Cookie 管理、文件发送等能力，并支持链式调用。
+ *
+ * @see ResponseInterface
  * @link https://wiki.swoole.com/#/http_server?id=swoolehttpresponse
  */
 class Response implements ResponseInterface
 {
   /**
-   * @var int 响应状态码
-   * @internal 仅用于构造时初始化 swooleResponse，后续不同步
+   * @var int 响应状态码，仅构造时同步到 swooleResponse，后续不同步
    */
   protected int $statusCode = Status::OK;
   /**
-   * @var string 状态描述
+   * @var string 状态描述短语
    */
   protected string $reasonPhrase = Status::REASON_PHRASES[Status::OK];
   /**
-   * @var array 默认响应标头
-   * @internal 仅用于构造时初始化 swooleResponse，后续不同步
+   * @var array 默认响应标头，仅构造时同步到 swooleResponse，后续不同步
    */
   protected array $headers = [
     'Content-Type' => 'text/html; charset=utf-8'
   ];
   /**
-   * @var string 响应内容
+   * @var string 待发送的响应内容
    */
   protected string $content = '';
   /**
-   * @var int json_encode flags 参数
+   * @var int json_encode 的 flags 参数，默认不转义 Unicode 和斜杠
    */
   protected int $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
   /**
-   * @var bool 是否把消息输出到控制台，仅建议在调试阶段使用
+   * @var bool 是否将响应内容输出到控制台（仅调试阶段使用）
    */
   protected bool $echoToConsole = false;
 
   /**
-   * @param swooleResponse $swooleResponse swoole响应对象
+   * @param swooleResponse $swooleResponse Swoole 原始响应对象，由框架在 onRequest 回调中注入
    */
   public function __construct(public readonly swooleResponse $swooleResponse)
   {
@@ -72,7 +73,12 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 设置 HTTP 响应状态码及描述短语
+   *
+   * @param int $http_status_code 状态码，有效范围 100-599
+   * @param string $reasonPhrase 状态描述，为空时自动从 Status 常量获取
+   * @return ResponseInterface 支持链式调用
+   * @throws InvalidArgumentException 状态码不在 100-599 范围时抛出
    */
   #[Override] public function status(
     int    $http_status_code,
@@ -93,7 +99,13 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 设置响应标头
+   *
+   * @param string $key 标头名称
+   * @param string $value 标头值
+   * @param bool $format 是否按 HTTP 约定格式化键名
+   * @return ResponseInterface 支持链式调用
+   * @throws InvalidArgumentException 响应对象已结束或已分离时抛出
    */
   #[Override] public function header(
     string $key,
@@ -109,7 +121,12 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 工厂方法：创建新的响应对象
+   *
+   * @param object|array|int $server Swoole\Server 对象、[Server, Request] 数组或文件描述符
+   * @param int $fd 文件描述符，$server 为 Swoole\Server 时必填
+   * @return ResponseInterface 新创建的响应实例
+   * @throws RuntimeException 创建失败时抛出
    */
   #[Override] public static function create(
     object|array|int $server = -1,
@@ -122,9 +139,12 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * 代理调用 Swoole\Http\Response 的方法
+   *
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed 方法返回值
+   * @throws BadMethodCallException 方法在 Swoole\Http\Response 中不存在时抛出
    */
   public function __call(string $name, array $arguments)
   {
@@ -136,10 +156,11 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 用于 获取 Swoole\Http\Response 对象的属性
+   * 代理获取 Swoole\Http\Response 的属性
    *
-   * @param string $name
-   * @return mixed
+   * @param string $name 属性名
+   * @return mixed 属性值
+   * @throws InvalidArgumentException 属性在 Swoole\Http\Response 中不存在时抛出
    */
   public function __get(string $name)
   {
@@ -151,11 +172,11 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 用于 设置 Swoole\Http\Response 对象的属性
+   * 代理设置 Swoole\Http\Response 的属性
    *
-   * @param string $name
-   * @param $value
-   * @return void
+   * @param string $name 属性名
+   * @param mixed $value 属性值
+   * @throws InvalidArgumentException 属性在 Swoole\Http\Response 中不存在时抛出
    */
   public function __set(string $name, $value): void
   {
@@ -169,9 +190,10 @@ class Response implements ResponseInterface
   /**
    * 批量设置响应标头
    *
-   * @access public
-   * @param array $headers
-   * @return ResponseInterface
+   * 数组值为数组时会用逗号拼接为字符串。
+   *
+   * @param array<string, string|string[]> $headers 标头键值对
+   * @return ResponseInterface 支持链式调用
    */
   #[Override] public function setHeaders(array $headers): ResponseInterface
   {
@@ -185,9 +207,8 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 发送HTTP状态
+   * 设置状态码（status 方法的别名）
    *
-   * @access public
    * @see status
    */
   public function setStatusCode(
@@ -199,9 +220,8 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 发送响应
+   * 发送响应（end 方法的别名）
    *
-   * @access public
    * @see end
    */
   public function send(?string $content = null): bool
@@ -210,7 +230,13 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 结束响应并发送内容
+   *
+   * 若已开启 echoToConsole，会同时将响应内容和耗时输出到控制台。
+   * 响应对象不可写时直接返回 false。
+   *
+   * @param string|null $content 响应内容，为 null 时使用已设置的 content
+   * @return bool 发送成功返回 true，响应已结束或不可写返回 false
    */
   #[Override] public function end(?string $content = null): bool
   {
@@ -233,7 +259,9 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 判断响应是否仍可写入（未结束且未分离）
+   *
+   * @return bool true 表示可写入，false 表示已结束或已分离
    */
   #[Override] public function isWritable(): bool
   {
@@ -241,9 +269,8 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 设置响应头
+   * 设置响应标头（header 方法的别名）
    *
-   * @inheritDoc
    * @see header
    */
   public function setHeader(string $key, string $value, bool $format = true): ResponseInterface
@@ -252,7 +279,11 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 在 HTTP 响应末尾追加 Trailer 标头（仅 HTTP2 有效）
+   *
+   * @param string $key 标头键名
+   * @param string $value 标头值
+   * @return bool 设置成功返回 true
    */
   #[Override] public function trailer(string $key, string $value): bool
   {
@@ -260,7 +291,11 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 发送 HTTP 重定向响应
+   *
+   * @param string $uri 目标 URI
+   * @param int $http_code 重定向状态码，默认 302
+   * @return bool 重定向成功返回 true
    */
   #[Override] public function redirect(string $uri, int $http_code = 302): bool
   {
@@ -268,7 +303,11 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 分段写入响应数据（HTTP Chunk 模式）
+   *
+   * @param string $data 数据内容，最大长度受 buffer_output_size 配置控制
+   * @return ResponseInterface 支持链式调用
+   * @throws RuntimeException 写入失败（连接上下文已不存在）时抛出
    */
   #[Override] public function write(string $data): ResponseInterface
   {
@@ -278,7 +317,13 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 将数据编码为 JSON 并设置为响应内容
+   *
+   * 先编码再设置 Content-Type，避免编码失败但已修改了标头。
+   *
+   * @param mixed $data 任意可序列化为 JSON 的数据
+   * @return ResponseInterface 支持链式调用
+   * @throws RuntimeException JSON 编码失败时抛出
    */
   #[Override] public function json(mixed $data): ResponseInterface
   {
@@ -293,7 +338,11 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 快捷设置 Content-Type 响应标头
+   *
+   * @param string $contentType MIME 类型，如 application/json
+   * @param string $charset 字符编码，默认 utf-8
+   * @return ResponseInterface 支持链式调用
    */
   #[Override] public function setContentType(
     string $contentType,
@@ -305,7 +354,10 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 设置待发送的响应内容
+   *
+   * @param string $content 响应正文
+   * @return ResponseInterface 支持链式调用
    */
   #[Override] public function setContent(string $content): ResponseInterface
   {
@@ -314,9 +366,9 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 获取Swoole\Http\Response响应对象
+   * 获取底层的 Swoole\Http\Response 对象
    *
-   * @return swooleResponse
+   * @return swooleResponse Swoole 原始响应对象
    */
   #[Override] public function getSwooleResponse(): swooleResponse
   {
@@ -324,7 +376,10 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 设置 HTML 响应内容
+   *
+   * @param string $html HTML 内容
+   * @return ResponseInterface 支持链式调用
    */
   #[Override] public function html(string $html): ResponseInterface
   {
@@ -334,7 +389,16 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 发送本地文件作为响应体
+   *
+   * 未指定 MIME 类型时通过 finfo 自动检测，检测失败回退为 application/octet-stream。
+   *
+   * @param string $filePath 文件绝对路径
+   * @param int $offset 发送起始偏移量
+   * @param int $length 发送字节数，0 表示全部
+   * @param string|null $fileMimeType 强制指定的 MIME 类型
+   * @return bool 发送成功返回 true
+   * @throws InvalidArgumentException 文件不存在时抛出
    */
   #[Override] public function sendfile(
     string  $filePath,
@@ -366,7 +430,9 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 获取所有已设置的响应标头
+   *
+   * @return array<string, string> 标头键值对
    */
   #[Override] public function getHeader(): array
   {
@@ -375,7 +441,10 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 控制是否将响应内容输出到控制台（调试用）
+   *
+   * @param bool $echo true 开启控制台输出
+   * @return ResponseInterface 支持链式调用
    */
   #[Override] public function echo(bool $echo = true): ResponseInterface
   {
@@ -384,7 +453,20 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 设置不编码的原始 Cookie（值不经过 urlencode 处理）
+   *
+   * @param string $key Cookie 名称
+   * @param string $value Cookie 值
+   * @param int $expire 过期时间戳
+   * @param string $path 存储路径
+   * @param string $domain 域名
+   * @param bool $secure 是否仅 HTTPS 传输
+   * @param bool $httponly 是否禁止 JS 访问
+   * @param string $samesite SameSite 策略
+   * @param string $priority Cookie 优先级
+   * @return ResponseInterface 支持链式调用
+   * @throws RuntimeException 设置失败时抛出
+   * @see cookie
    */
   #[Override] public function rawCookie(
     string $key,
@@ -407,7 +489,19 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 设置 Cookie（值会经过 urlencode 编码）
+   *
+   * @param string $key Cookie 名称
+   * @param string $value Cookie 值
+   * @param int $expire 过期时间戳
+   * @param string $path 存储路径
+   * @param string $domain 域名
+   * @param bool $secure 是否仅 HTTPS 传输
+   * @param bool $httponly 是否禁止 JS 访问
+   * @param string $samesite SameSite 策略
+   * @param string $priority Cookie 优先级
+   * @return ResponseInterface 支持链式调用
+   * @throws RuntimeException 设置失败时抛出
    */
   #[Override] public function cookie(
     string $key,
@@ -429,7 +523,12 @@ class Response implements ResponseInterface
   }
 
   /**
-   * @inheritDoc
+   * 分离响应对象，使其销毁时不再自动 end
+   *
+   * 与 create 和 Server::send 配合使用，实现异步推送。
+   *
+   * @return ResponseInterface 支持链式调用
+   * @throws RuntimeException 分离失败（连接上下文已不存在）时抛出
    */
   #[Override] public function detach(): ResponseInterface
   {

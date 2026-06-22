@@ -21,14 +21,14 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 验证日期格式
+ * 日期格式验证规则，校验日期字符串是否符合指定的格式
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class DateFormat extends BaseValidateRule
 {
   /**
-   * @param string $format 日期格式(可选值参考date())
-   * @param string $message
+   * @param string $format 期望的日期格式，参考 date() 函数格式说明
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public string $format,
@@ -39,7 +39,7 @@ class DateFormat extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验日期字符串是否严格匹配指定格式
    */
   #[Override] public function validate(mixed $value): mixed
   {

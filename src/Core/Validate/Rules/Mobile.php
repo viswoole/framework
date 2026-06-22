@@ -18,7 +18,7 @@ namespace Viswoole\Core\Validate\Rules;
 use Attribute;
 
 /**
- * 手机号验证
+ * 手机号验证规则，校验中国大陆手机号格式（1开头，第二位3-9，共11位）
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Mobile extends Regex

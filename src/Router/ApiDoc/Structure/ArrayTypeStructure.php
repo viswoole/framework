@@ -16,14 +16,12 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 /**
- * 数组结构描述
+ * 数组类型结构，描述数组元素的类型组成
  */
 class ArrayTypeStructure extends TypeStructure
 {
   /**
-   * 构建数组结构
-   *
-   * @param TypeStructure ...$items 数组元素结构
+   * @param TypeStructure ...$items 数组元素类型结构列表
    */
   public function __construct(TypeStructure ...$items)
   {
@@ -45,9 +43,7 @@ class ArrayTypeStructure extends TypeStructure
   }
 
   /**
-   * 打包名称
-   *
-   * @return void
+   * 根据元素类型列表重建显示名称，格式：Array<type1 | type2>
    */
   private function buildName(): void
   {

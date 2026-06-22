@@ -20,7 +20,7 @@ use Viswoole\Core\Service\Provider;
 use Viswoole\Router\Commands\ClearCache;
 
 /**
- * 路由服务注册
+ * 路由服务提供者，负责将 Router 注册到容器并在服务器启动前初始化路由
  */
 class RouterService extends Provider
 {

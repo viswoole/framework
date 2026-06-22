@@ -18,22 +18,25 @@ namespace Viswoole\Core\Console;
 use Exception;
 
 /**
- * 输出工具类，使用该类可轻松打印各种颜色的消息到控制台。
+ * 控制台输出工具，提供带颜色标签的格式化消息输出与变量打印能力
  *
- * @method static void success(string $message, int $backtrace = 1) 绿色
- * @method static void warning(string $message, int $backtrace = 1) 黄色
- * @method static void info(string $message, int $backtrace = 1) 默认颜色
- * @method static void error(string $message, int $backtrace = 1) 红色
- * @method static void emergency(string $message, int $backtrace = 1) 红色
- * @method static void alert(string $message, int $backtrace = 1) 红色
- * @method static void critical(string $message, int $backtrace = 1) 红色
- * @method static void notice(string $message, int $backtrace = 1) 蓝色
- * @method static void debug(string $message, int $backtrace = 1) 灰色
+ * 通过静态方法按日志级别输出彩色消息，支持自定义标签与颜色；
+ * 也支持通过 __callStatic 以日志级别名作为方法名直接调用。
+ *
+ * @method static void success(string $message, int $backtrace = 1) 输出成功级别消息（绿色）
+ * @method static void warning(string $message, int $backtrace = 1) 输出警告级别消息（黄色）
+ * @method static void info(string $message, int $backtrace = 1) 输出信息级别消息（默认颜色）
+ * @method static void error(string $message, int $backtrace = 1) 输出错误级别消息（红色）
+ * @method static void emergency(string $message, int $backtrace = 1) 输出紧急级别消息（红色）
+ * @method static void alert(string $message, int $backtrace = 1) 输出警戒级别消息（红色）
+ * @method static void critical(string $message, int $backtrace = 1) 输出严重级别消息（红色）
+ * @method static void notice(string $message, int $backtrace = 1) 输出通知级别消息（蓝色）
+ * @method static void debug(string $message, int $backtrace = 1) 输出调试级别消息（灰色）
  */
 class Output
 {
   /**
-   * Console Color 控制台颜色
+   * ANSI 控制台颜色转义序列映射
    */
   public const array COLORS = [
     'DEFAULT' => "\033[0m",    // 默认颜色
@@ -47,7 +50,7 @@ class Output
     'WHITE' => "\033[1;37m",   // 白色（加粗）
   ];
   /**
-   * 标签颜色映射
+   * 日志级别到颜色转义序列的映射
    */
   public const array LABEL_COLOR = [
     'EMERGENCY' => self::COLORS['RED'],
@@ -62,12 +65,11 @@ class Output
   ];
 
   /**
-   * 系统输出的日志
+   * 输出 SYSTEM 级别的格式化消息
    *
-   * @param string $message
-   * @param string $color
-   * @param int $backtrace
-   * @return void
+   * @param string $message 输出的消息内容
+   * @param string $color 颜色名称或 ANSI 转义序列，默认 'SUCCESS'
+   * @param int $backtrace 调用栈回溯层级，0 不输出调用源，1 输出直接调用源
    */
   public static function system(
     string $message,
@@ -79,13 +81,12 @@ class Output
   }
 
   /**
-   * 输出一条文本信息
+   * 输出带时间戳和标签的格式化消息到控制台
    *
-   * @param string|int $message 要输出的内容
-   * @param string $label 标签
-   * @param string|null $color 转义颜色,如果标签未映射颜色，且传入null，则使用默认颜色
-   * @param int $backtrace 1为输出调用源，0为不输出
-   * @return void
+   * @param string|int $message 输出的消息内容
+   * @param string $label 日志级别标签，默认 'INFO'
+   * @param string|null $color 颜色名称或 ANSI 转义序列；为 null 时按标签自动映射
+   * @param int $backtrace 调用栈回溯层级，0 不输出调用源，1 输出直接调用源
    */
   public static function echo(
     string|int $message,
@@ -122,10 +123,10 @@ class Output
   }
 
   /**
-   * 获取来源
+   * 获取调用源的文件路径与行号
    *
-   * @param int $backtrace
-   * @return string
+   * @param int $backtrace 回溯层级，1 为直接调用源
+   * @return string 格式为 "in /path/to/file:line"
    */
   private static function getTrace(int $backtrace): string
   {
@@ -137,14 +138,12 @@ class Output
   }
 
   /**
-   * 打印变量
+   * 格式化打印变量内容，带标题栏与调用源信息
    *
-   * @access public
-   * @param mixed $data 变量内容
-   * @param string $title 标题
-   * @param string $color 颜色,可以传入标签名称，如：'SUCCESS'
-   * @param int $backtrace 1为输出调用源，0为不输出
-   * @return void
+   * @param mixed $data 待打印的变量
+   * @param string $title 标题栏文本
+   * @param string $color 颜色名称或 ANSI 转义序列
+   * @param int $backtrace 调用栈回溯层级，0 不输出调用源
    */
   public static function dump(
     mixed  $data,
@@ -181,10 +180,11 @@ class Output
   }
 
   /**
-   * @param string $name
-   * @param array $arguments
-   * @return void
-   * @throws Exception
+   * 静态方法调用代理，支持以日志级别名作为方法名直接调用 echo
+   *
+   * @param string $name 日志级别名称
+   * @param array $arguments [0=>消息内容, 1=>回溯层级]
+   * @throws Exception 日志级别不存在时抛出
    */
   public static function __callStatic(string $name, array $arguments)
   {

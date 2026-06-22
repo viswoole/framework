@@ -21,12 +21,12 @@ use Viswoole\Core\Console\Output;
 use Viswoole\Core\Facade\Event;
 
 /**
- * SwooleServer事件hook
+ * Swoole 服务端事件钩子，统一管理服务生命周期事件的注册与分发
  */
 class ServerEventHook
 {
   /**
-   * @var array<string,callable[]> 事件处理
+   * @var array<string,callable[]> 已注册的事件处理器列表，键为事件名（小写），值为回调数组
    */
   protected static array $handles = [
     'start' => [[ServerEventHook::class, 'onStart']],
@@ -35,10 +35,9 @@ class ServerEventHook
   ];
 
   /**
-   * 批量添加事件处理
+   * 批量注册事件处理器
    *
-   * @param array<string,callable> $events 监听的事件
-   * @return void
+   * @param array<string,callable> $events 事件名称与回调的映射，键为事件名
    */
   public static function addEvents(array $events): void
   {
@@ -49,11 +48,10 @@ class ServerEventHook
   }
 
   /**
-   * 添加事件处理
+   * 注册单个事件处理器，同一事件可注册多个回调
    *
-   * @param string $event 事件名称
-   * @param callable $callback 回调
-   * @return void
+   * @param string $event 事件名称，不区分大小写
+   * @param callable $callback 事件触发时执行的回调函数
    */
   public static function addEvent(string $event, callable $callback): void
   {
@@ -61,9 +59,9 @@ class ServerEventHook
   }
 
   /**
-   * 获取需要hook的事件列表，用于注册到swoole服务中(该方法由Server自动调用)
+   * 获取所有已注册事件的闭包列表，供 Swoole Server 注册事件时使用
    *
-   * @return array<string,callable> 事件列表
+   * @return array<string,callable> 事件名到调度闭包的映射
    */
   public static function getEventHooks(): array
   {
@@ -77,11 +75,10 @@ class ServerEventHook
   }
 
   /**
-   * 事件调度
+   * 依次调用指定事件的所有已注册处理器
    *
-   * @param string $event
-   * @param array $args
-   * @return void
+   * @param string $event 事件名称
+   * @param array $args 传递给事件处理器的参数列表
    */
   private static function dispatch(string $event, array $args): void
   {
@@ -94,10 +91,9 @@ class ServerEventHook
   }
 
   /**
-   * 服务关闭前事件
+   * 服务关闭前回调，触发 ServerShutdownBefore 事件以允许执行清理工作
    *
-   * @param Server $server
-   * @return void
+   * @param Server $server Swoole 服务实例
    */
   private static function onBeforeShutdown(Server $server): void
   {
@@ -106,10 +102,9 @@ class ServerEventHook
   }
 
   /**
-   * 监听服务关闭事件
+   * 服务关闭回调，输出服务已安全关闭的提示信息
    *
-   * @param Server $server
-   * @return void
+   * @param Server $server Swoole 服务实例
    */
   private static function onShutdown(Server $server): void
   {
@@ -126,10 +121,9 @@ class ServerEventHook
   }
 
   /**
-   * 监听服务启动代理信号
+   * 服务启动回调，输出启动信息、监听 SIGINT 信号以安全关闭服务，并触发 AfterStartServer 事件
    *
-   * @param Server $server 服务实例
-   * @return void
+   * @param Server $server Swoole 服务实例
    */
   private static function onStart(Server $server): void
   {

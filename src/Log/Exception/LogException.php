@@ -18,7 +18,7 @@ namespace Viswoole\Log\Exception;
 use RuntimeException;
 
 /**
- * 日志异常
+ * 日志模块异常，用于通道配置错误、级别路由异常等场景
  */
 class LogException extends RuntimeException
 {

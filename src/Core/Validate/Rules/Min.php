@@ -20,14 +20,14 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 验证数值小于或等于$min
+ * 最小值验证规则，校验数值是否不低于指定下界
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Min extends BaseValidateRule
 {
   /**
-   * @param int|float $min 最小值
-   * @param string $message
+   * @param int|float $min 允许的最小值（含）
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public int|float $min,
@@ -38,7 +38,7 @@ class Min extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验数值是否不低于最小值
    */
   #[Override] public function validate(mixed $value): int|float
   {

@@ -15,6 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Exception;
 
+/**
+ * 方法不存在时抛出，通常在容器调用不存在的方法时触发
+ */
 class MethodNotFoundException extends NotFoundException
 {
 

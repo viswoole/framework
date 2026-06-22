@@ -21,7 +21,7 @@ use ReflectionType;
 use ReflectionUnionType;
 
 /**
- * 用于声明字段结构，声明请求参数
+ * 字段结构，描述 API 文档中单个请求参数或响应字段的元信息
  */
 class FieldStructure
 {

@@ -41,31 +41,40 @@ use Viswoole\Core\Exception\ValidateException;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 容器基本功能类
+ * 依赖注入容器
+ *
+ * 提供服务绑定、依赖解析、单例管理和反射调用能力。
+ * 支持 ArrayAccess/Countable/IteratorAggregate 接口，可像数组一样访问容器绑定。
+ * 单例存储区分协程上下文与进程全局，确保协程间单例隔离。
  */
 abstract class Container implements ArrayAccess, IteratorAggregate, Countable
 {
+  /**
+   * @var string 协程上下文中单例键名的前缀，避免与用户数据冲突
+   */
   protected string $CONTEXT_PREFIX = '__container_singleton_';
   /**
    * @var array<string,string|Closure> 接口标识映射
    */
   protected array $bindings = [];
   /**
-   * @var object[] 容器中记录的单例
+   * @var object[] 已解析的单例实例池（非协程环境使用）
    */
   protected array $instances = [];
   /**
-   * @var array 解析类时的需要触发的回调
+   * @var array<string,array<string,Closure>> 类解析后触发的回调钩子，键为类名或 '*'（通配）
    */
   protected array $invokeCallback = [];
 
   /**
-   * 检测是否可调用
+   * 检测给定的回调是否可通过 invoke 系列方法调用
    *
-   * @param mixed $handle 待检测的回调
-   * @param bool $throw 不合格是否抛出异常
-   * @return bool 如果通过self::invoke方法可以调用返回true，否则返回false
-   * @throws InvalidArgumentException 如果不合格，且$throw为true，则抛出异常
+   * 支持闭包、函数名、类名、[类名, 方法名] 数组等形式
+   *
+   * @param mixed $handle 待检测的回调结构
+   * @param bool $throw 检测不通过时是否抛出异常
+   * @return bool 可调用返回 true
+   * @throws InvalidArgumentException 当 $throw 为 true 且不可调用时抛出
    */
   public static function isCallable(mixed $handle, bool $throw = false): bool
   {
@@ -84,19 +93,18 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 添加一个钩子，在解析类时触发
+   * 注册类解析后的回调钩子，在 invokeClass 创建实例后触发
    *
    * Example:
    * ```
-   * $container->addHook(UserService::class,function($object,$container){
-   *   // 这里可以对UserService对象进行操作
+   * $container->addHook(UserService::class, function($object, $container){
+   *   // 对 UserService 实例进行额外操作
    * })
    * ```
    *
-   * @access public
-   * @param string $abstract 类名,可传入*代表所有
-   * @param Closure $callback 事件回调
-   * @return string 返回钩子唯一哈希标识
+   * @param string $abstract 类名，传入 '*' 监听所有类的解析
+   * @param Closure $callback 回调函数，参数为 (object $instance, Container $container)
+   * @return string 钩子唯一哈希标识，用于 removeHook 移除
    */
   public function addHook(string $abstract, Closure $callback): string
   {
@@ -107,12 +115,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 删除解析钩子
+   * 移除类解析钩子
    *
-   * @access public
-   * @param string $abstract 类标识或类名
-   * @param string|null $id
-   * @return void
+   * @param string $abstract 类名或 '*'
+   * @param string|null $id 钩子标识，为 null 时移除该类的所有钩子
    */
   public function removeHook(string $abstract, string $id = null): void
   {
@@ -134,10 +140,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 判断容器中是否绑定某个接口
+   * 判断容器中是否绑定或实例化了指定标识
    *
-   * @param string $id
-   * @return bool
+   * @param string $id 绑定标识或类名
+   * @return bool 存在绑定或实例返回 true
    */
   public function has(string $id): bool
   {
@@ -145,11 +151,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 判断是否存在某个类的实例
+   * 判断指定类是否已有单例实例（含协程上下文）
    *
-   * @access public
-   * @param string $class
-   * @return bool
+   * @param string $class 类名
+   * @return bool 存在实例返回 true
    */
   public function hasInstance(string $class): bool
   {
@@ -158,10 +163,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 获取单实例
+   * 获取单例实例，优先从进程级实例池取，协程环境下从协程上下文取
    *
-   * @param string $class
-   * @return object|null
+   * @param string $class 类名
+   * @return object|null 存在则返回实例，否则返回 null
    */
   protected function getSingleton(string $class): ?object
   {
@@ -171,11 +176,11 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 从容器绑定中获取实例
+   * 从容器中获取绑定标识对应的实例
    *
-   * @param string $id
-   * @return object
-   * @throws NotFoundException
+   * @param string $id 绑定标识或类名
+   * @return object 解析得到的实例
+   * @throws NotFoundException 标识未绑定时抛出
    */
   public function get(string $id): object
   {
@@ -184,12 +189,14 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 创建一个已绑定的服务，或反射创建类实例，将存储为单例
+   * 创建已绑定服务的单例实例，若已存在则直接返回
    *
-   * @param string $abstract
-   * @param array $params
-   * @return object
-   * @throws NotFoundException
+   * 当类定义了 ALLOW_NEW_INSTANCE = true 常量时，每次调用都创建新实例而不缓存单例
+   *
+   * @param string $abstract 绑定标识或类名
+   * @param array $params 构造参数，覆盖依赖注入
+   * @return object 解析得到的单例实例
+   * @throws NotFoundException 类或闭包不可达时抛出
    */
   public function make(string $abstract, array $params = []): object
   {
@@ -216,10 +223,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 通过标识获取到真实映射的类名
+   * 根据绑定标识获取映射的实现类名或闭包
    *
-   * @param string $abstract 标识
-   * @return string|Closure 获取类
+   * @param string $abstract 绑定标识
+   * @return string|Closure 映射的类名或闭包，未绑定时返回原值
    */
   protected function getBind(string $abstract): string|Closure
   {
@@ -227,13 +234,15 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 调用反射创建类实例，支持依赖注入。
+   * 通过反射创建类实例，自动解析构造函数依赖
    *
-   * @param string $class
-   * @param array $params
-   * @return object
-   * @throws NotFoundException
-   * @noinspection PhpDocMissingThrowsInspection
+   * 优先使用类的 factory() 静态方法（若存在且为 public static），否则走 __construct
+   *
+   * @param string $class 要实例化的类名
+   * @param array $params 手动传入的构造参数，按名称或位置匹配
+   * @return object 创建的类实例
+   * @throws ClassNotFoundException 类不存在时抛出
+   * @throws ValidateException 参数类型校验失败时抛出
    */
   public function invokeClass(string $class, array $params = []): object
   {
@@ -270,12 +279,14 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 注入参数
+   * 解析反射方法的参数列表，依次处理前置注入、依赖注入和类型校验
+   *
+   * 支持命名参数、位置参数、可变参数、PreInjectInterface 属性注入和 ValidateRule 属性校验
    *
    * @param ReflectionFunctionAbstract $reflect 反射方法
-   * @param array $params 传递的参数
-   * @return array<int,mixed>
-   * @throws NotFoundException
+   * @param array $params 手动传入的参数，按名称或位置覆盖
+   * @return array<int,mixed> 按位置索引的参数值数组
+   * @throws NotFoundException 依赖不可达时抛出
    */
   protected function injectParams(ReflectionFunctionAbstract $reflect, array $params = []): array
   {
@@ -340,14 +351,17 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 验证参数
+   * 对单个参数执行类型校验和扩展规则校验
+   *
+   * 内置类型通过 Validate::check 校验，扩展规则通过 Validate::checkRules 校验
    *
    * @param string $name 参数名称
-   * @param ReflectionType|null $paramType 参数类型
-   * @param mixed $value 值
-   * @param bool $allowsNull 是否允许为空
-   * @param ReflectionAttribute[] $validateAttributes 扩展属性
-   * @return mixed
+   * @param ReflectionType|null $paramType 参数声明的类型
+   * @param mixed $value 待校验的值
+   * @param bool $allowsNull 参数是否允许 null
+   * @param ReflectionAttribute[] $validateAttributes 扩展验证属性列表
+   * @return mixed 校验通过的值
+   * @throws ValidateException 类型不匹配时抛出
    */
   protected function validateParam(
     string              $name,
@@ -371,12 +385,12 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 处理注入参数时类型错误
+   * 处理参数注入时的类型校验错误，debug 模式下附带参数位置信息
    *
-   * @param int $index
-   * @param string $name
-   * @param ValidateException $e
-   * @return void
+   * @param int $index 参数位置索引（从 0 开始）
+   * @param string $name 参数名称
+   * @param ValidateException $e 原始校验异常
+   * @throws ValidateException 始终抛出，debug 模式下消息包含参数位置
    */
   protected function handleParamsError(int $index, string $name, ValidateException $e): void
   {
@@ -391,12 +405,11 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 处理反射验证类型错误
+   * 处理反射过程中的类型校验错误，debug 模式下附带方法签名上下文
    *
-   * @param string $message
-   * @param ValidateException $e
-   * @return void
-   * @throws ValidateException
+   * @param string $message 附加上下文的错误消息
+   * @param ValidateException $e 原始校验异常
+   * @throws ValidateException 始终抛出，debug 模式下使用 $message 作为消息
    */
   protected function handleValidateError(string $message, ValidateException $e): void
   {
@@ -408,12 +421,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 执行invokeClass回调
+   * 在类实例创建后触发已注册的解析钩子，先执行通配 '*' 钩子再执行类名钩子
    *
-   * @access protected
-   * @param string $class 对象类名
-   * @param object $object 容器对象实例
-   * @return void
+   * @param string $class 类名
+   * @param object $object 刚创建的实例
    */
   protected function invokeAfter(string $class, object $object): void
   {
@@ -430,12 +441,12 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 反射调用函数
+   * 通过反射调用函数或闭包，自动解析参数依赖
    *
-   * @param string|Closure $concrete 调用的函数或闭包
-   * @param array<string|int,mixed> $params 参数数组
-   * @return mixed
-   * @throws NotFoundException
+   * @param string|Closure $concrete 函数名或闭包
+   * @param array<string|int,mixed> $params 手动传入的参数
+   * @return mixed 函数返回值
+   * @throws FuncNotFoundException 函数不存在时抛出
    */
   public function invokeFunction(string|Closure $concrete, array $params = []): mixed
   {
@@ -453,13 +464,14 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 反射调用
+   * 统一调用入口，根据 $callable 类型分发到 invokeFunction/invokeMethod/invokeClass
    *
-   * @access public
-   * @param callable|string|array $callable
-   * @param array $params
-   * @return mixed
-   * @throws NotFoundException|ValidateException
+   * @param callable|string|array $callable 闭包、函数名、[类/对象, 方法名]、'类名::方法名'、类名
+   * @param array $params 手动传入的参数
+   * @return mixed 调用返回值
+   * @throws NotFoundException 依赖不可达时抛出
+   * @throws ValidateException 参数类型校验失败时抛出
+   * @throws TypeError $callable 不可调用时抛出
    */
   public function invoke(callable|string|array $callable, array $params = []): mixed
   {
@@ -482,12 +494,14 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 调用反射执行方法，支持依赖注入。
+   * 通过反射调用类方法，自动解析参数依赖
    *
-   * @access public
-   * @param array|callable $method 方法[object|class,method]|class::method
-   * @param array $params 参数
-   * @return mixed
+   * 支持对象方法、静态方法、[类名, 方法名]（自动实例化类）和 '类名::方法名' 格式
+   *
+   * @param array|callable $method 方法描述，如 [object, 'method']、[ClassName::class, 'method']、'ClassName::method'
+   * @param array $params 手动传入的参数
+   * @return mixed 方法返回值
+   * @throws MethodNotFoundException 方法不存在时抛出
    */
   public function invokeMethod(array|callable $method, array $params = []): mixed
   {
@@ -528,11 +542,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 设置单实例（存储在父协程中），协程结束自动销毁
+   * 存储单例实例，协程环境下写入父协程上下文以实现协程间隔离，非协程环境写入进程级实例池
    *
-   * @param string $class
-   * @param object $instance
-   * @return void
+   * @param string $class 类名或绑定标识
+   * @param object $instance 单例实例
    */
   protected function setSingleInstance(string $class, object $instance): void
   {
@@ -548,10 +561,9 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 获取绑定关系
+   * 获取所有绑定映射关系
    *
-   * @access public
-   * @return string[]
+   * @return string[] 绑定标识到实现类名/闭包的映射数组
    */
   public function getBindings(): array
   {
@@ -576,15 +588,16 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 绑定接口
+   * 绑定接口标识到实现类、闭包或实例
    *
    * Example:
    * ```
-   *  $app->bind(ExampleInterface::class, ExampleClass::class);
+   * $app->bind(ExampleInterface::class, ExampleClass::class);
    * ```
-   * @param string $abstract 接口|类名
-   * @param string|object $concrete 实现类|实例|闭包
-   * @return void
+   *
+   * @param string $abstract 接口名、类名或自定义标识
+   * @param string|object $concrete 实现类名、闭包或已有实例
+   * @throws TypeError $concrete 为字符串但不是有效类名时抛出
    */
   public function bind(string $abstract, string|object $concrete): void
   {
@@ -625,8 +638,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * @param $name
-   * @return void
+   * @param string $name 属性名
    */
   public function __unset($name)
   {
@@ -634,11 +646,9 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 删除容器中的服务实例
+   * 从容器中移除指定标识的单例实例，同时清理协程上下文中的缓存
    *
-   * @access public
-   * @param string $abstract
-   * @return void
+   * @param string $abstract 绑定标识或类名
    */
   public function remove(string $abstract): void
   {
@@ -652,11 +662,11 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 获取容器中的服务实例
+   * 通过属性访问容器中的服务实例（代理到 make）
    *
-   * @param string $name
-   * @return mixed
-   * @throws NotFoundException
+   * @param string $name 绑定标识
+   * @return mixed 解析得到的实例
+   * @throws NotFoundException 标识未绑定时抛出
    */
   public function __get(string $name)
   {
@@ -664,11 +674,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 绑定服务到容器
+   * 通过属性绑定服务到容器（代理到 bind）
    *
-   * @param string $name
-   * @param $value
-   * @return void
+   * @param string $name 绑定标识
+   * @param mixed $value 实现类名、闭包或实例
    */
   public function __set(string $name, $value): void
   {

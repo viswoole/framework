@@ -19,13 +19,14 @@ use InvalidArgumentException;
 use Viswoole\Database\Facade\Db;
 
 /**
- * 查询条件
+ * WHERE 条件 Trait
+ *
+ * 提供丰富的查询条件构建方法，支持 AND/OR 连接、IN/BETWEEN/EXISTS 等操作符，
+ * 以及条件分组和原生SQL条件。
  */
 trait Where
 {
-  /**
-   * 运算符
-   */
+  /** @var array 支持的 SQL 比较运算符列表 */
   public const array OPERATORS = [
     '=',
     '!=',
@@ -46,13 +47,12 @@ trait Where
   ];
 
   /**
-   * OR 查询条件
+   * 添加 OR 连接的查询条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param string|int|float|array $operator 比较运算符，表达式
-   * @param string|int|float|array|null $value 值
-   * @return $this
+   * @param string $column 列名
+   * @param string|int|float|array $operator 运算符；当 $value 为 null 时作为比较值
+   * @param string|int|float|array|null $value 比较值，为 null 时 $operator 作为值
+   * @return static 支持链式调用
    */
   public function orWhere(
     string                 $column,
@@ -64,14 +64,14 @@ trait Where
   }
 
   /**
-   * 查询条件
+   * 添加查询条件，支持简化写法（省略运算符时默认为 = 或 IN）
    *
-   * @access public
-   * @param string $column 列名称
-   * @param string|int|float|array $operator 比较运算符，表达式
-   * @param string|int|float|array|null $value 值, 如果为null，则使用$operator作为值
-   * @param string $connector 条件连接符，AND或OR
-   * @return $this
+   * @param string $column 列名
+   * @param string|int|float|array $operator 运算符；当 $value 为 null 时作为比较值，数组自动转为 IN
+   * @param string|int|float|array|null $value 比较值，为 null 时 $operator 作为值
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 运算符或连接符无效时抛出
    */
   public function where(
     string                 $column,
@@ -98,20 +98,10 @@ trait Where
   }
 
   /**
-   * 用数组批量设置查询条件
+   * 批量设置查询条件，支持键值对和数组两种格式
    *
-   * Example:
-   * ```
-   * // 关联键值对元素
-   * $query->wheres(['username'=>'小明','status'=>1])->find();
-   * // 数组元素
-   * $query->wheres([['username','=','小明'],['username','=','小红','OR']])->find();
-   * // 混合使用
-   * $query->wheres(['username'=>'小明',['username','=','小红','OR']])->find();
-   * ```
-   *
-   * @param array $wheres
-   * @return static
+   * @param array $wheres 条件数组
+   * @return static 支持链式调用
    */
   public function wheres(array $wheres): static
   {
@@ -121,13 +111,12 @@ trait Where
   }
 
   /**
-   * 查询条件（AND）
+   * 添加 AND 连接的查询条件（where 的显式写法）
    *
-   * @access public
-   * @param string $column 列名称
-   * @param string|int|float|array $operator 比较运算符，表达式
-   * @param string|int|float|array|null $value 值
-   * @return $this
+   * @param string $column 列名
+   * @param string|int|float|array $operator 运算符
+   * @param string|int|float|array|null $value 比较值
+   * @return static 支持链式调用
    */
   public function andWhere(
     string                 $column,
@@ -139,13 +128,13 @@ trait Where
   }
 
   /**
-   * 查询条件（IN）
+   * 添加 IN 条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param mixed $value 值
-   * @param string $connector 条件连接符，AND或OR
-   * @return static
+   * @param string $column 列名
+   * @param array $value 值列表
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 值为空数组时抛出
    */
   public function whereIn(
     string $column,
@@ -158,13 +147,13 @@ trait Where
   }
 
   /**
-   * 查询条件（NOT IN）
+   * 添加 NOT IN 条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param mixed $value 值
-   * @param string $connector 条件连接符，AND或OR
-   * @return $this
+   * @param string $column 列名
+   * @param array $value 值列表
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 值为空数组时抛出
    */
   public function whereNotIn(
     string $column,
@@ -177,12 +166,11 @@ trait Where
   }
 
   /**
-   * 查询条件（IS NULL）
+   * 添加 IS NULL 条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param string $connector 条件连接符，AND或OR
-   * @return $this
+   * @param string $column 列名
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
    */
   public function whereNull(
     string $column,
@@ -193,12 +181,11 @@ trait Where
   }
 
   /**
-   * 查询条件（IS NOT NULL）
+   * 添加 IS NOT NULL 条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param string $connector 条件连接符，AND或OR
-   * @return $this
+   * @param string $column 列名
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
    */
   public function whereNotNull(
     string $column,
@@ -209,13 +196,13 @@ trait Where
   }
 
   /**
-   * 查询条件（NOT BETWEEN）
+   * 添加 NOT BETWEEN 条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param mixed $value 值
-   * @param string $connector 条件连接符，AND或OR
-   * @return $this
+   * @param string $column 列名
+   * @param array $value 包含两个元素的区间数组
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 值为空数组时抛出
    */
   public function whereNotBetween(
     string $column,
@@ -228,13 +215,13 @@ trait Where
   }
 
   /**
-   * 查询条件（BETWEEN）
+   * 添加 BETWEEN 条件
    *
-   * @access public
-   * @param string $column 列名称
-   * @param mixed $value 值
-   * @param string $connector 条件连接符，AND或OR
-   * @return $this
+   * @param string $column 列名
+   * @param array $value 包含两个元素的区间数组
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 值为空数组时抛出
    */
   public function whereBetween(
     string $column,
@@ -247,12 +234,11 @@ trait Where
   }
 
   /**
-   * 查询条件组，支持嵌套
+   * 添加条件分组，支持嵌套
    *
-   * @access public
-   * @param array $wheres
-   * @param string $connector
-   * @return $this
+   * @param array $wheres 分组内的条件数组
+   * @param string $connector 分组连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
    */
   public function whereGroup(array $wheres, string $connector = 'AND'): static
   {
@@ -261,11 +247,11 @@ trait Where
   }
 
   /**
-   * 查询条件（EXISTS）
+   * 添加 EXISTS 条件
    *
-   * @param string $sql sql语句
-   * @param array $bindings 绑定的参数
-   * @return $this
+   * @param string $sql 子查询SQL语句
+   * @param array $bindings 子查询绑定参数
+   * @return static 支持链式调用
    */
   public function whereExists(string $sql, array $bindings = []): static
   {
@@ -273,12 +259,11 @@ trait Where
   }
 
   /**
-   * 原生 where 查询sql
+   * 添加原生 WHERE 条件，直接嵌入SQL片段
    *
-   * @access public
-   * @param string $sql sql语句
-   * @param array $bindings 绑定的参数
-   * @return static
+   * @param string $sql 原生SQL条件语句
+   * @param array $bindings 绑定参数
+   * @return static 支持链式调用
    */
   public function whereRaw(
     string $sql,
@@ -290,11 +275,11 @@ trait Where
   }
 
   /**
-   * 查询条件（NOT EXISTS）
+   * 添加 NOT EXISTS 条件
    *
-   * @param string $sql sql语句
-   * @param array $bindings 绑定的参数
-   * @return static
+   * @param string $sql 子查询SQL语句
+   * @param array $bindings 子查询绑定参数
+   * @return static 支持链式调用
    */
   public function whereNotExists(string $sql, array $bindings = []): static
   {

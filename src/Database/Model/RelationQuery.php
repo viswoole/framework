@@ -22,19 +22,23 @@ use Viswoole\Database\Model;
 
 /**
  * 关联查询
+ *
+ * 处理模型间的一对一和一对多关联关系，通过外键映射将关联数据填充到主数据中。
+ * 支持通过 handle() 方法对关联查询添加额外条件。
+ *
+ * @see Model::hasOne()
+ * @see Model::hasMany()
  */
 class RelationQuery
 {
-  /**
-   * @var callable 处理查询的回调
-   */
+  /** @var callable|null 对关联查询添加额外条件的回调 */
   protected mixed $handle;
 
   /**
-   * @param Model $relationModel 关联的模型
-   * @param string $foreignKey 当前模型在关联模型中的外键，如果有中间模型时则是在中间模型中的外键
-   * @param string $localKey 当前模型主键
-   * @param bool $many 是否对多关联，默认为false，表示一对一关联
+   * @param Model $relationModel 关联模型实例
+   * @param string $foreignKey 关联模型中的外键名
+   * @param string $localKey 当前模型的主键名
+   * @param bool $many 是否一对多关联，默认 false（一对一）
    */
   public function __construct(
     protected Model  $relationModel,
@@ -46,12 +50,12 @@ class RelationQuery
   }
 
   /**
-   * 查询关联数据
+   * 查询关联数据并按外键映射填充到主数据中
    *
-   * @param array $data 数据
-   * @param string $name 关联名称
-   * @return array
-   * @throws DbException
+   * @param array $data 主表查询结果
+   * @param string $name 关联名称，作为填充到主数据中的键名
+   * @return array 填充关联数据后的主数据
+   * @throws DbException 数据库操作失败时抛出
    */
   public function query(array $data, string $name): array
   {
@@ -106,10 +110,10 @@ class RelationQuery
   }
 
   /**
-   * 通过该方法设置中间件，可以在关联查询时添加一些自定义的查询条件。
+   * 设置关联查询的额外条件回调，在查询执行前调用
    *
-   * @param callable $handle
-   * @return static
+   * @param callable $handle 接收 Query 实例的回调
+   * @return static 支持链式调用
    */
   public function handle(callable $handle): static
   {

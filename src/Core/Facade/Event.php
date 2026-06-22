@@ -19,7 +19,7 @@ use Override;
 use Viswoole\Core\Facade;
 
 /**
- * Event事件管理器
+ * 事件管理门面，静态代理 Event 核心方法
  *
  * @method static array|string on(string $event, callable|string $handle, int $limit = 0) 监听事件
  * @method static void emit(string $event, array $arguments = []) 触发事件
@@ -31,7 +31,7 @@ class Event extends Facade
 {
 
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
    */
   #[Override] protected static function getMappingClass(): string
   {

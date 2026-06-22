@@ -19,12 +19,16 @@ use Override;
 use Viswoole\Core\Service\Provider;
 
 /**
- * 缓存服务注册
+ * 缓存服务提供者，负责将缓存管理器注册到应用容器并完成引导启动
+ *
+ * 在服务注册阶段绑定 cache 标识到 CacheManager，在引导阶段触发缓存实例化。
+ *
+ * @see CacheManager
  */
 class CacheService extends Provider
 {
   /**
-   * @inheritDoc
+   * 引导阶段：触发缓存管理器实例化，确保配置在请求初期加载
    */
   #[Override] public function boot(): void
   {
@@ -32,7 +36,7 @@ class CacheService extends Provider
   }
 
   /**
-   * @inheritDoc
+   * 注册阶段：将 cache 标识绑定到 CacheManager 类
    */
   #[Override] public function register(): void
   {

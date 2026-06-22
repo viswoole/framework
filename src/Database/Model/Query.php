@@ -32,20 +32,24 @@ use Viswoole\Database\Raw;
 
 /**
  * 模型查询构造器
+ *
+ * 扩展 BaseQuery，增加软删除、时间戳自动写入、关联查询、获取器等 ORM 能力。
+ * 通过模型属性配置元信息，自动在 CRUD 操作前后注入业务逻辑。
+ *
+ * @see BaseQuery
+ * @see Model
  */
 class Query extends BaseQuery
 {
-  /**
-   * @var bool 是否包含软删除的数据
-   */
+  /** @var bool 查询结果是否包含软删除的数据 */
   private bool $withTrashed = false;
-  /**
-   * @var array<string,RelationQuery> 关联查询
-   */
+  /** @var array<string,RelationQuery> 已注册的关联查询，键为关联名称 */
   private array $relations = [];
 
   /**
-   * 实例化一个模型查询实例
+   * 初始化模型查询实例，从模型属性读取表名、主键和通道配置
+   *
+   * @param Model $model 关联的模型实例
    */
   public function __construct(protected Model $model)
   {
@@ -56,9 +60,7 @@ class Query extends BaseQuery
   }
 
   /**
-   * 克隆重置属性
-   *
-   * @return void
+   * 克隆时重置软删除和关联查询状态
    */
   public function __clone(): void
   {
@@ -68,10 +70,11 @@ class Query extends BaseQuery
   }
 
   /**
-   * 关联查询
+   * 注册关联查询，支持闭包对关联查询添加额外条件
    *
-   * @param array<string,Closure>|string[]|string $relations 关联关系
-   * @return $this
+   * @param array<string,Closure>|string[]|string $relations 关联名称、关联名称数组或"关联名=>回调"映射
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 关联方法不存在或返回值非 RelationQuery 时抛出
    */
   public function with(array|string $relations): static
   {
@@ -104,10 +107,10 @@ class Query extends BaseQuery
   }
 
   /**
-   * 获取模型中的属性
+   * 代理访问模型属性
    *
-   * @param string $name
-   * @return mixed
+   * @param string $name 属性名
+   * @return mixed 属性值
    */
   public function __get(string $name)
   {
@@ -115,14 +118,11 @@ class Query extends BaseQuery
   }
 
   /**
-   * 删除记录
+   * 删除记录，启用软删除时执行软删除而非物理删除
    *
-   * @param bool $real 是否为硬删除，仅开启软删除功能时有效
-   * @return int|Raw
-   * @throws DbException
-   * @throws DbException
-   * @throws DbException
-   * @throws DbException
+   * @param bool $real 是否硬删除，仅启用软删除时有效
+   * @return int|Raw 受影响的记录数或 Raw 对象
+   * @throws DbException 数据库操作失败时抛出
    */
   #[Override] public function delete(bool $real = false): int|Raw
   {
@@ -135,10 +135,10 @@ class Query extends BaseQuery
   }
 
   /**
-   * 获取时间
+   * 根据格式类型获取当前时间字符串
    *
-   * @param string $format
-   * @return string
+   * @param string $format 时间格式类型 datetime|timestamp|date|int
+   * @return string 格式化后的时间字符串
    */
   private function _getTime(string $format): string
   {
@@ -155,12 +155,10 @@ class Query extends BaseQuery
   /**
    * 恢复软删除的数据
    *
-   * @access public
-   * @param int|string|array|null $id 要恢复记录的主键值，如果为空则必须指定where条件
-   * @return int|Raw 如果未启用软删除功能，返回0，否则返回更新记录数
-   * @throws RuntimeException
-   * @throws DbException
-   * @throws DbException
+   * @param int|string|array|null $id 要恢复记录的主键值，为空时需指定 where 条件
+   * @return int|Raw 受影响的记录数或 Raw 对象，未启用软删除时返回 0
+   * @throws RuntimeException 未启用软删除或未指定条件时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function restore(int|string|array|null $id = null): int|Raw
   {
@@ -178,9 +176,9 @@ class Query extends BaseQuery
   }
 
   /**
-   * 获取隐藏字段
+   * 获取模型定义的隐藏字段列表
    *
-   * @return array
+   * @return array 隐藏字段名数组
    */
   public function getHiddenColumn(): array
   {
@@ -188,11 +186,10 @@ class Query extends BaseQuery
   }
 
   /**
-   * 查询结果中包含软删除的数据
+   * 设置查询结果是否包含软删除的数据
    *
-   * @access public
-   * @param bool $withTrashed
-   * @return $this
+   * @param bool $withTrashed 是否包含，默认 true
+   * @return static 支持链式调用
    */
   public function withTrashed(bool $withTrashed = true): static
   {
@@ -201,12 +198,11 @@ class Query extends BaseQuery
   }
 
   /**
-   * 使用获取器
+   * 应用模型获取器，将蛇形字段名转换为驼峰后查找对应的 get{Field}Attr 方法
    *
-   * @access public
-   * @param string $key
-   * @param mixed $value
-   * @return mixed
+   * @param string $key 字段名
+   * @param mixed $value 原始值
+   * @return mixed 转换后的值，无获取器时返回原值
    */
   public function withGetAttr(string $key, mixed $value): mixed
   {
@@ -219,7 +215,9 @@ class Query extends BaseQuery
   }
 
   /**
-   * @inheritDoc
+   * 重置查询选项及软删除、关联查询状态
+   *
+   * @return static 支持链式调用
    */
   public function reset(): static
   {
@@ -228,11 +226,12 @@ class Query extends BaseQuery
   }
 
   /**
-   * 转发方法回模型层
+   * 将方法调用转发到模型层，用于访问模型自定义方法
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed 模型方法的返回值
+   * @throws RuntimeException 模型方法不存在时抛出
    */
   public function __call(string $name, array $arguments)
   {
@@ -245,11 +244,10 @@ class Query extends BaseQuery
   }
 
   /**
-   * 运行crud方法
+   * 执行 CRUD 操作前注入模型业务逻辑（软删除过滤、时间戳写入等），查询后执行关联查询
    *
-   * @param string $type
-   * @return Raw|string|array|int
-   * @noinspection PhpDocMissingThrowsInspection
+   * @param string $type 操作类型 insert|insertGetId|update|delete|select
+   * @return Raw|string|array|int 查询结果
    */
   #[Override] protected function runCrud(string $type): Raw|string|array|int
   {
@@ -264,10 +262,9 @@ class Query extends BaseQuery
   }
 
   /**
-   * 处理crud方法
+   * 根据 CRUD 类型注入模型业务逻辑：软删除过滤、时间戳自动写入、主键自动生成
    *
-   * @param $type
-   * @return void
+   * @param string $type 操作类型
    */
   private function handleCrud($type): void
   {
@@ -325,11 +322,11 @@ class Query extends BaseQuery
   }
 
   /**
-   * 查询关联数据
+   * 使用协程并发查询关联数据并填充到主数据中
    *
    * @param array $data 主表查询结果
-   * @return array
-   * @throws Throwable
+   * @return array 填充关联数据后的结果
+   * @throws Throwable 关联查询异常时抛出
    */
   protected function queryRelationData(array $data): array
   {
@@ -359,12 +356,13 @@ class Query extends BaseQuery
   }
 
   /**
-   * 创建一条数据，并返回数据集
+   * 创建一条数据并返回 DataSet
    *
-   * @param array $data
-   * @param array $columns 只允许写入的列
-   * @return DataSet
-   * @throws DbException
+   * @param array $data 关联数组数据
+   * @param array $columns 仅允许写入的列名，为空时不限制
+   * @return DataSet 包含写入数据（含主键）的 DataSet
+   * @throws DbException 数据库操作失败时抛出
+   * @throws InvalidArgumentException 数据非关联数组时抛出
    */
   public function create(array $data, array $columns = []): DataSet
   {
@@ -379,10 +377,9 @@ class Query extends BaseQuery
   }
 
   /**
-   * 新建查询实例
+   * 创建全新的查询实例，基于当前模型的新实例
    *
-   * @access public
-   * @return $this 返回一个全新的查询实例
+   * @return static 新的查询实例
    */
   public function newQuery(): static
   {

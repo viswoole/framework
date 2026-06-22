@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Structure;
 
 /**
- * 类结构声明
+ * 类类型结构基类，扩展 TypeStructure 增加命名空间和描述信息
  */
 abstract class ClassTypeStructure extends TypeStructure
 {

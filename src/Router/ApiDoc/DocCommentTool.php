@@ -21,10 +21,10 @@ namespace Viswoole\Router\ApiDoc;
 class DocCommentTool
 {
   /**
-   * 从注释文档中提取到属性说明
+   * 从属性文档注释中提取 @var 后的描述文本
    *
-   * @param string $doc 属性doc
-   * @return string
+   * @param string $doc 属性文档注释
+   * @return string 描述文本
    */
   public static function extractPropertyDoc(string $doc): string
   {
@@ -40,11 +40,11 @@ class DocCommentTool
   }
 
   /**
-   * 从注释文档中提取到参数说明
+   * 从方法文档注释中提取指定参数的描述文本
    *
-   * @param string $docComment 完整的doc注释
+   * @param string $docComment 完整的文档注释
    * @param string $param_name 参数名称
-   * @return string
+   * @return string 参数描述文本
    */
   public static function extractParamDoc(string $docComment, string $param_name): string
   {
@@ -102,10 +102,10 @@ class DocCommentTool
   }
 
   /**
-   * 提取文档注释中的标题
+   * 提取文档注释中的首行描述文本作为标题
    *
-   * @param string $docComment
-   * @return string
+   * @param string $docComment 文档注释
+   * @return string 标题文本
    */
   public static function extractDocTitle(string $docComment): string
   {

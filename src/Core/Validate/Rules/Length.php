@@ -20,15 +20,15 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 长度验证，仅对基本类型为 string、array生效。
+ * 长度验证规则，校验字符串或数组的长度是否在指定范围内
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Length extends BaseValidateRule
 {
   /**
-   * @param int $min 最小长度
-   * @param int|null $max 最大长度，为null则不限制
-   * @param string $message
+   * @param int $min 最小长度（含）
+   * @param int|null $max 最大长度（含），为 null 时不限制上界
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public int  $min,
@@ -40,7 +40,7 @@ class Length extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验字符串或数组长度是否在指定范围内
    */
   #[Override] public function validate(mixed $value): mixed
   {

@@ -19,13 +19,13 @@ use Attribute;
 use Override;
 
 /**
- * 验证数值是否不在某个区间
+ * 排除区间验证规则，校验数值是否不在指定的闭区间 [start, end] 范围内
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class NotBetween extends Between
 {
   /**
-   * @inheritDoc
+   * 校验数值是否不在闭区间范围内
    */
   #[Override] public function validate(mixed $value): int|float
   {

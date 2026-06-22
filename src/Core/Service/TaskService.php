@@ -19,13 +19,13 @@ use Override;
 use Viswoole\Core\Server\TaskManager;
 
 /**
- * 任务管理服务
+ * 任务管理服务提供者，负责注册和启动任务管理器
  */
 class TaskService extends Provider
 {
 
   /**
-   * @inheritDoc
+   * 启动任务管理器，初始化任务队列与事件监听
    */
   #[Override] public function boot(): void
   {
@@ -34,7 +34,7 @@ class TaskService extends Provider
   }
 
   /**
-   * @inheritDoc
+   * 将任务管理器绑定到容器
    */
   #[Override] public function register(): void
   {

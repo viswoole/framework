@@ -15,7 +15,9 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Validate;
 /**
- * PHP内置类型枚举
+ * PHP 内置类型枚举
+ *
+ * 定义所有 PHP 内置原子类型的枚举值，用于 Validate 校验时的类型标识
  */
 enum Type: string
 {

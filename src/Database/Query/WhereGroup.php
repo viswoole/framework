@@ -20,24 +20,27 @@ use Viswoole\Database\BaseQuery;
 use Viswoole\Database\Raw;
 
 /**
- * 查询条件组
+ * WHERE 条件分组
+ *
+ * 将多条查询条件封装为一个带括号的逻辑组，
+ * 用于构建 (A AND B) OR (C AND D) 等嵌套条件。
  */
 class WhereGroup
 {
   /**
-   * @var string 连接运算符
+   * @var string 组间连接符：AND | OR
    */
   public string $connector;
   /**
-   * 查询条件
+   * 组内条件列表
    *
    * @var array<int,array{column:string,operator:string,value:mixed,connector:string}|Raw|WhereGroup>
    */
   public array $items;
 
   /**
-   * @param array $wheres
-   * @param string $connector
+   * @param array $wheres 原始条件数组，支持简写语法
+   * @param string $connector 组间连接符，AND 或 OR（不区分大小写，其他值默认 OR）
    */
   public function __construct(array $wheres, string $connector)
   {
@@ -49,10 +52,15 @@ class WhereGroup
   }
 
   /**
-   * 解析数组
+   * 将原始条件数组解析为统一结构
    *
-   * @param array $wheres
-   * @return array<int,array{column:string,operator:string,value:mixed,connector:string}>
+   * 支持两种简写：
+   *  - 关联键值对：['name' => 'foo'] 等价于 name = foo
+   *  - 索引数组：  ['name', '=', 'foo', 'AND']（第三项起可省略连接符）
+   *
+   * @param array $wheres 原始条件数组
+   * @return array<int,array{column:string,operator:string,value:mixed,connector:string}> 标准化后的条件列表
+   * @throws InvalidArgumentException 条件格式无效或运算符不支持时抛出
    */
   public static function parsing(array $wheres): array
   {

@@ -25,46 +25,55 @@ use Viswoole\Log\Drives\File;
 use Viswoole\Log\Exception\LogException;
 
 /**
- * 日志管理器
+ * 日志管理器，负责通道注册、日志路由与格式化
  *
- * @method void mixed(string $level, string|Stringable $message, array $context = []) 记录具有任意级别的日志。
- * @method void alert(string|Stringable $message, array $context = []) 必须立即采取行动。
- * @method void error(string|Stringable $message, array $context = []) 不需要立即采取行动的运行时错误，但通常应记录和监视。
- * @method void warning(string|Stringable $message, array $context = []) 不是错误的异常情况。
- * @method void info(string|Stringable $message, array $context = []) 普通日志信息。
- * @method void debug(string|Stringable $message, array $context = []) 详细的调试信息。
- * @method void sql(string|Stringable $message, array $context = []) SQL日志。
- * @method void task(string|Stringable $message, array $context = []) 任务日志。
- * @method void write(Stringable|string $message, array $context = [], string $level = 'info') 直接写入日志
- * @method bool save(array $logRecords) 保存日志（一般无需手动调用, 协程结束会自动调用）
- * @method bool clearRecord() 清除缓存日志
- * @method array getRecord() 获取缓存日志
+ * 管理多个日志通道，支持按日志级别路由到不同通道，并通过 __call 将日志调用
+ * 转发至对应通道的驱动实例。协程环境下日志先缓存至 Recorder，协程结束时批量写入。
+ *
+ * @see DriveInterface 日志驱动接口
+ * @see Recorder 协程日志记录器
+ *
+ * @method void mixed(string $level, string|Stringable $message, array $context = []) 记录具有任意级别的日志
+ * @method void alert(string|Stringable $message, array $context = []) 记录必须立即采取行动的警报
+ * @method void error(string|Stringable $message, array $context = []) 记录运行时错误（无需立即处理但需监控）
+ * @method void warning(string|Stringable $message, array $context = []) 记录非错误的异常情况
+ * @method void info(string|Stringable $message, array $context = []) 记录普通业务信息
+ * @method void debug(string|Stringable $message, array $context = []) 记录详细调试信息
+ * @method void sql(string|Stringable $message, array $context = []) 记录SQL执行日志
+ * @method void task(string|Stringable $message, array $context = []) 记录异步任务日志
+ * @method void write(Stringable|string $message, array $context = [], string $level = 'info') 绕过缓存直接写入日志
+ * @method bool save(array $logRecords) 批量保存日志（协程结束时自动调用，一般无需手动调用）
+ * @method bool clearRecord() 清除当前协程缓存的日志
+ * @method array getRecord() 获取当前协程缓存的日志
  */
 class LogManager
 {
   /**
-   * @var bool 是否输出至控制台
+   * @var bool 是否将日志同步输出至控制台
    */
   private static bool $toTheConsole;
   /**
-   * @var DriveInterface[] 通道列表
+   * @var DriveInterface[] 已注册的日志通道，键名为小写通道名
    */
   private array $channels;
   /**
-   * @var string 默认通道
+   * @var string 默认日志通道名称（小写）
    */
   private string $defaultChannel;
   /**
-   * @var array<string,string> 日志类型指定通道
+   * @var array<string,string> 日志级别到通道名的映射，用于按级别路由日志
    */
   private array $type_channel;
   /**
-   * @var bool 是否记录日志来源
+   * @var bool 是否在日志中记录调用来源（文件:行号）
    */
   private bool $recordLogTraceSource;
 
   /**
-   * @throws LogException
+   * 根据日志配置初始化管理器，注册通道并校验级别路由
+   *
+   * @param Config $config 框架配置实例，读取 log 配置项
+   * @throws LogException type_channel 中引用了不存在的通道
    */
   public function __construct(Config $config)
   {
@@ -94,14 +103,13 @@ class LogManager
   }
 
   /**
-   * 添加一个日志通道
+   * 注册一个日志通道
    *
-   * 注意：该方法需在swoole服务器启动之前调用，在工作进程添加的通道不会同步到其他进程。
+   * 需在 Swoole 服务器启动前调用，工作进程内添加的通道不会同步到其他进程。
    *
-   * @param string $name 通道名称
-   * @param DriveInterface|string|array{driver:string,options:array} $channel 驱动类
-   * @return void
-   * @throws LogException 配置错误
+   * @param string $name 通道名称（内部统一转小写存储）
+   * @param DriveInterface|string|array{driver:string,options:array} $channel 驱动实例、类名或驱动配置数组
+   * @throws LogException 通道类不存在、未实现接口或配置格式错误
    */
   public function addChannel(string $name, DriveInterface|string|array $channel): void
   {
@@ -130,10 +138,9 @@ class LogManager
   }
 
   /**
-   * 判断通道是否存在
+   * 判断指定通道是否已注册
    *
-   * @access public
-   * @param string|array $channel 通过通道名称，判断是否存在
+   * @param string|array $channel 通道名称，传入数组时需全部存在才返回 true
    * @return bool
    */
   public function hasChannel(string|array $channel): bool
@@ -148,11 +155,11 @@ class LogManager
   }
 
   /**
-   * 创建日志数据
+   * 构建一条标准日志数据结构
    *
-   * @param string $level
-   * @param string|Stringable $message
-   * @param array $context
+   * @param string $level 日志级别，如 error、info、debug 等
+   * @param string|Stringable $message 日志消息内容
+   * @param array $context 附加上下文，支持 _trace_source 键传递调用来源
    * @return array<int,array{timestamp:int,level:string,message:string,context:array,source:string}>
    */
   public static function createLogData(
@@ -173,18 +180,14 @@ class LogManager
   }
 
   /**
-   * 格式化日志数据为字符串
+   * 将日志数据按格式规则渲染为字符串
    *
-   * @access public
-   * @param array{
-   *    timestamp: int,
-   *    level: string,
-   *    message: string,
-   *    context: array,
-   *    source: string,
-   * } $logData 需要写入日志的记录
-   * @param string $formatRule 格式化规则，示例:[%timestamp][%level] %message : %context -in %source
-   * @return string
+   * 支持两种格式：占位符格式（如 %timestamp、%level）和 sprintf 格式。
+   * 占位符格式按规则中出现的字段顺序替换；无占位符时回退到 vsprintf。
+   *
+   * @param string $formatRule 格式化规则，占位符格式示例: [%timestamp][%level] %message : %context -in %source
+   * @param array{timestamp:int,level:string,message:string,context:array,source:string} $logData 日志数据
+   * @return string 格式化后的日志字符串
    */
   public static function formatLogDataToString(string $formatRule, array $logData): string
   {
@@ -224,12 +227,13 @@ class LogManager
   }
 
   /**
-   * 输出日志到控制台
+   * 输出日志内容到控制台并附加颜色
    *
-   * @access public
-   * @param string $color 输出的颜色，传入内置日志等级会有预设颜色
-   * @param string $content 日志内容,通过Manager::formatLogDataToString方法生成
-   * @return void
+   * 传入 ANSI 颜色码或日志级别名称（自动映射预设颜色）。
+   * 当全局开关 $toTheConsole 为 false 时不输出。
+   *
+   * @param string $color ANSI 颜色码或日志级别名称（如 error、warning）
+   * @param string $content 通过 formatLogDataToString 生成的日志字符串
    */
   public static function echoConsole(string $color, string $content): void
   {
@@ -253,11 +257,15 @@ class LogManager
   }
 
   /**
-   * 将调用的方法转发至日志驱动
+   * 将方法调用转发至对应通道的驱动实例
    *
-   * @param string $name
-   * @param array $arguments
-   * @return mixed
+   * 优先根据 type_channel 路由到指定通道，否则使用默认通道。
+   * 对 write/record/mixed 级别的调用会自动注入调用来源信息。
+   *
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed 驱动方法的返回值
+   * @throws BadMethodCallException 调用不存在的方法时抛出
    */
   public function __call(string $name, array $arguments)
   {
@@ -293,10 +301,13 @@ class LogManager
   }
 
   /**
-   * 在上下文中加入日志来源
+   * 在上下文中注入日志调用来源（文件:行号）
    *
-   * @param array $context 上下文
-   * @return array
+   * 通过 debug_backtrace 回溯到 Facade 或 LogManager 的调用位置，
+   * 仅在 recordLogTraceSource 开启时记录。
+   *
+   * @param array $context 原始上下文数据
+   * @return array 注入 _trace_source 后的上下文
    */
   private function buildTraceSource(array $context = []): array
   {
@@ -324,11 +335,11 @@ class LogManager
   }
 
   /**
-   * 设置日志通道
+   * 获取指定通道的驱动实例
    *
-   * @param string|null $channel 设置记录日志的通道
-   * @return DriveInterface
-   * @throws InvalidArgumentException 通道不存在
+   * @param string|null $channel 通道名称，null 时使用默认通道
+   * @return DriveInterface 通道驱动实例
+   * @throws InvalidArgumentException 通道不存在时抛出
    */
   public function channel(?string $channel): DriveInterface
   {

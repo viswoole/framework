@@ -25,18 +25,22 @@ use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
 /**
- * HTTP服务事件处理
+ * HTTP 请求事件处理器
+ *
+ * 作为 Swoole HTTP Server 的 onRequest 回调入口，
+ * 负责将 Swoole 原始请求/响应对象封装为 PSR-7 风格对象，
+ * 交由路由分发并处理响应输出。
  */
 class HttpEventHandle
 {
   /**
-   * 处理http请求
+   * Swoole onRequest 回调入口
    *
-   * @access public
-   * @param Request $request swoole HTTP请求对象
-   * @param Response $response swoole HTTP响应对象
-   * @return void
-   * @throws ServerNotFoundException
+   * 构造请求/响应对象 → 路由分发 → 处理响应；异常交由异常处理器渲染。
+   *
+   * @param Request $request Swoole 原始请求对象
+   * @param Response $response Swoole 原始响应对象
+   * @throws ServerNotFoundException 服务未找到时抛出
    */
   public static function onRequest(
     Request  $request,
@@ -71,11 +75,12 @@ class HttpEventHandle
   }
 
   /**
-   * 处理响应
+   * 根据路由返回值类型选择响应方式
    *
-   * @param mixed $result
-   * @param ResponseInterface $psr7Response
-   * @return void
+   * ResponseInterface 实例直接 send；数组/对象以 JSON 响应；其它转为字符串响应。
+   *
+   * @param mixed $result 路由分发返回值
+   * @param ResponseInterface $psr7Response 响应对象
    */
   public static function handleResponse(mixed $result, ResponseInterface $psr7Response): void
   {

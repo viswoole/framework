@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Exception;
 
 /**
- * 服务未找到异常
+ * Swoole 服务类型未注册时抛出，如获取不存在的服务实例
  */
 class ServerNotFoundException extends ServerException
 {

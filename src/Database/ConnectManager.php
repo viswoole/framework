@@ -22,7 +22,11 @@ use Swoole\Database\PDOProxy;
 use Viswoole\Core\Coroutine\Context;
 
 /**
- * 连接管理
+ * 连接管理器
+ *
+ * 基于协程上下文的单例，管理当前协程内的数据库连接和事务状态。
+ * 事务期间复用同一连接，避免占用过多连接池资源。
+ * 析构时自动回滚未完成的事务，防止连接泄漏。
  */
 class ConnectManager
 {
@@ -30,15 +34,13 @@ class ConnectManager
    * @var array<int,array{channel:Channel,connect:mixed,active:bool}> 事务状态中的连接池
    */
   protected array $connections = [];
-  /**
-   * @var bool 是否状态
-   */
+  /** @var bool 是否处于事务中 */
   protected bool $inTransaction = false;
 
   /**
-   * 获取当前协程中的连接管理器单例
+   * 获取当前协程中的连接管理器单例，首次调用时自动创建
    *
-   * @return static
+   * @return static 连接管理器实例
    */
   public static function factory(): static
   {
@@ -52,12 +54,11 @@ class ConnectManager
   }
 
   /**
-   * 获取连接
+   * 从通道获取一个连接，事务中复用空闲连接
    *
-   * @param Channel $channel
-   * @param string $type
-   * @return mixed
-   * @noinspection PhpComposerExtensionStubsInspection
+   * @param Channel $channel 数据库通道
+   * @param string $type 连接类型 read|write
+   * @return mixed 数据库连接实例
    */
   public function pop(Channel $channel, string $type): mixed
   {
@@ -88,10 +89,9 @@ class ConnectManager
   }
 
   /**
-   * 开启事务
+   * 标记事务开始
    *
-   * @return void
-   * @throws RuntimeException 处于事务中不允许开启多个事务
+   * @throws RuntimeException 已处于事务中时抛出
    */
   public function start(): void
   {
@@ -100,9 +100,7 @@ class ConnectManager
   }
 
   /**
-   * 提交事务
-   * @access public
-   * @return void
+   * 提交事务，释放所有事务连接
    */
   public function commit(): void
   {
@@ -120,11 +118,10 @@ class ConnectManager
   }
 
   /**
-   * 归还连接
+   * 归还连接到通道，事务中仅标记为空闲而非真正归还
    *
-   * @param Channel $channel
-   * @param mixed $connect
-   * @return void
+   * @param Channel $channel 数据库通道
+   * @param mixed $connect 数据库连接实例
    */
   public function put(Channel $channel, mixed $connect): void
   {
@@ -140,9 +137,7 @@ class ConnectManager
   }
 
   /**
-   * 关闭事务
-   *
-   * @return void
+   * 关闭事务，归还所有连接并重置事务状态
    */
   protected function close(): void
   {
@@ -157,9 +152,7 @@ class ConnectManager
   }
 
   /**
-   * 析构函数
-   *
-   * 回滚所有未完成的事务
+   * 析构时回滚未完成的事务，防止连接泄漏
    */
   public function __destruct()
   {
@@ -167,10 +160,7 @@ class ConnectManager
   }
 
   /**
-   * 回滚所有事务
-   *
-   * @access public
-   * @return void
+   * 回滚事务，释放所有事务连接
    */
   public function rollBack(): void
   {

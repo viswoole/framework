@@ -21,18 +21,21 @@ use Viswoole\Core\Validate\BaseValidateRule;
 use Viswoole\HttpServer\Message\UploadedFile;
 
 /**
- * HTTP上传文件校验
+ * 上传文件验证规则属性
  *
- * 与Viswoole\HttpServer\AutoInject\File注解配合使用
+ * 用于校验上传文件的 MIME 类型、大小和数量，
+ * 与 InjectFile 注解配合使用实现控制器参数自动注入与校验。
+ *
+ * @see InjectFile
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class FileRule extends BaseValidateRule
 {
   /**
-   * @param string $fileMime 文件媒体类型，多个用`|`分割
-   * @param int $maxSize 文件最大长度,单位字节，小于等于0为不限制长度
-   * @param int $count 上传文件数量，小于等于0为不限制文件数量
-   * @param string $message 错误提示，如果不为空则会覆盖掉默认提示
+   * @param string $fileMime 允许的 MIME 类型，多个用 `|` 分隔，'*' 表示不限制
+   * @param int $maxSize 文件最大字节数，小于等于 0 不限制
+   * @param int $count 要求的文件数量，小于等于 0 不限制
+   * @param string $message 自定义错误提示，非空时覆盖默认提示
    */
   public function __construct(
     public readonly string $fileMime = '*',
@@ -45,7 +48,12 @@ class FileRule extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验上传文件值
+   *
+   * 值为 null 时直接返回 null；非空时校验文件数量、类型和大小。
+   *
+   * @param mixed $value 待校验的 UploadedFile 或 UploadedFile[]
+   * @return mixed 原值
    */
   #[Override] public function validate(mixed $value): mixed
   {
@@ -70,10 +78,9 @@ class FileRule extends BaseValidateRule
   }
 
   /**
-   * 验证文件
+   * 校验单个文件的 MIME 类型和大小
    *
-   * @param UploadedFile $file
-   * @return void
+   * @param UploadedFile $file 上传文件实例
    */
   private function checkFile(UploadedFile $file): void
   {

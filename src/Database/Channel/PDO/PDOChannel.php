@@ -29,32 +29,35 @@ use Viswoole\Database\Query\Options;
 use Viswoole\Database\Raw;
 
 /**
- * PDO通道
+ * PDO 数据库通道
+ *
+ * 管理 PDO 连接池、读写分离与连接调度，
+ * 负责将查询选项转换为参数化 SQL 并执行。
  */
 class PDOChannel extends Channel
 {
   /**
-   * @var PDOPool|array{read:PDOPool[],write:PDOPool[]} 连接池
+   * @var PDOPool|array{read:PDOPool[],write:PDOPool[]} 连接池，单库时为 PDOPool，读写分离时为 read/write 分组
    */
   private readonly PDOPool|array $pool;
   /**
-   * @var Table 全局共享表
+   * @var Table Swoole\Table 全局共享计数器，用于读写分离的轮询索引
    */
   private Table $table;
 
   /**
-   * @param DriverType $type 数据库类型
-   * @param string|array{read:array,write:array} $host 链接地址,可以使用unixSocket做为连接地址，支持读写分离
-   * @param int $port 端口
-   * @param bool $sticky 如果设置为true，则当前请求内，只要写入过数据，其他读操作都会复用该库链接
+   * @param DriverType $type 数据库驱动类型
+   * @param string|array{read:string|string[],write:string|string[]} $host 连接地址，支持 Unix Socket；数组形式启用读写分离
+   * @param int $port 数据库端口
+   * @param bool $sticky 是否开启粘性读：写入后同一协程内后续读操作复用写连接池
    * @param string $database 数据库名称
    * @param string $username 用户名
    * @param string $password 密码
-   * @param string $charset 数据库编码
-   * @param array $options 其他PDO配置
-   * @param int $pool_max_size 连接池最大长度
-   * @param int $pool_fill_size 连接池默认填充长度，默认0为不填充
-   * @param int $pool_timeout_time 获取或归还连接超时时间，默认5秒
+   * @param string $charset 字符集编码
+   * @param array $options 额外 PDO 配置项
+   * @param int $pool_max_size 连接池最大连接数
+   * @param int $pool_fill_size 连接池初始填充数，0 表示不预填充
+   * @param int $pool_timeout_time 获取/归还连接超时时间（秒）
    */
   public function __construct(
     public readonly DriverType $type = DriverType::MYSQL,
@@ -118,11 +121,11 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 创建连接池
+   * 为单个地址创建连接池，自动识别 Unix Socket 与 TCP 地址
    *
-   * @param string $host
-   * @param array $config
-   * @return PDOPool
+   * @param string $host 主机地址或 Unix Socket 路径
+   * @param array $config PDO 配置项
+   * @return PDOPool 连接池实例
    */
   protected function createPool(string $host, array $config): PDOPool
   {
@@ -148,11 +151,11 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 构建sql
+   * 根据查询选项构建参数化 SQL
    *
-   * @param Options $options
-   * @return Raw
-   * @throws DbException
+   * @param Options $options 查询选项
+   * @return Raw 包含 SQL 与绑定参数的原始表达式
+   * @throws DbException 构建失败时抛出
    */
   #[Override] public function build(Options $options): Raw
   {
@@ -161,7 +164,10 @@ class PDOChannel extends Channel
   }
 
   /**
+   * 执行参数化 SQL 语句，INSERT/REPLACE 时可选返回自增 ID
+   *
    * @inheritDoc
+   * @throws DbException SQL 执行失败时抛出
    */
   public function execute(
     string|Raw   $sql,
@@ -206,10 +212,10 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 获取连接
+   * 从连接池获取一个 PDO 代理连接
    *
-   * @param string $type
-   * @return PDOProxy
+   * @param string $type 连接类型：read 或 write
+   * @return PDOProxy PDO 代理连接
    */
   #[Override] public function pop(string $type): PDOProxy
   {
@@ -218,10 +224,10 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 获取数据库连接池，读写分离
+   * 根据读写类型获取对应连接池，读写分离时按轮询 + sticky 策略选择
    *
-   * @param string $type
-   * @return PDOPool
+   * @param string $type 连接类型：read 或 write
+   * @return PDOPool 目标连接池
    */
   protected function getPool(string $type): PDOPool
   {
@@ -266,10 +272,10 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 是否为写操作
+   * 根据 SQL 语句判断操作类型：SELECT 为读，其余为写
    *
-   * @param string $sql
-   * @return string
+   * @param string $sql SQL 语句
+   * @return string read 或 write
    */
   protected function getType(string $sql): string
   {
@@ -304,9 +310,7 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 删除当前协程中获取连接时的索引
-   *
-   * @return void
+   * 清除当前协程记录的连接池索引
    */
   private function removeCurrentPoolIndex(): void
   {

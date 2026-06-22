@@ -25,9 +25,8 @@ use Viswoole\Router\ApiDoc\DocCommentTool;
 class EnumStructure extends ClassTypeStructure
 {
   /**
-   * 构建枚举结构
-   *
-   * @param string $enum
+   * @param string $enum 枚举类的完全限定名称
+   * @throws InvalidArgumentException 传入类名不是枚举时抛出
    */
   public function __construct(string $enum)
   {

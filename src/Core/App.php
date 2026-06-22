@@ -30,7 +30,9 @@ use Viswoole\Router\Router;
 use Viswoole\Router\RouterService;
 
 /**
- * App应用管理中心
+ * 应用容器
+ *
+ * 框架全局唯一的容器实例，负责服务注册、初始化与生命周期管理。
  *
  * @property Env $env 环境变量管理实例
  * @property Config $config 配置管理实例
@@ -51,7 +53,7 @@ class App extends Container
    */
   public const string VERSION = '1.0.2';
   /**
-   * @var App 当前APP应用容器实例
+   * @var App 当前应用容器实例（单例）
    */
   protected static self $instance;
   /**
@@ -77,11 +79,11 @@ class App extends Container
     DbService::class
   ];
   /**
-   * @var Table 共享内存表
+   * @var Table 基于 Swoole 共享内存的配置表，用于跨 Worker 进程同步 debug 状态
    */
   private Table $_config;
   /**
-   * @var float 开始运行时间
+   * @var float 应用启动时间戳（含微秒精度）
    */
   private float $startRunTime;
 
@@ -104,10 +106,9 @@ class App extends Container
   }
 
   /**
-   * 获取项目根路径
+   * 获取项目根路径，首次调用时定义 BASE_PATH 常量
    *
-   * @access public
-   * @return string
+   * @return string 项目根目录绝对路径（不含末尾分隔符）
    */
   public function getRootPath(): string
   {
@@ -116,9 +117,7 @@ class App extends Container
   }
 
   /**
-   * 初始化
-   *
-   * @return void
+   * 初始化应用：设置 debug 模式、时区，并注册所有服务提供者
    */
   protected function initialize(): void
   {
@@ -133,11 +132,9 @@ class App extends Container
   }
 
   /**
-   * 设置是否启用debug模式，debug值由跨域共享表记录，会影响所有worker进程
+   * 设置 debug 模式，通过 Swoole\Table 写入共享内存以影响所有 Worker 进程
    *
-   * @access public
-   * @param bool $debug
-   * @return void
+   * @param bool $debug 是否开启调试模式
    */
   public function setDebug(bool $debug): void
   {
@@ -145,9 +142,7 @@ class App extends Container
   }
 
   /**
-   * 加载服务
-   *
-   * @return void
+   * 加载并启动所有服务提供者，合并框架默认、用户配置和依赖包三处注册的服务
    */
   protected function loadService(): void
   {
@@ -179,9 +174,9 @@ class App extends Container
   }
 
   /**
-   * 获取vendor路径
+   * 获取 Composer 依赖包目录路径
    *
-   * @return string
+   * @return string vendor 目录绝对路径
    */
   public function getVendorPath(): string
   {
@@ -189,9 +184,9 @@ class App extends Container
   }
 
   /**
-   * 工厂单例模式
+   * 获取应用容器单例，首次调用时自动创建
    *
-   * @return App
+   * @return App 应用容器实例
    */
   public static function factory(): App
   {
@@ -200,10 +195,9 @@ class App extends Container
   }
 
   /**
-   * 获取程序正常运行了多少秒
+   * 获取应用已运行时长
    *
-   * @access public
-   * @return float 返回秒数（含微秒精度）
+   * @return float 自启动以来的秒数（含微秒精度）
    */
   public function getUptime(): float
   {
@@ -211,10 +205,9 @@ class App extends Container
   }
 
   /**
-   * 获取程序开始运行时间
+   * 获取应用启动时间戳
    *
-   * @access public
-   * @return float 返回时间戳（含微秒精度）
+   * @return float 启动时的 Unix 时间戳（含微秒精度）
    */
   public function getStartRunTime(): float
   {
@@ -222,9 +215,9 @@ class App extends Container
   }
 
   /**
-   * 获取当前版本号
+   * 获取框架版本号
    *
-   * @return string
+   * @return string 语义化版本号
    */
   public function getVersion(): string
   {
@@ -232,10 +225,9 @@ class App extends Container
   }
 
   /**
-   * 获取config路径
+   * 获取配置文件目录路径
    *
-   * @access public
-   * @return string
+   * @return string config 目录绝对路径
    */
   public function getConfigPath(): string
   {
@@ -243,10 +235,9 @@ class App extends Container
   }
 
   /**
-   * 获取app路径
+   * 获取应用业务代码目录路径
    *
-   * @access public
-   * @return string
+   * @return string app 目录绝对路径
    */
   public function getAppPath(): string
   {
@@ -254,10 +245,9 @@ class App extends Container
   }
 
   /**
-   * 获取env路径
+   * 获取环境变量文件路径
    *
-   * @access public
-   * @return string
+   * @return string .env 文件绝对路径
    */
   public function getEnvPath(): string
   {
@@ -265,9 +255,9 @@ class App extends Container
   }
 
   /**
-   * 是否debug调试模式
+   * 判断当前是否处于 debug 调试模式，从 Swoole 共享内存表中读取
    *
-   * @return bool
+   * @return bool 开启调试返回 true
    */
   public function isDebug(): bool
   {
@@ -276,7 +266,7 @@ class App extends Container
   }
 
   /**
-   * 析构方法
+   * 析构时触发 AppDestroy 事件，供服务清理资源
    */
   public function __destruct()
   {

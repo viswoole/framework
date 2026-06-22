@@ -19,7 +19,7 @@ use Override;
 use Viswoole\Core\Facade;
 
 /**
- * Env管理类
+ * 环境变量门面，静态代理 Env 核心方法
  *
  * @method static void set(array|string $env, mixed $value = null) 设置环境变量值
  * @method static bool has(string $name) 检测是否存在环境变量
@@ -32,7 +32,7 @@ class Env extends Facade
 {
 
   /**
-   * @inheritDoc
+   * 获取门面代理的目标类名
    */
   #[Override] protected static function getMappingClass(): string
   {

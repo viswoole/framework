@@ -18,17 +18,22 @@ namespace Viswoole\HttpServer;
 use InvalidArgumentException;
 
 /**
- * 请求头处理工具
+ * HTTP 标头验证与格式化工具
+ *
+ * 提供标头名称/值的合法性校验、名称大小写格式化、
+ * 标头值数组/字符串互转、不区分大小写的标头存在性判断等能力。
  */
 class Header
 {
   /**
-   * 验证标头是否合法
+   * 校验标头名称和值的合法性
    *
-   * @param string $name 不区分大小写的头字段名称
-   * @param string|string[] $value 标头值
-   * @return void
-   * @throws InvalidArgumentException 用于无效的标头名称或值
+   * 名称不得为空或包含换行符、回车符、冒号（防止 CRLF 注入）；
+   * 值不得为空字符串或空数组。
+   *
+   * @param string $name 标头名称
+   * @param string|string[] $value 标头值，支持单个字符串或字符串数组
+   * @throws InvalidArgumentException 名称或值不合法时抛出
    */
   public static function validate(string $name, array|string $value): void
   {
@@ -51,13 +56,12 @@ class Header
   }
 
   /**
-   * 格式化全部标头
+   * 批量格式化标头的值类型和名称大小写
    *
-   * @access public
-   * @param array $headers 标头数组
-   * @param string $valueMode 标头值类型array|string
-   * @param false|string $nameModel false则表示保留原标头名称，其他可选值为lower|upper|title
-   * @return array 格式化完毕的标头
+   * @param array $headers 原始标头键值对
+   * @param string $valueMode 值输出模式：'array' 将逗号分隔的字符串拆分为数组，其它将数组用逗号拼接为字符串
+   * @param false|string $nameModel 名称格式化模式：false 保留原样，'lower' 全小写，'upper' 全大写，'title' 首字母大写
+   * @return array 格式化后的标头数组
    */
   public static function formatHeaders(
     array        $headers,
@@ -82,11 +86,11 @@ class Header
   }
 
   /**
-   * 把标头名称格式化为首字母大写
+   * 格式化标头名称的大小写
    *
-   * @param string $name 标头名称
-   * @param string $formatModel 默认值title其他可选值为lower|upper
-   * @return string
+   * @param string $name 原始标头名称
+   * @param string $formatModel 格式化模式：'title' 首字母大写（默认），'upper' 全大写，'lower' 全小写
+   * @return string 格式化后的标头名称
    */
   public static function formatName(string $name, string $formatModel = 'title'): string
   {
@@ -101,11 +105,11 @@ class Header
   }
 
   /**
-   * 通过不区分大小标头判断是否存在
+   * 不区分大小写地检查标头是否存在，存在时返回真实的标头键名
    *
-   * @param string $name 不区分大小写标头名称
-   * @param array $headers 标头数组
-   * @return false|string 如存在返回真实标头，不存在则返回false
+   * @param string $name 待查找的标头名称（不区分大小写）
+   * @param array $headers 标头键值对
+   * @return false|string 存在时返回真实的标头键名，不存在返回 false
    */
   public static function hasHeader(string $name, array $headers): false|string
   {

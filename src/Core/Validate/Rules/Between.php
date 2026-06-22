@@ -20,16 +20,15 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 区间验证,对数值类型数据进行验证。
- * 大于等于 起始值 或小于等于 结束值
+ * 区间验证规则，校验数值是否在指定的闭区间 [start, end] 范围内
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Between extends BaseValidateRule
 {
   /**
-   * @param int|float $start 起始值
-   * @param int|float $end 结束值
-   * @param string $message
+   * @param int|float $start 区间下界（含）
+   * @param int|float $end 区间上界（含）
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public int|float $start,
@@ -41,7 +40,7 @@ class Between extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验数值是否在闭区间范围内，返回类型转换后的值
    */
   #[Override] public function validate(mixed $value): int|float
   {

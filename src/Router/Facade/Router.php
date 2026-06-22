@@ -22,28 +22,28 @@ use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
 
 /**
- * 路由收集器
+ * 路由门面，提供静态代理访问 Router 的所有方法
  *
- * @method static mixed dispatch(string $path, string $method, string $domain, ?array $params = null, ?callable $callback = null) 匹配路由，返回路由实例
- * @method static Route get(array|string $paths, callable|array|string $handler) 定义一个GET方式访问的路由
- * @method static Route addRoute(array|string $paths, callable|array|string $handler, string $method) 添加路由
- * @method static Route post(array|string $paths, callable|array|string $handler) 定义一个POST方式访问的路由
- * @method static Route put(array|string $paths, callable|array|string $handler) 定义一个PUT方式访问的路由
- * @method static Route delete(array|string $paths, callable|array|string $handler) 定义一个DELETE方式访问的路由
- * @method static Route head(array|string $paths, callable|array|string $handler) 定义一个HEAD方式访问的路由
- * @method static Route options(array|string $paths, callable|array|string $handler) 定义一个OPTIONS方式访问的路由
- * @method static Route patch(array|string $paths, callable|array|string $handler) 定义一个PATCH方式访问的路由
- * @method static Route any(array|string $paths, callable|array|string $handler) 定义一个不限制访问方式的路由
- * @method static Group group(array|string $prefix, Closure $closure, string $id) 分组路由
- * @method static void miss(Closure $handler, array|string $method = '*') miss路由（在未匹配到路由的时候生效）
- * @method static void server(string $serverName, Closure $closure) 服务路由定义
- * @method static Route|Group getRoute(string $idOrCiteLink) 获取路由分组或路由对象，需传入路由id或完整引用链路
+ * @method static mixed dispatch(string $path, string $method, string $domain, ?array $params = null, ?callable $callback = null) 匹配请求路径到路由并执行处理函数
+ * @method static Route get(array|string $paths, callable|array|string $handler) 定义 GET 方式访问的路由
+ * @method static Route addRoute(array|string $paths, callable|array|string $handler, string $method) 添加自定义方法的路由
+ * @method static Route post(array|string $paths, callable|array|string $handler) 定义 POST 方式访问的路由
+ * @method static Route put(array|string $paths, callable|array|string $handler) 定义 PUT 方式访问的路由
+ * @method static Route delete(array|string $paths, callable|array|string $handler) 定义 DELETE 方式访问的路由
+ * @method static Route head(array|string $paths, callable|array|string $handler) 定义 HEAD 方式访问的路由
+ * @method static Route options(array|string $paths, callable|array|string $handler) 定义 OPTIONS 方式访问的路由
+ * @method static Route patch(array|string $paths, callable|array|string $handler) 定义 PATCH 方式访问的路由
+ * @method static Route any(array|string $paths, callable|array|string $handler) 定义不限制访问方式的路由
+ * @method static Group group(array|string $prefix, Closure $closure, string $id) 定义路由分组
+ * @method static void miss(Closure $handler, array|string $method = '*') 定义兜底路由
+ * @method static void server(string $serverName, Closure $closure) 定义服务级路由
+ * @method static Route|Group getRoute(string $idOrCiteLink) 通过 ID 或引用链路获取路由实例
  * @method static array getRoutes() 获取所有路由列表
- * @method static bool isEnableApiDoc() 判断是否启用API文档解析功能
- * @method static array getApiList() 获取api列表，包含分组、路由
- * @method static array getApiDetail(string $citeLink) 通过完整引用链路获取api详情，返回路由请求参数、响应参数
+ * @method static bool isEnableApiDoc() 判断是否启用 API 文档解析功能
+ * @method static array getApiList() 获取 API 文档列表
+ * @method static array getApiDetail(string $citeLink) 获取指定路由的 API 文档详情
  *
- * 优化命令：php viswoole optimize:facade Viswoole\\Router\\Facade\\Router
+ * @see \Viswoole\Router\Router 路由器
  */
 class Router extends Facade
 {

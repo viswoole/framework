@@ -20,15 +20,17 @@ use Override;
 use Viswoole\Core\Service\Provider;
 
 /**
- * 数据库服务
+ * 数据库服务提供者
+ *
+ * 负责将数据库管理器注册到应用容器，并在所有系统服务绑定完毕后初始化数据库通道。
+ *
+ * @see DbManager
  */
 class DbService extends Provider
 {
 
   /**
-   * 该方法是在所有系统服务都绑定完毕过后调用，可以在此方法内注册路由，监听事件等
-   *
-   * @return void
+   * 所有系统服务绑定完毕后调用，初始化数据库通道管理器
    */
   #[Override] public function boot(): void
   {
@@ -37,9 +39,7 @@ class DbService extends Provider
   }
 
   /**
-   * 该方法会在服务注册时调用，在该方法内通过$this->app->bind('服务名', '服务类名');
-   *
-   * @return void
+   * 注册数据库管理器到服务容器
    */
   #[Override] public function register(): void
   {

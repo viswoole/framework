@@ -22,24 +22,26 @@ use Viswoole\Log\Contract\DriveInterface;
 use Viswoole\Log\LogManager;
 
 /**
- * 日志门面类
+ * 日志门面，提供静态代理访问 LogManager 的所有方法
  *
- * @method static void mixed(string $level, string|Stringable $message, array $context = []) 记录具有任意级别的日志。
- * @method static void alert(string|Stringable $message, array $context = []) 必须立即采取行动。
- * @method static void error(string|Stringable $message, array $context = []) 不需要立即采取行动的运行时错误，但通常应记录和监视。
- * @method static void warning(string|Stringable $message, array $context = []) 不是错误的异常情况。
- * @method static void info(string|Stringable $message, array $context = []) 有趣的事件。
- * @method static void debug(string|Stringable $message, array $context = []) 详细的调试信息。
- * @method static void sql(string|Stringable $message, array $context = []) SQL日志。
- * @method static void task(string|Stringable $message, array $context = []) 任务日志。
- * @method static void write(string $level, Stringable|string $message, array $context = []) 直接写入日志
- * @method static void record(string $level, Stringable|string $message, array $context = []) 缓存日志
- * @method static bool save(array $logRecords) 保存日志（无需手动调用, 协程结束会自动调用）
- * @method static bool clearRecord() 清除缓存日志
- * @method static array getRecord() 获取缓存日志
- * @method static DriveInterface channel(string $name) 设置日志通道
- * @method static bool hasChannel(string $name) 判断通道是否存在
- * @method static void addChannel(string $name, DriveInterface|string|array $channel) 添加通道
+ * @method static void mixed(string $level, string|Stringable $message, array $context = []) 记录自定义级别的日志
+ * @method static void alert(string|Stringable $message, array $context = []) 记录必须立即采取行动的警报
+ * @method static void error(string|Stringable $message, array $context = []) 记录运行时错误
+ * @method static void warning(string|Stringable $message, array $context = []) 记录非错误的异常情况
+ * @method static void info(string|Stringable $message, array $context = []) 记录普通业务信息
+ * @method static void debug(string|Stringable $message, array $context = []) 记录详细调试信息
+ * @method static void sql(string|Stringable $message, array $context = []) 记录SQL执行日志
+ * @method static void task(string|Stringable $message, array $context = []) 记录异步任务日志
+ * @method static void write(string $level, Stringable|string $message, array $context = []) 绕过缓存直接写入日志
+ * @method static void record(string $level, Stringable|string $message, array $context = []) 缓存日志，协程结束时批量写入
+ * @method static bool save(array $logRecords) 批量保存日志（协程结束时自动调用）
+ * @method static bool clearRecord() 清除当前协程缓存的日志
+ * @method static array getRecord() 获取当前协程缓存的日志
+ * @method static DriveInterface channel(string $name) 获取指定通道的驱动实例
+ * @method static bool hasChannel(string $name) 判断指定通道是否已注册
+ * @method static void addChannel(string $name, DriveInterface|string|array $channel) 注册一个日志通道
+ *
+ * @see LogManager 日志管理器
  */
 class Log extends Facade
 {

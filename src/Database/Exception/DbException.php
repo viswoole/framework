@@ -19,7 +19,9 @@ use Exception;
 use Throwable;
 
 /**
- * 数据库异常
+ * 数据库操作异常
+ *
+ * 封装 SQL 执行过程中的错误信息，额外携带出错的 SQL 语句以便调试。
  */
 class DbException extends Exception
 {

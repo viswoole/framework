@@ -21,16 +21,18 @@ use Viswoole\HttpServer\Message\UploadedFile;
 use Viswoole\HttpServer\Message\Uri;
 
 /**
- * 请求对象
+ * HTTP 请求对象接口
+ *
+ * 定义请求参数获取、标头操作、文件处理、URI 构建等核心能力，
+ * Request 实现类必须遵循此契约。
  *
  * @link https://wiki.swoole.com/zh-cn/#/http_server?id=swoolehttprequest
  */
 interface RequestInterface
 {
   /**
-   * 创建一个新的RequestInterface对象
+   * 工厂方法：创建新的请求对象
    *
-   * @access public
    * @param array{
    *   parse_cookie:bool,
    *   parse_body:bool,
@@ -38,144 +40,123 @@ interface RequestInterface
    *   enable_compression:bool,
    *   compression_level:int,
    *   upload_tmp_dir:string
-   * } $options
-   * @return RequestInterface
+   * } $options Swoole\Request::create 的配置项
+   * @return RequestInterface 新创建的请求实例
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=create
    */
   public static function create(array $options = []): RequestInterface;
 
   /**
-   * 获取Swoole\Http\Request对象
+   * 获取底层的 Swoole\Http\Request 对象
    *
-   * @return swooleRequest
+   * @return swooleRequest Swoole 原始请求对象
    */
   public function getSwooleRequest(): swooleRequest;
 
   /**
-   * 获取请求标头
+   * 获取请求标头（所有键名均为小写）
    *
-   * @access public
-   * @param string|null $key 如果传入key则获取单个请求标头，否则获取所有标头
-   * @return array|string|null 存在返回标头值，不存在返回null
+   * @param string|null $key 标头名称，不传则返回全部
+   * @param mixed $default 标头不存在时的默认值
+   * @return array|string|null 传入 key 时返回字符串值或 null，不传时返回全部标头数组
    */
   public function getHeader(?string $key = null, mixed $default = null): array|string|null;
 
   /**
-   * 获取服务参数
+   * 获取 Swoole server 属性（等价于 $_SERVER）
    *
-   * @access public
-   * @return array{
-   *   query_string:string,
-   *   request_method:string,
-   *   request_uri:string,
-   *   path_info:string,
-   *   request_time:int,
-   *   request_time_float:float,
-   *   server_protocol:string,
-   *   server_port:int,
-   *   remote_port:int,
-   *   remote_addr:string,
-   *   master_time:int
-   * }|mixed
+   * @param string|null $key 属性键名，不传则返回全部
+   * @param mixed $default 键不存在时的默认值
+   * @return mixed 单个属性值或完整 server 数组
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=server
    */
   public function getServer(?string $key = null, mixed $default = null): mixed;
 
   /**
-   * 获取post参数
+   * 获取 POST 参数
    *
-   * @access public
-   * @param string|null $key 要获取的参数
-   * @param mixed|null $default 默认值
-   * @return mixed
+   * @param string|null $key 参数名，不传则返回全部 POST 数据
+   * @param mixed $default 参数不存在时的默认值
+   * @return mixed 单个参数值或全部 POST 数据
    */
   public function post(?string $key = null, mixed $default = null): mixed;
 
   /**
-   * 获取get参数
+   * 获取 GET 查询参数
    *
-   * @access public
-   * @param string|null $key 要获取的参数
-   * @param mixed|null $default 不存在时返回默认值
-   * @return mixed
+   * @param string|null $key 参数名，不传则返回全部查询参数
+   * @param mixed $default 参数不存在时的默认值
+   * @return mixed 单个参数值或全部查询参数
    */
   public function get(?string $key = null, mixed $default = null): mixed;
 
   /**
-   * 获取cookie
+   * 获取 Cookie 值
    *
-   * @param string|null $key 要获取的Cookie名称，不传获取所有cookie关联数组
-   * @param mixed|null $default 不存在返回默认值
-   * @return mixed
+   * @param string|null $key Cookie 名称，不传则返回全部 Cookie 关联数组
+   * @param mixed $default 键不存在时的默认值
+   * @return mixed 单个 Cookie 值或全部 Cookie 数组
    */
   public function cookie(?string $key = null, mixed $default = null): mixed;
 
   /**
-   * 获取上传的文件
+   * 获取上传文件
    *
-   * @access public
-   * @param string|null $key 可选文件名称
-   * @return UploadedFile|UploadedFile[]|null|array<string, UploadedFile|UploadedFile[]>
+   * @param string|null $key 表单字段名，不传则返回全部上传文件
+   * @return UploadedFile|UploadedFile[]|null|array<string, UploadedFile|UploadedFile[]> 无对应文件时返回 null
    */
   public function files(?string $key = null): UploadedFile|array|null;
 
   /**
-   * 获取POST包体，此函数等同于 PHP 的 fopen('php://input')。
+   * 获取原始请求体（等价于 fopen('php://input')）
    *
-   * @access public
-   * @return string|false 返回原始POST数据，失败返回false
+   * @return string|false 原始 POST 数据，读取失败返回 false
    */
   public function getContent(): string|false;
 
   /**
-   * 获取完整的原始 Http 请求报文，注意 Http2 下无法使用。包括 Http Header 和 Http Body
+   * 获取完整原始 HTTP 请求报文（含请求行、Header 和 Body），HTTP2 下不可用
    *
-   * @access public
-   * @return string|false 执行成功返回报文，如果上下文连接不存在或者在 Http2 模式下返回 false
+   * @return string|false 完整报文字符串，连接不存在或 HTTP2 模式下返回 false
    */
   public function getData(): string|false;
 
   /**
-   * 解析 HTTP 请求数据包，会返回成功解析的数据包长度。
+   * 解析 HTTP 请求数据包，用于半包/粘包场景下手动追加数据
    *
-   * @access public
-   * @param string $data
-   * @return int 解析成功返回解析的报文长度
-   * @throws RuntimeException 解析失败
+   * @param string $data 原始请求数据包
+   * @return int 成功解析的报文长度
+   * @throws RuntimeException 数据包解析失败时抛出
    */
   public function parse(string $data): int;
 
   /**
-   * 获取当前的 HTTP 请求数据包是否已到达结尾。
+   * 判断当前 HTTP 请求数据包是否已完整接收
    *
-   * @access public
-   * @return bool
+   * @return bool 数据包接收完毕返回 true
    */
   public function isCompleted(): bool;
 
   /**
-   * 获取当前的 HTTP 请求的请求方式。
+   * 获取 HTTP 请求方法（大写形式，如 GET、POST）
    *
-   * @access public
-   * @return string 成返回大写的请求方式
+   * @return string 请求方法名
    */
   public function getMethod(): string;
 
   /**
-   * 获取客户端ip
+   * 获取客户端 IP 地址，优先读取 X-Forwarded-For / X-Real-IP 等代理头
    *
-   * @access public
-   * @return string
+   * @return string 客户端 IP
    */
   public function ip(): string;
 
   /**
-   * 批量获取请求参数
+   * 批量获取请求参数，支持指定字段名与默认值
    *
-   * @access public
-   * @param string|array|null $rule 可传key或[key=>default,...]或[key1,key2....]
-   * @param bool $isShowNull 是否显示为null的字段
-   * @return array
+   * @param string|array<string,mixed>|null $rule 字段名、[字段名 => 默认值] 或 [字段名, ...]；null 返回全部
+   * @param bool $isShowNull 是否包含值为 null 的字段
+   * @return array<string,mixed> 筛选后的参数关联数组
    */
   public function params(
     string|array|null $rule = null,
@@ -183,13 +164,12 @@ interface RequestInterface
   ): array;
 
   /**
-   * 获取请求参数，自动判断get或post
+   * 获取单个请求参数，自动合并 GET 与 POST，支持过滤器
    *
-   * @access public
-   * @param string|null $key 字段，不传则获取全部
-   * @param mixed $default 默认值
-   * @param string|array|null $filter 过滤器
-   * @return mixed
+   * @param string|null $key 参数名，null 时返回全部参数
+   * @param mixed $default 参数不存在时的默认值
+   * @param string|array<string,mixed>|null $filter 过滤器函数名或回调，对返回值进行清洗
+   * @return mixed 参数值或全部参数
    */
   public function param(
     ?string      $key = null,
@@ -206,10 +186,9 @@ interface RequestInterface
   public function getBasicAuthCredentials(): ?array;
 
   /**
-   * 当前是否JSON请求
+   * 判断请求 Content-Type 是否为 JSON
    *
-   * @access public
-   * @return bool
+   * @return bool 是 JSON 请求返回 true
    */
   public function isJson(): bool;
 
@@ -222,18 +201,16 @@ interface RequestInterface
   public function getAcceptType(): string;
 
   /**
-   * 获取HTTP协议版本。
+   * 获取 HTTP 协议版本
    *
-   * @access public
-   * @return string HTTP协议版本。例如，"1.1"，"1.0","2"
+   * @return string 协议版本号，如 "1.1"、"1.0"、"2"
    */
   public function getProtocolVersion(): string;
 
   /**
-   * 获取消息的请求目标。
+   * 获取请求目标（Request-Target），即请求行中的路径及查询字符串部分
    *
-   * @access public
-   * @return string
+   * @return string 请求目标，如 /path?query=1
    */
   public function target(): string;
 
@@ -246,10 +223,9 @@ interface RequestInterface
   public function getPath(): string;
 
   /**
-   * 检索 URI 实例。
+   * 获取请求 URI 实例，包含 scheme、host、path、query 等组成部分
    *
-   * @access public
-   * @return Uri 返回表示请求 URI 的 UriInterface 实例。
+   * @return Uri URI 实例
    */
   public function getUri(): Uri;
 
@@ -280,11 +256,10 @@ interface RequestInterface
   public function setHeader(string $name, string $value): RequestInterface;
 
   /**
-   * 添加/修改请求参数
+   * 向请求中注入额外参数，可指定注入到 GET、POST 或自动合并
    *
-   * @param array<string,mixed> $params 参数名称
-   * @param string $type 参数类型，可选值auto,get,post。
-   * @return void
+   * @param array<string,mixed> $params 要注入的参数键值对
+   * @param string $type 注入目标：auto（合并到 param）、get（GET 参数）、post（POST 参数）
    */
   public function addParams(array $params, string $type = 'auto'): void;
 }

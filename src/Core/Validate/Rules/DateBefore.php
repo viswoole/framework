@@ -19,13 +19,13 @@ use Attribute;
 use Override;
 
 /**
- * 日期验证，验证日期必须小于datetime
+ * 日期早于验证规则，校验日期字符串是否早于指定的时间基准点
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class DateBefore extends DateAfter
 {
   /**
-   * @inheritDoc
+   * 校验日期是否早于基准时间点
    */
   #[Override] public function validate(mixed $value): mixed
   {

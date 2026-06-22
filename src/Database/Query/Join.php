@@ -18,18 +18,21 @@ namespace Viswoole\Database\Query;
 use InvalidArgumentException;
 
 /**
- * Join联表查询
+ * JOIN 联表查询 Trait
+ *
+ * 提供 INNER、LEFT、RIGHT、FULL 四种联表方式，
+ * 支持表别名和自定义关联条件运算符。
  */
 trait Join
 {
   /**
-   * 关联查询（LEFT）
+   * 左连接查询（LEFT JOIN 的快捷方法）
    *
-   * @param string $table 要关联的表
-   * @param string $localKey 主键
-   * @param string $operator 关联条件运算符表达式
-   * @param string $foreignKey 外键
-   * @return static
+   * @param string $table 关联表名，支持别名（table AS alias）
+   * @param string $localKey 主键字段
+   * @param string $operator 关联条件运算符
+   * @param string $foreignKey 外键字段
+   * @return static 支持链式调用
    * @see self::join()
    */
   public function LeftJoin(
@@ -43,20 +46,15 @@ trait Join
   }
 
   /**
-   * 关联查询
+   * 添加 JOIN 联表查询
    *
-   * ```
-   * $query->table('user')->join('user_info', 'user.id', 'user_info.uid');
-   * // 设置别名
-   * $query->table('user','u')->join('user_info as info', 'u.id', 'info.uid');
-   * ```
-   *
-   * @param string $table 要关联的表
-   * @param string $localKey 主键
-   * @param string $foreignKey 外键
-   * @param string $operator 关联条件运算符表达式，默认为等号
-   * @param string $type ['INNER', 'LEFT', 'RIGHT', 'FULL']，不区分大小写
-   * @return static
+   * @param string $table 关联表名，支持别名（table AS alias）
+   * @param string $localKey 主键字段
+   * @param string $foreignKey 外键字段
+   * @param string $operator 关联条件运算符，默认 '='
+   * @param string $type 连接类型 INNER|LEFT|RIGHT|FULL，默认 INNER
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 连接类型无效时抛出
    */
   public function join(
     string $table,
@@ -102,13 +100,13 @@ trait Join
   }
 
   /**
-   * 关联查询（FULL）
+   * 全连接查询（FULL JOIN 的快捷方法）
    *
-   * @param string $table 要关联的表
-   * @param string $localKey 主键
-   * @param string $foreignKey 外键
-   * @param string $operator 关联条件运算符表达式，默认为等号
-   * @return static
+   * @param string $table 关联表名，支持别名（table AS alias）
+   * @param string $localKey 主键字段
+   * @param string $foreignKey 外键字段
+   * @param string $operator 关联条件运算符，默认 '='
+   * @return static 支持链式调用
    * @see self::join()
    */
   public function fullJoin(

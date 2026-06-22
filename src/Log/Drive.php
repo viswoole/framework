@@ -22,12 +22,18 @@ use Viswoole\Core\Coroutine\Context;
 use Viswoole\Log\Contract\DriveInterface;
 
 /**
- * 日志驱动抽象类
+ * 日志驱动抽象基类，提供协程感知的日志记录与写入能力
+ *
+ * 在协程环境中将日志缓存至协程上下文的 Recorder，协程结束时批量持久化；
+ * 非协程环境直接写入。子类只需实现 save() 方法定义持久化策略。
+ *
+ * @see DriveInterface 驱动接口
+ * @see Recorder 协程日志记录器
  */
 abstract class Drive extends Collector implements DriveInterface
 {
   /**
-   * @var string 容器记录名
+   * @var string 协程上下文中存储 Recorder 的键名
    */
   protected string $contextName;
 
@@ -40,9 +46,9 @@ abstract class Drive extends Collector implements DriveInterface
   }
 
   /**
-   * 获取日志记录器
+   * 获取当前协程绑定的日志记录器，不存在时自动创建并存入协程上下文
    *
-   * @return Recorder
+   * @return Recorder 当前协程的日志记录器实例
    */
   private function getRecorder(): Recorder
   {
@@ -57,9 +63,9 @@ abstract class Drive extends Collector implements DriveInterface
   }
 
   /**
-   * 获取协程上下文记录键
+   * 生成协程上下文中存储 Recorder 的唯一键，基于类名避免不同驱动冲突
    *
-   * @return string
+   * @return string 协程上下文键名
    */
   private function getContextName(): string
   {

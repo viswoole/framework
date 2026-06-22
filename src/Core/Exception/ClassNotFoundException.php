@@ -16,7 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Core\Exception;
 
 /**
- * 找不到类异常
+ * 类不存在时抛出，通常在容器反射解析或自动加载阶段触发
  */
 class ClassNotFoundException extends NotFoundException
 {

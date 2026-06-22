@@ -26,7 +26,10 @@ use Viswoole\Router\ApiDoc\Structure\Types;
 use Viswoole\Router\ApiDoc\Structure\TypeStructure;
 
 /**
- * 返回值注解
+ * 返回值注解，声明接口响应的数据结构、状态码和内容类型
+ *
+ * 支持从数组示例数据自动推导字段类型和嵌套结构，
+ * 键名支持 name|描述 和 name?|描述 语法标记可选字段。
  */
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_FUNCTION | Attribute::IS_REPEATABLE)]
 class Returned
@@ -137,10 +140,10 @@ class Returned
   }
 
   /**
-   * 解析数组对象结构
+   * 解析关联数组为对象字段结构列表
    *
-   * @param array $data
-   * @return array{0:array,1:FieldStructure[]}
+   * @param array $data 关联数组数据
+   * @return array{0:array,1:FieldStructure[]} [0=>展示数据, 1=>字段结构列表]
    */
   private function parseArrayObject(array $data): array
   {

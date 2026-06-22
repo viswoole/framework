@@ -20,14 +20,14 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 验证数值是否大于或等于$max
+ * 最大值验证规则，校验数值是否不超过指定上界
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Max extends BaseValidateRule
 {
   /**
-   * @param int|float $max 最大值
-   * @param string $message
+   * @param int|float $max 允许的最大值（含）
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public int|float $max,
@@ -38,7 +38,7 @@ class Max extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验数值是否不超过最大值
    */
   #[Override] public function validate(mixed $value): int|float
   {

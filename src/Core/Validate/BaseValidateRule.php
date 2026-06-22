@@ -18,17 +18,21 @@ namespace Viswoole\Core\Validate;
 use Viswoole\Core\Exception\ValidateException;
 
 /**
- * 拓展验证规则，基类
+ * 扩展验证规则基类
+ *
+ * 自定义验证规则须继承此类并实现 validate() 方法，
+ * 校验失败时调用 error() 抛出 ValidateException。
+ * 作为 PHP Attribute 使用时，容器注入参数会自动调用 validate() 进行校验。
  */
 abstract class BaseValidateRule
 {
   /**
-   * @var string 错误提示消息
+   * @var string 自定义校验失败提示消息
    */
   protected string $message;
 
   /**
-   * @param string $message 错误提示信息
+   * @param string $message 校验失败时的自定义提示消息
    */
   public function __construct(string $message = '')
   {
@@ -36,20 +40,19 @@ abstract class BaseValidateRule
   }
 
   /**
-   * 验证数据
+   * 执行校验逻辑，子类必须实现
    *
-   * @param mixed $value
-   * @return mixed 返回校验后的数据
-   * @throws ValidateException 验证失败请抛出异常或调用$this->error()
+   * @param mixed $value 待校验的值
+   * @return mixed 校验通过的值（可能被转换）
+   * @throws ValidateException 校验失败时抛出
    */
   abstract public function validate(mixed $value): mixed;
 
   /**
-   * 抛出验证失败异常
+   * 抛出校验失败异常，优先使用构造时传入的自定义消息
    *
-   * @param string|null $message 自定义错误提示信息，如果为null则使用$this->message,仅在$this->message为空时有效
-   * @return void
-   * @throws ValidateException
+   * @param string|null $message 临时错误消息，仅在 $this->message 为空时生效
+   * @throws ValidateException 始终抛出
    */
   protected function error(?string $message = null): void
   {

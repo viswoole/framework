@@ -15,12 +15,12 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Common;
 /**
- * 字符串辅助类
+ * 字符串工具类，提供命名风格转换等静态方法
  */
 class Str
 {
   /**
-   * 骆驼形到蛇形
+   * 将驼峰命名转换为蛇形命名（如 camelCase → camel_case）
    *
    * @param string $input 驼峰命名字符串
    * @return string 蛇形命名字符串
@@ -32,10 +32,10 @@ class Str
   }
 
   /**
-   * 蛇形到骆驼形(单词首字母大写)
+   * 将蛇形命名转换为小驼峰命名（如 snake_case → snakeCase）
    *
    * @param string $input 蛇形命名字符串
-   * @return string 驼峰命名字符串
+   * @return string 小驼峰命名字符串
    */
   public static function snakeCaseToCamelCase(string $input): string
   {

@@ -20,34 +20,38 @@ use Exception;
 use Swoole\Server\Task as SwooleTask;
 
 /**
- * 任务代理
+ * 任务代理对象，封装 Swoole Task 提供任务数据访问与生命周期控制
  *
- * @property float $dispatch_time 任务派发时间
- * @property int $id 任务id
- * @property int $worker_id 任务所在的worker进程id
- * @property int $flags 任务的flags，默认为SW_TASK_NONBLOCK
+ * 作为任务处理器接收的参数，提供对原始任务数据的只读访问，
+ * 并通过代理方式暴露 SwooleTask 的属性，同时管理队列任务的完成回调。
+ *
+ * @property float $dispatch_time 任务投递时间戳
+ * @property int $id 任务ID
+ * @property int $worker_id 任务所在的 Worker 进程ID
+ * @property int $flags 任务标志位，默认为 SW_TASK_NONBLOCK
  */
 class TaskProxy
 {
   /**
-   * @var mixed 任务接收到数据
+   * @var mixed 任务处理器接收的业务数据
    */
   public readonly mixed $data;
   /**
-   * @var string|mixed 缓存队列id，在任务执行完成时会自动删除。主要用途是服务重启时自动恢复未执行完的任务
+   * @var string|null 队列唯一标识，非队列任务为 null；任务完成后自动从缓存中清除
    */
   public readonly string|null $queue_id;
   /**
-   * @var string 主题
+   * @var string 任务主题名称
    */
   public readonly string $topic;
   /**
-   * @var bool 是否已经完成
+   * @var bool 任务是否已调用 finish 标记完成
    */
   public bool $is_finish = false;
 
   /**
-   * @param SwooleTask $swooleTask swoole task
+   * @param SwooleTask $swooleTask Swoole 原始任务对象
+   * @param Closure $finish_callback 队列任务完成后的清理回调，接收 (queueId, workerId)
    */
   public function __construct(
     private readonly SwooleTask $swooleTask,
@@ -64,11 +68,10 @@ class TaskProxy
   }
 
   /**
-   * 序列化任务数据
+   * 序列化任务数据为二进制字符串，用于跨进程传输
    *
-   * @access public
-   * @param mixed $data Task data to be packed.
-   * @return string|false The packed task data. Returns false if failed.
+   * @param mixed $data 待序列化的任务数据
+   * @return string|false 序列化成功返回二进制字符串，失败返回 false
    */
   public static function pack(mixed $data): string|false
   {
@@ -76,11 +79,10 @@ class TaskProxy
   }
 
   /**
-   * 反序列化任务数据
+   * 反序列化二进制字符串为任务数据
    *
-   * @param string $data The packed task data.
-   * @return mixed The unpacked data. Returns false if failed.
-   * @since 5.0.1
+   * @param string $data 已序列化的二进制任务数据
+   * @return mixed 反序列化成功返回原始数据，失败返回 false
    */
   public static function unpack(string $data): mixed
   {
@@ -88,9 +90,11 @@ class TaskProxy
   }
 
   /**
-   * @param string $name
-   * @return mixed
-   * @throws Exception
+   * 代理访问 SwooleTask 的属性，如 dispatch_time、id、worker_id 等
+   *
+   * @param string $name 属性名称
+   * @return mixed 属性值
+   * @throws Exception 属性不存在时抛出
    */
   public function __get(string $name)
   {
@@ -102,10 +106,10 @@ class TaskProxy
   }
 
   /**
-   * 完成任务
+   * 标记任务完成，向 Worker 进程返回结果并清理队列缓存
    *
-   * @param mixed $data 要传递给worker进程的任务结果.
-   * @return bool
+   * @param mixed $data 返回给 Worker 进程的任务结果数据
+   * @return bool 完成成功返回 true，重复调用返回 false
    */
   public function finish(mixed $data): bool
   {

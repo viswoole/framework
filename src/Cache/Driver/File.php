@@ -25,25 +25,33 @@ use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Core\Coroutine;
 
 /**
- * 文件缓存驱动
+ * 基于文件系统的缓存驱动，将缓存数据以序列化形式写入磁盘文件
+ *
+ * 通过在文件头部嵌入过期时间戳实现 TTL 管理，支持文件锁实现竞争锁机制。
+ * 适用于无 Redis 等外部服务的轻量场景，性能低于内存型驱动。
+ *
+ * @see Driver
  */
 class File extends Driver
 {
   public const string EXPIRE_PATTERN = '/^expire\((\d+)\)/';
   /**
-   * @var string 存储目录
+   * @var string 缓存文件存储根目录
    */
   protected string $storage;
   /**
-   * @var array 锁
+   * @var array<string,array{scene:string,secretKey:string,autoUnlock:bool,lockHandle:resource}> 当前持有锁的列表
    */
   private array $lockList = [];
 
   /**
-   * @param string $storage 存储目录
-   * @param string $prefix 前缀
-   * @param string $tag_store 标签仓库名称(用于存储标签映射列表)
-   * @param int $expire 过期时间 默认0不过期
+   * 初始化文件缓存驱动
+   *
+   * @param string $storage 缓存文件存储根目录
+   * @param string $prefix 缓存键前缀
+   * @param string $tag_prefix 标签键前缀标识
+   * @param string $tag_store 标签仓库键名
+   * @param int $expire 默认过期时间（秒），0 表示永不过期
    */
   public function __construct(
     string $storage = BASE_PATH . '/runtime/cache',
@@ -81,10 +89,12 @@ class File extends Driver
   }
 
   /**
-   * 获取缓存内容
+   * 读取缓存原始内容（含过期检测与自动清理）
    *
-   * @param string $key
-   * @return mixed|null 返回null代表无缓存
+   * 读取文件后检查头部过期时间戳，已过期则删除文件并返回 null。
+   *
+   * @param string $key 缓存键
+   * @return mixed|null 缓存值，不存在或已过期返回 null
    */
   protected function getRaw(string $key): mixed
   {
@@ -106,10 +116,10 @@ class File extends Driver
   }
 
   /**
-   * 获取文件名
+   * 根据缓存键生成完整的文件路径
    *
    * @param string $key 缓存标识
-   * @return string
+   * @return string 缓存文件完整路径
    */
   protected function filename(string $key): string
   {
@@ -118,10 +128,11 @@ class File extends Driver
   }
 
   /**
-   * 获取存储目录
+   * 获取存储目录路径，目录不存在时自动创建
    *
-   * @param string $dir
-   * @return string
+   * @param string $dir 相对或绝对子目录路径
+   * @return string 以目录分隔符结尾的目录路径
+   * @throws CacheErrorException 创建目录失败时抛出
    */
   protected function dir(string $dir = ''): string
   {
@@ -140,10 +151,10 @@ class File extends Driver
   }
 
   /**
-   * 删除文件
+   * 安全删除缓存文件，并在目录为空时清理空目录
    *
-   * @param string $path
-   * @return bool
+   * @param string $path 文件路径
+   * @return bool 删除成功返回 true
    */
   protected function unlink(string $path): bool
   {
@@ -172,13 +183,15 @@ class File extends Driver
   }
 
   /**
-   * 写入缓存
+   * 写入缓存数据到文件，支持 NX（仅不存在时写入）和过期时间
    *
-   * @param string $key
-   * @param mixed $value 记录值
-   * @param DateTime|int|null $expire 过期时间
-   * @param bool $NX 如果不存在则写入
-   * @return bool
+   * 文件内容格式为 `expire(时间戳)序列化数据`，无过期时间时省略头部。
+   *
+   * @param string $key 缓存键
+   * @param mixed $value 缓存值
+   * @param DateTime|int|null $expire 过期时间，null 使用驱动默认值
+   * @param bool $NX 是否仅在缓存不存在时写入
+   * @return bool 写入成功返回 true
    */
   protected function setRaw(
     string       $key,
@@ -216,10 +229,10 @@ class File extends Driver
   }
 
   /**
-   * 判断是否过期
+   * 检测文件内容是否已过期
    *
-   * @param string $fileContent
-   * @return true|int 返回true代表已过期，返回-1则没有过期时间，返回其他数字代表剩余过期时间
+   * @param string $fileContent 文件原始内容
+   * @return true|int true 表示已过期，-1 表示无过期时间，其他正整数表示剩余秒数
    */
   protected function hasExpire(string $fileContent): true|int
   {
@@ -308,10 +321,10 @@ class File extends Driver
   }
 
   /**
-   * 删除目录
+   * 递归删除指定目录及其下所有缓存文件
    *
-   * @param string $dirname
-   * @return bool
+   * @param string $dirname 目录路径
+   * @return bool 清理成功返回 true
    */
   protected function rmdir(string $dirname): bool
   {
@@ -402,10 +415,10 @@ class File extends Driver
   }
 
   /**
-   * 获取锁文件
+   * 生成锁文件的完整路径
    *
    * @param string $scene 锁场景标识
-   * @return string
+   * @return string 锁文件路径
    */
   private function getLockFilename(string $scene): string
   {

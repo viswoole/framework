@@ -19,29 +19,28 @@ use Throwable;
 use Viswoole\Log\LogManager;
 
 /**
- * 异常处理基类
+ * 全局异常处理器，负责异常的日志记录与渲染输出
  */
 class Handle
 {
   /**
-   * @var array 忽略的异常
+   * @var array<string> 不写入日志的异常类名列表
    */
   protected array $ignoreReport = [
     ValidateException::class
   ];
 
   /**
-   * @param LogManager $log
+   * @param LogManager $log 日志管理器，用于记录异常日志
    */
   public function __construct(protected readonly LogManager $log)
   {
   }
 
   /**
-   * 处理异常
+   * 渲染异常，触发日志记录流程
    *
-   * @param Throwable $e
-   * @return void
+   * @param Throwable $e 待处理的异常实例
    */
   public function render(Throwable $e): void
   {
@@ -49,10 +48,9 @@ class Handle
   }
 
   /**
-   * 写入日志
+   * 将异常信息写入日志，忽略列表中的异常类型不记录
    *
-   * @param Throwable $e
-   * @return void
+   * @param Throwable $e 待记录的异常实例
    */
   public function report(Throwable $e): void
   {
@@ -69,9 +67,10 @@ class Handle
   }
 
   /**
-   * 判断是否被忽视不写入日志
-   * @param Throwable $exception
-   * @return bool
+   * 判断异常是否在忽略日志列表中
+   *
+   * @param Throwable $exception 待检查的异常实例
+   * @return bool 在忽略列表中返回 true，否则返回 false
    */
   protected function isIgnoreReport(Throwable $exception): bool
   {

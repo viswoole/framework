@@ -46,11 +46,11 @@ class RouterTool
   }
 
   /**
-   * 生成控制器缓存文件名称
+   * 根据服务名和控制器类名生成缓存文件路径
    *
-   * @param string $server
-   * @param string $controller
-   * @return string
+   * @param string $server 服务名称
+   * @param string $controller 控制器类完全限定名称
+   * @return string 缓存文件绝对路径
    */
   private static function generateCacheFileName(string $server, string $controller): string
   {
@@ -94,10 +94,10 @@ class RouterTool
   }
 
   /**
-   * 递归删除目录及其内容
+   * 递归删除目录及其下所有文件
    *
    * @param string $dir 目录路径
-   * @return int
+   * @return int 删除的文件数量
    */
   private static function deleteDirectory(string $dir): int
   {
@@ -119,12 +119,12 @@ class RouterTool
   }
 
   /**
-   * 获取目录下所有指定后缀的文件
+   * 递归扫描目录下指定后缀的文件
    *
-   * @param string $dir 文件目录
-   * @param string $ext 文件后缀
+   * @param string $dir 目录路径
+   * @param string $ext 文件后缀，默认 php
    * @param bool $recursion 是否递归子目录
-   * @return array
+   * @return array 文件路径列表
    */
   public static function getAllFiles(
     string $dir, string $ext = 'php',
@@ -202,8 +202,9 @@ class RouterTool
   }
 
   /**
-   * 判断是否为可选变量
-   * @param string $str
+   * 判断路由模式段是否为可选变量（如 {id?}）
+   *
+   * @param string $str 路由模式段
    * @return bool
    */
   public static function isOptionalVariable(string $str): bool
@@ -212,9 +213,9 @@ class RouterTool
   }
 
   /**
-   * 判断字符串中是否包含{}包裹的变量
+   * 判断字符串中是否包含花括号包裹的路由变量（如 {id} 或 {id?}）
    *
-   * @param string $str
+   * @param string $str 待检测字符串
    * @return bool
    */
   public static function isVariable(string $str): bool
@@ -223,11 +224,11 @@ class RouterTool
   }
 
   /**
-   * 获取控制器完全限定名称
+   * 根据控制器文件路径推导其完全限定类名
    *
-   * @param string $controller
-   * @param string $rootPath
-   * @return array{0:string,1:string} [0=>完全限定名称,1=>类名称]
+   * @param string $controller 控制器文件绝对路径
+   * @param string $rootPath 项目根目录
+   * @return array{0:string,1:string} [0=>完全限定类名, 1=>类短名]
    */
   public static function getNamespace(string $controller, string $rootPath): array
   {

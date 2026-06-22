@@ -18,22 +18,24 @@ namespace Viswoole\Database\Channel\PDO;
 use PDO;
 
 /**
- * PDO配置
+ * PDO 连接配置值对象
+ *
+ * 承载创建 PDO 连接所需的全部参数，同时包含连接池的容量配置。
  */
 class PDOConfig
 {
   /**
-   * @param DriverType $type 数据库类型
-   * @param string $host 链接地址
-   * @param int $port 端口
-   * @param string|null $unixSocket unixSocket
+   * @param DriverType $type 数据库驱动类型
+   * @param string $host 主机地址，使用 Unix Socket 时可为空
+   * @param int $port 数据库端口
+   * @param string|null $unixSocket Unix Socket 路径，设置后优先于 host 使用
    * @param string $database 数据库名称
    * @param string $username 用户名
    * @param string $password 密码
-   * @param string $charset 数据库编码
-   * @param array $options 其他配置
-   * @param int $pool_max_size 连接池最大长度
-   * @param int $pool_fill_size 连接池默认填充长度，默认0为不填充
+   * @param string $charset 字符集编码
+   * @param array $options 额外 PDO 属性配置
+   * @param int $pool_max_size 连接池最大连接数
+   * @param int $pool_fill_size 连接池初始填充数，0 表示不预填充
    */
   public function __construct(
     public DriverType $type = DriverType::MYSQL,

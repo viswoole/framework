@@ -19,15 +19,15 @@ namespace Viswoole\Core\Contract;
 use Closure;
 
 /**
- * 中间件接口
+ * 中间件契约接口，所有中间件必须实现该方法以支持洋葱模型调度
  */
 interface MiddlewareInterface
 {
   /**
-   * 中间件处理方法
+   * 执行中间件逻辑，通过调用 $handler 将控制权传递给下一个中间件
    *
-   * @param Closure $handler 下一个处理程序
-   * @return mixed
+   * @param Closure $handler 下一个中间件的处理闭包
+   * @return mixed 中间件处理结果
    */
   public function process(
     Closure $handler

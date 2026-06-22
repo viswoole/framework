@@ -20,15 +20,19 @@ use Viswoole\Core\Coroutine;
 
 /**
  * 协程上下文辅助操作类
+ *
+ * 封装 Swoole\Coroutine\Context 的读写操作，提供键值对式的上下文访问接口，
+ * 支持跨协程拷贝和指定协程 ID 操作。
  */
 class Context
 {
   /**
-   * 将上下文从指定协程容器拷贝到当前容器
+   * 将上下文从指定协程拷贝到当前协程，可选择仅拷贝指定键或合并到已有上下文
    *
-   * @param int $fromCoroutineId 要复制的协程容器id
-   * @param array $keys 要复制的记录键,为空则复制所有上下文
-   * @param bool $merge 是否合并到当前上下文，默认为false，即不保留当前协程上下文
+   * @param int $fromCoroutineId 源协程ID
+   * @param array $keys 要拷贝的键名列表，为空则拷贝全部
+   * @param bool $merge 是否与当前上下文合并，为 false 时覆盖当前上下文
+   * @throws RuntimeException 源协程上下文不存在时抛出
    */
   public static function copy(int $fromCoroutineId, array $keys = [], bool $merge = false): void
   {
@@ -47,10 +51,11 @@ class Context
   }
 
   /**
-   * 判断属性协程上下文中是否存在
-   * @param string $key
-   * @param int $id 协程id，默认为当前协程
-   * @return bool
+   * 判断协程上下文中是否存在指定键
+   *
+   * @param string $key 上下文键名
+   * @param int $id 协程ID，0 为当前协程
+   * @return bool 存在返回 true
    */
   public static function has(string $key, int $id = 0): bool
   {
@@ -58,12 +63,12 @@ class Context
   }
 
   /**
-   * 从协程上下文中获取记录
+   * 从协程上下文中获取值
    *
-   * @param string $key
-   * @param mixed|null $default
-   * @param int $id 协程id，默认为当前协程
-   * @return false|mixed|null
+   * @param string $key 上下文键名
+   * @param mixed|null $default 键不存在时的默认值
+   * @param int $id 协程ID，0 为当前协程
+   * @return mixed 键对应的值或默认值
    */
   public static function get(string $key, mixed $default = null, int $id = 0): mixed
   {
@@ -71,12 +76,11 @@ class Context
   }
 
   /**
-   * 往协程上下文中新增记录
+   * 向协程上下文中写入键值对
    *
-   * @param string $key
-   * @param mixed $value
-   * @param int $id 协程id，默认为当前协程
-   * @return void
+   * @param string $key 上下文键名
+   * @param mixed $value 要存储的值
+   * @param int $id 协程ID，0 为当前协程
    */
   public static function set(string $key, mixed $value, int $id = 0): void
   {
@@ -84,11 +88,10 @@ class Context
   }
 
   /**
-   * 删除上下文
+   * 从协程上下文中移除指定键
    *
-   * @param string $key 上下文记录键
-   * @param int $id 协程id，默认为当前协程
-   * @return void
+   * @param string $key 上下文键名
+   * @param int $id 协程ID，0 为当前协程
    */
   public static function remove(string $key, int $id = 0): void
   {
@@ -96,10 +99,10 @@ class Context
   }
 
   /**
-   * 获取完整的上下文
+   * 获取完整的协程上下文对象
    *
-   * @param int $id
-   * @return \Swoole\Coroutine\Context|null
+   * @param int $id 协程ID，0 为当前协程
+   * @return \Swoole\Coroutine\Context|null 协程上下文对象
    */
   public function all(int $id = 0): ?\Swoole\Coroutine\Context
   {

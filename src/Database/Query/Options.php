@@ -21,107 +21,111 @@ use Override;
 use Viswoole\Database\Raw;
 
 /**
- * 构建查询选项
+ * 查询构建选项的数据容器
+ *
+ * 承载 SELECT / INSERT / UPDATE / DELETE 各类查询所需的全部选项，
+ * 同时实现 ArrayAccess 以支持选项的数组式读写。
  */
 class Options implements ArrayAccess
 {
   /**
-   * @var string 要查询的表名
+   * @var string 目标数据表名
    */
   public string $table;
   /**
-   * @var string 主键
+   * @var string 主键字段名，用于自动推导 WHERE 条件
    */
   public string $pk;
   /**
-   * @var string 表别名
+   * @var string 表别名，为空则不使用别名
    */
   public string $alias = '';
   /**
-   * @var false|array{key:string,store:string|null,tag:string|null,expire:int} 是否读取缓存
+   * @var false|array{key:string,store:string|null,tag:string|null,expire:int} 缓存配置，false 表示不缓存
    */
   public false|array $cache = false;
   /**
-   * @var array<string,string|null> 查询的列，如果为空则查询所有列, 键为列名，值为列别名
+   * @var array<string,string|null> 查询列，键为列名、值为列别名；为空时等同于 SELECT *
    */
   public array $columns = [];
   /**
-   * @var array<int,array{column:string,operator:string,value:mixed,connector:string}|Raw|WhereGroup> 查询条件
+   * @var array<int,array{column:string,operator:string,value:mixed,connector:string}|Raw|WhereGroup> WHERE 条件列表
    */
   public array $where = [];
   /**
-   * @var array<int,array{table:string,localKey:string,operator:string,foreignKey:string,type:string}> 连接表
+   * @var array<int,array{table:string,localKey:string,operator:string,foreignKey:string,type:string}> JOIN 子句列表
    */
   public array $join = [];
   /**
-   * @var string[] 分组
+   * @var string[] GROUP BY 字段列表
    */
   public array $groupBy = [];
   /**
-   * @var array<int,array{column:string,operator:string,value:mixed,connector:string}> having条件
+   * @var array<int,array{column:string,operator:string,value:mixed,connector:string}> HAVING 条件列表
    */
   public array $having = [];
   /**
-   * @var array<int,array{column:string,direction:string}|Raw> 排序
+   * @var array<int,array{column:string,direction:string}|Raw> ORDER BY 排序规则列表
    */
   public array $orderBy = [];
   /**
-   * @var int|null 限制数量, null为不限制
+   * @var int|null 返回行数上限，null 表示不限制
    */
   public ?int $limit = null;
   /**
-   * @var int|null 偏移量, null为不偏移
+   * @var int|null 结果偏移行数，null 表示不偏移
    */
   public ?int $offset = null;
   /**
-   * @var array<int,array{query:string,type:string}> 合并查询
+   * @var array<int,array{query:string,type:string}> UNION 合并查询列表
    */
   public array $unions = [];
   /**
-   * @var bool 是否去重
+   * @var bool 是否去重（SELECT DISTINCT）
    */
   public bool $distinct = false;
   /**
-   * @var string|null 强制索引，null为不指定
+   * @var string|null 强制索引名称，null 表示不指定
    */
   public ?string $force = null;
   /**
-   * @var string 查询类型`insert`|`update`|`delete`|`select`
+   * @var string 查询操作类型：insert|insertGetId|update|delete|select
    */
   public string $type = '';
 
   /**
-   * @var array 要写入的数据
+   * @var array 要写入的数据，单条为关联数组，批量为索引数组
    */
   public array $data = [];
   /**
-   * @var bool 排他锁，其他事务不能读取或修改该记录
+   * @var bool 是否加排他锁（FOR UPDATE），阻止其他事务读写
    */
   public bool $lockForUpdate = false;
   /**
-   * @var bool 共享锁，其他事务可以读取该记录，但无法修改
+   * @var bool 是否加共享锁（LOCK IN SHARE MODE），允许其他事务读但不允许写
    */
   public bool $sharedLock = false;
   /**
-   * @var bool 返回SQL语句，不执行查询
+   * @var bool 是否仅生成 SQL 而不实际执行
    */
   public bool $toRaw = false;
   /**
-   * @var bool 强制写入，仅mysql有效
+   * @var bool 是否使用 REPLACE INTO（仅 MySQL 有效）
    */
   public bool $replace = false;
   /**
-   * @var string[] 要排除的列
+   * @var string[] 需要从查询结果中排除的列名
    */
   public array $withoutColumns = [];
 
   /**
-   * @var bool 严格检测即将要写入的字段列是否存在
+   * @var bool 是否严格校验写入字段是否存在于表结构中
    */
   public bool $strict = true;
 
   /**
-   * @param string $table 表名
+   * @param string $table 目标数据表名
+   * @param string $pk 主键字段名
    */
   public function __construct(string $table, string $pk)
   {
@@ -161,8 +165,10 @@ class Options implements ArrayAccess
   }
 
   /**
+   * 禁止注销属性，调用将抛出异常
+   *
    * @inheritDoc
-   * @throws Exception
+   * @throws Exception 始终抛出，不允许 unset 操作
    */
   #[Override] public function offsetUnset(mixed $offset): void
   {

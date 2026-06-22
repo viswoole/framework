@@ -18,7 +18,7 @@ namespace Viswoole\Core\Exception;
 use Exception;
 
 /**
- * 容器异常基类
+ * IoC 容器相关异常基类，所有容器操作异常的根类型
  */
 class ContainerException extends Exception
 {

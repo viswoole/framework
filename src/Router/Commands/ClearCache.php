@@ -26,7 +26,7 @@ use Throwable;
 use Viswoole\Router\RouterTool;
 
 /**
- * 清理路由缓存
+ * 路由缓存清理命令，清除指定服务或全部路由缓存文件
  */
 #[AsCommand(
   name       : 'router:clear-cache',

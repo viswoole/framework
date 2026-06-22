@@ -22,12 +22,20 @@ use Throwable;
 use Viswoole\Core\Channel\ConnectionPool;
 
 /**
- * Redis连接池
+ * Redis 协程连接池，基于 Swoole Channel 实现连接的借出与归还
+ *
+ * 继承通用连接池，提供 Redis 连接的创建、健康检测与生命周期管理。
+ * 在 Swoole 协程环境下确保每个协程安全地获取和释放 Redis 连接。
+ *
+ * @see ConnectionPool
+ * @see RedisConfig
  */
 class RedisPool extends ConnectionPool
 {
   /**
-   * @param RedisConfig $config Redis配置
+   * 初始化连接池并设置容量参数
+   *
+   * @param RedisConfig $config Redis 连接配置，包含连接参数与池容量
    */
   public function __construct(protected RedisConfig $config)
   {
@@ -35,8 +43,9 @@ class RedisPool extends ConnectionPool
   }
 
   /**
-   * @inheritDoc
-   * @return RedisConfig
+   * 获取当前连接池的 Redis 配置
+   *
+   * @return RedisConfig Redis 连接配置实例
    */
   #[Override] public function getConfig(): RedisConfig
   {
@@ -44,10 +53,10 @@ class RedisPool extends ConnectionPool
   }
 
   /**
-   * 必须实现创建连接方法
+   * 创建新的 Redis 连接并完成认证与数据库选择
    *
-   * @return Redis 返回一个可用的连接对象
-   * @throws RedisException
+   * @return Redis 已认证并选择数据库的 Redis 连接实例
+   * @throws RedisException 连接、认证或选择数据库失败时抛出
    */
   #[Override] protected function createConnection(): Redis
   {
@@ -72,7 +81,10 @@ class RedisPool extends ConnectionPool
   }
 
   /**
-   * @inheritDoc
+   * 检测连接是否存活，通过 PING 命令验证
+   *
+   * @param mixed $connection 待检测的连接实例
+   * @return bool 连接存活返回 true
    */
   #[Override] protected function connectionDetection(mixed $connection): bool
   {

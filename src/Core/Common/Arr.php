@@ -15,17 +15,16 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Common;
 /**
- * 数组辅助类
+ * 数组工具类，提供数组类型判断与安全取值等静态方法
  */
 class Arr
 {
   /**
-   * 判断是否为关联数组
+   * 判断数组是否为关联数组（键名非连续整数从0开始）
    *
-   * @access public
-   * @param array $array
-   * @param bool $allowEmpty
-   * @return bool
+   * @param array $array 待判断的数组
+   * @param bool $allowEmpty 空数组是否视为关联数组，默认 false 时空数组返回 false
+   * @return bool 是关联数组返回 true，否则返回 false
    */
   public static function isAssociativeArray(array $array, bool $allowEmpty = false): bool
   {
@@ -33,12 +32,11 @@ class Arr
   }
 
   /**
-   * 判断是否为索引数组
+   * 判断数组是否为索引数组（键名为从0开始的连续整数）
    *
-   * @access public
-   * @param array $array
-   * @param bool $allowEmpty
-   * @return bool
+   * @param array $array 待判断的数组
+   * @param bool $allowEmpty 空数组是否视为索引数组，默认 false 时空数组返回 false
+   * @return bool 是索引数组返回 true，否则返回 false
    */
   public static function isIndexArray(array $array, bool $allowEmpty = false): bool
   {
@@ -49,13 +47,12 @@ class Arr
   }
 
   /**
-   * 从数组中弹出指定下标的值
+   * 从数组中弹出指定键的值并从原数组中移除该键
    *
-   * @access public
-   * @param array $array 数组
-   * @param string|int $key 下标键
-   * @param mixed|null $default 默认值
-   * @return mixed
+   * @param array $array 待操作的数组（引用传递，弹出后原数组会移除该键）
+   * @param string|int $key 要弹出的键名
+   * @param mixed|null $default 键不存在时返回的默认值
+   * @return mixed 键存在时返回对应值，否则返回默认值
    */
   public static function arrayPopValue(array &$array, string|int $key, mixed $default = null): mixed
   {

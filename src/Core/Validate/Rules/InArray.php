@@ -20,15 +20,15 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 范围验证器
+ * 枚举范围验证规则，校验值是否在指定的候选列表中
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InArray extends BaseValidateRule
 {
   /**
-   * @param array $haystack 范围数组
-   * @param bool $strict 严格检测
-   * @param string $message 不传则会使用默认的错误提示信息
+   * @param array $haystack 允许的候选值列表
+   * @param bool $strict 是否使用严格模式比较（===）
+   * @param string $message 校验失败提示信息
    */
   public function __construct(
     public array $haystack,
@@ -40,7 +40,7 @@ class InArray extends BaseValidateRule
   }
 
   /**
-   * @inheritDoc
+   * 校验值是否在候选列表中
    */
   #[Override] public function validate(mixed $value): mixed
   {

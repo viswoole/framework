@@ -26,36 +26,45 @@ use Viswoole\Cache\RedisPool;
 use Viswoole\Core\Coroutine;
 
 /**
- * Redis缓存驱动
+ * 基于 Redis 的缓存驱动，通过连接池管理 Redis 连接并提供缓存操作
+ *
+ * 利用 Redis 原生命令实现 TTL、原子自增/自减、分布式锁等能力，
+ * 通过 RedisPool 实现协程安全的连接复用。数组集合操作使用 Redis Set 实现。
+ *
+ * @see Driver
+ * @see RedisPool
  */
 class Redis extends Driver
 {
   /**
-   * @var array 锁
+   * @var array<string,array{scene:string,secretKey:string,autoUnlock:bool}> 当前持有锁的列表
    */
   private array $lockList = [];
   /**
-   * @var \Redis 当前连接实例
+   * @var \Redis 当前协程持有的 Redis 连接实例
    */
   private \Redis $redis;
   /**
-   * @var RedisPool 连接池
+   * @var RedisPool Redis 连接池，负责协程间连接的借出与归还
    */
   private readonly RedisPool $pool;
 
   /**
-   * @param string $host 连接地址
-   * @param int $port 连接端口
-   * @param string $password 密码
-   * @param int $db_index redis数据库 0-15
-   * @param float $timeout 连接超时时间
-   * @param int $retry_interval 连接重试时间等待单位毫秒
-   * @param float $read_timeout 读取超时时间
-   * @param string $prefix 缓存前缀
-   * @param int $expire 过期时间，单位秒
-   * @param string $tag_store 标签仓库名称(用于存储标签映射列表),不能为空
-   * @param int $pool_max_size 连接池最大长度
-   * @param int $pool_fill_size 连接池最小长度，如果为0则默认不填充连接池
+   * 初始化 Redis 缓存驱动并创建连接池
+   *
+   * @param string $host Redis 服务器地址
+   * @param int $port Redis 服务器端口
+   * @param string $password 认证密码，空字符串表示无密码
+   * @param int $db_index Redis 数据库索引（0-15）
+   * @param float $timeout 连接超时时间（秒）
+   * @param int $retry_interval 重连等待间隔（毫秒）
+   * @param float $read_timeout 读取超时时间（秒）
+   * @param string $prefix 缓存键前缀
+   * @param string $tag_prefix 标签键前缀标识
+   * @param int $expire 默认过期时间（秒），0 表示永不过期
+   * @param string $tag_store 标签仓库键名，不能为空
+   * @param int $pool_max_size 连接池最大连接数
+   * @param int $pool_fill_size 连接池最小填充连接数，0 表示不预填充
    */
   public function __construct(
     string           $host = '127.0.0.1',
@@ -109,8 +118,12 @@ class Redis extends Driver
   }
 
   /**
-   * @inheritDoc
-   * @return \Redis
+   * 从连接池获取或复用当前协程的 Redis 连接实例
+   *
+   * 首次调用时从连接池借出连接并缓存到当前实例，后续调用直接复用。
+   *
+   * @return \Redis Redis 连接实例
+   * @throws RedisException 连接失败时抛出
    */
   #[Override] public function connect(): \Redis
   {
@@ -154,7 +167,13 @@ class Redis extends Driver
   }
 
   /**
-   * @inheritDoc
+   * Redis 专用的反序列化：将数字字符串还原为原始数值类型
+   *
+   * Redis 将所有值存储为字符串，整数经 serialize 跳过后以数字字符串存入，
+   * 反序列化时需识别数字字符串并还原为 int/float，其余走标准反序列化。
+   *
+   * @param mixed $data 从 Redis 取出的原始数据
+   * @return mixed 还原后的原始值
    */
   #[Override] protected function unserialize(mixed $data): mixed
   {
@@ -262,7 +281,10 @@ class Redis extends Driver
   }
 
   /**
-   * @inheritDoc
+   * Redis 专用的序列化：整数跳过序列化直接存储，由 Redis 原生管理数值类型
+   *
+   * @param mixed $data 待序列化的缓存数据
+   * @return mixed 序列化后的字符串或原始整数
    */
   #[Override] protected function serialize(mixed $data): mixed
   {

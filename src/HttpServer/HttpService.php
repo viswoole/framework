@@ -21,7 +21,10 @@ use Viswoole\HttpServer\Contract\RequestInterface;
 use Viswoole\HttpServer\Contract\ResponseInterface;
 
 /**
- * Http服务提供者
+ * HTTP 服务提供者
+ *
+ * 将 Request/Response 及其接口绑定到容器，
+ * 优先使用应用层自定义的 \App\Request 和 \App\Response 类。
  */
 class HttpService extends Provider
 {
@@ -33,7 +36,10 @@ class HttpService extends Provider
   }
 
   /**
-   * @inheritDoc
+   * 注册 HTTP 相关绑定到容器
+   *
+   * 按优先级绑定 request/response 别名、接口到实现类、
+   * 以及框架内置类到应用自定义类的映射。
    */
   #[Override] public function register(): void
   {

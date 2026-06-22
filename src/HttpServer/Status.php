@@ -15,7 +15,10 @@ declare (strict_types=1);
 
 namespace Viswoole\HttpServer;
 /**
- * 状态码
+ * HTTP 状态码常量与原因短语映射
+ *
+ * 定义标准 HTTP 状态码常量及对应的原因短语，
+ * 提供根据状态码获取描述文本的快捷方法。
  */
 final class Status
 {
@@ -267,10 +270,9 @@ final class Status
   ];
 
   /**
-   * 获取全部原因短语
+   * 获取全部状态码与原因短语的映射
    *
-   * @access public
-   * @return array|string[]
+   * @return array<int, string> 状态码 => 原因短语
    */
   public static function getReasonPhrases(): array
   {
@@ -278,11 +280,10 @@ final class Status
   }
 
   /**
-   * 检索原因短语
+   * 根据状态码获取对应的原因短语
    *
-   * @access public
-   * @param int $code
-   * @return string
+   * @param int $code HTTP 状态码
+   * @return string 原因短语，未知状态码返回 'Unknown'
    */
   public static function getReasonPhrase(int $code): string
   {

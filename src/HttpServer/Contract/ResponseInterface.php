@@ -19,47 +19,47 @@ use RuntimeException;
 use Swoole\Http\Response as swooleResponse;
 
 /**
- * 响应接口
+ * HTTP 响应对象接口
+ *
+ * 定义响应状态、标头、Cookie、内容输出等核心能力，
+ * Response 实现类必须遵循此契约。
  */
 interface ResponseInterface
 {
   /**
-   * 创建新响应对象。
+   * 工厂方法：创建新的响应对象
    *
-   * 使用此方法前请务必调用 detach 方法将旧的 $response 对象分离，否则可能会造成对同一个请求发送两次响应内容。
+   * 使用前须先调用 detach() 分离旧响应，否则同一请求会发送两次响应。
    *
-   * @access public
-   * @param object|array|int $server Swoole\Server 或者 Swoole\Coroutine\Socket 对象，数组（数组只能有两个参数，第一个是 Swoole\Server 对象，第二个是 Swoole\Http\Request 对象），或者文件描述符。
-   * @param int $fd 文件描述符。如果参数 $server 是 Swoole\Server 对象，$fd 是必填的
-   * @return ResponseInterface 调用成功返回一个新的 ResponseInterface 对象
-   * @throws RuntimeException 创建失败会抛出异常
+   * @param object|array|int $server Swoole\Server、Swoole\Coroutine\Socket、[Server, Request] 或文件描述符
+   * @param int $fd 文件描述符，$server 为 Swoole\Server 时必填
+   * @return ResponseInterface 新创建的响应实例
+   * @throws RuntimeException 创建失败时抛出
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=create
    */
   public static function create(object|array|int $server = -1, int $fd = -1): ResponseInterface;
 
   /**
-   * 获取Swoole\Http\Response响应对象
+   * 获取底层的 Swoole\Http\Response 对象
    *
-   * @return swooleResponse
+   * @return swooleResponse Swoole 原始响应对象
    */
   public function getSwooleResponse(): swooleResponse;
 
   /**
    * 批量设置响应标头
    *
-   * @access public
-   * @param array $headers
-   * @return ResponseInterface
+   * @param array<string,string> $headers 标头键值对
+   * @return ResponseInterface 支持链式调用
    */
   public function setHeaders(array $headers): ResponseInterface;
 
   /**
-   * 快捷设置Content-Type响应头
+   * 快捷设置 Content-Type 响应头
    *
-   * @access public
-   * @param string $contentType 输出类型 例如 application/json
-   * @param string $charset 输出编码 默认utf-8
-   * @return ResponseInterface
+   * @param string $contentType MIME 类型，如 application/json
+   * @param string $charset 字符集编码，默认 utf-8
+   * @return ResponseInterface 支持链式调用
    */
   public function setContentType(
     string $contentType,
@@ -67,22 +67,20 @@ interface ResponseInterface
   ): ResponseInterface;
 
   /**
-   * html响应
+   * 以 text/html 类型输出 HTML 内容
    *
-   * @access public
-   * @param string $html
-   * @return ResponseInterface
+   * @param string $html HTML 内容
+   * @return ResponseInterface 支持链式调用
    */
   public function html(string $html): ResponseInterface;
 
   /**
-   * 设置响应头(别名setHeader)
+   * 设置响应标头（setHeader 的别名）
    *
-   * @access public
-   * @param string $key HTTP 头的 Key
-   * @param string $value HTTP 头的 value
-   * @param bool $format 是否需要对 Key 进行 HTTP 约定格式化【默认 true 会自动格式化】
-   * @return ResponseInterface
+   * @param string $key 标头名称
+   * @param string $value 标头值
+   * @param bool $format 是否按 HTTP 约定格式化键名，默认 true
+   * @return ResponseInterface 支持链式调用
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=setheader
    */
   public function header(string $key, string $value, bool $format = true): ResponseInterface;
@@ -109,31 +107,29 @@ interface ResponseInterface
   public function trailer(string $key, string $value): bool;
 
   /**
-   * 重定向
+   * 发送 HTTP 重定向响应
    *
-   * @param string $uri
-   * @param int $http_code 302|301
-   * @return bool
+   * @param string $uri 目标 URI
+   * @param int $http_code 重定向状态码，302（临时）或 301（永久）
+   * @return bool 发送成功返回 true
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=redirect
    */
   public function redirect(string $uri, int $http_code = 302): bool;
 
   /**
-   * 启用 Http Chunk 分段向浏览器发送相应内容。
+   * 以 HTTP Chunk 分段发送响应内容，单次最大长度受 buffer_output_size 配置控制（默认 2M）
    *
-   * @access public
-   * @param string $data 要发送的数据内容【最大长度不得超过默认值2M，受 buffer_output_size 配置项控制】
-   * @return ResponseInterface
+   * @param string $data 要发送的数据内容
+   * @return ResponseInterface 支持链式调用
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=write
    */
   public function write(string $data): ResponseInterface;
 
   /**
-   * 发送响应，对象销毁底层会自动进行end
+   * 结束响应并发送内容，响应对象销毁时底层会自动调用
    *
-   * @access public
-   * @param string|null $content
-   * @return bool
+   * @param string|null $content 要发送的响应内容，null 表示仅结束不发送额外内容
+   * @return bool 发送成功返回 true
    */
   public function end(?string $content = null): bool;
 
@@ -146,20 +142,18 @@ interface ResponseInterface
   public function send(?string $content = null): bool;
 
   /**
-   * 发送HTTP状态(别名setStatusCode)
+   * 设置 HTTP 状态码（setStatusCode 的别名）
    *
-   * @access public
-   * @param int $http_status_code 状态码
-   * @param string $reasonPhrase 状态描述短语
-   * @return ResponseInterface
+   * @param int $http_status_code HTTP 状态码
+   * @param string $reasonPhrase 状态描述短语，为空时自动填充标准描述
+   * @return ResponseInterface 支持链式调用
    */
   public function status(int $http_status_code, string $reasonPhrase = ''): ResponseInterface;
 
   /**
-   * 发送HTTP状态
+   * 设置 HTTP 状态码
    *
-   * @access public
-   * @see status
+   * @see status()
    */
   public function setStatusCode(
     int    $http_status_code,
@@ -176,40 +170,36 @@ interface ResponseInterface
   public function json(mixed $data): ResponseInterface;
 
   /**
-   * 检索所有消息头的值。
+   * 获取所有已设置的响应标头
    *
-   * 该方法返回所有标头和值的字符串，这些值使用逗号拼接在一起。
-   *
-   * @return array 所有标头。
+   * @return array<string,string> 标头键值对
    */
   public function getHeader(): array;
 
   /**
-   * 设置响应内容
+   * 设置响应体内容
    *
-   * @access public
    * @param string $content 响应内容
-   * @return static
+   * @return ResponseInterface 支持链式调用
    */
   public function setContent(string $content): ResponseInterface;
 
   /**
-   * 是否将响应输出到控制台
+   * 控制是否将响应内容同时输出到控制台（调试用）
    *
-   * @access public
-   * @param bool $echo
-   * @return ResponseInterface
+   * @param bool $echo true 输出到控制台，默认 true
+   * @return ResponseInterface 支持链式调用
    */
   public function echo(bool $echo = true): ResponseInterface;
 
   /**
-   * 发送文件
+   * 以零拷贝方式发送本地文件
    *
-   * @param string $filePath 要发送的文件名称
-   * @param int $offset 上传文件的偏移量
-   * @param int $length 发送数据的尺寸
-   * @param string|null $fileMimeType 文件类型
-   * @return bool
+   * @param string $filePath 文件绝对路径
+   * @param int $offset 文件偏移量（字节）
+   * @param int $length 发送长度，0 表示发送至文件末尾
+   * @param string|null $fileMimeType MIME 类型，null 时自动检测
+   * @return bool 发送成功返回 true
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=sendfile
    */
   public function sendfile(
@@ -259,10 +249,9 @@ interface ResponseInterface
   public function detach(): ResponseInterface;
 
   /**
-   * 判断是否已经分离或已经结束
+   * 判断响应是否仍可写入（未分离且未结束）
    *
-   * @access public
-   * @return bool 如果返回true则是未分离，返回false则代表已分离，或上下文已结束
+   * @return bool 未分离时返回 true，已分离或已结束时返回 false
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=detach
    */
   public function isWritable(): bool;

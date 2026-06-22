@@ -18,7 +18,9 @@ namespace Viswoole\Router\Annotation;
 use Attribute;
 
 /**
- * 自动注册控制器下所有public方法
+ * 自动控制器注解，自动注册控制器下所有公共方法为路由
+ *
+ * 继承 Controller，无需为每个方法单独添加 RouteMapping 注解。
  */
 #[Attribute(Attribute::TARGET_CLASS)]
 class AutoController extends Controller

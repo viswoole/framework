@@ -21,35 +21,36 @@ use Viswoole\Core\Contract\MiddlewareInterface;
 
 /**
  * 中间件管理器
+ *
+ * 提供全局中间件和服务级中间件的注册与管道式执行能力，
+ * 支持闭包中间件和实现 MiddlewareInterface 的类中间件。
  */
 class Middleware
 {
   /**
-   * @var array 全局中间件
+   * @var array 全局中间件列表，应用于所有服务器
    */
   protected array $middlewares = [];
   /**
-   * @var array 服务中间件
+   * @var array 按服务器名称分组的中间件列表
    */
   protected array $serverMiddlewares = [];
 
   /**
-   * 注册一个全局中间件
+   * 注册中间件，指定 server 名称时注册到对应服务，否则注册为全局中间件
    *
    * Example usage:
-   *
    * ```
-   * // 注册一个闭包中间件，必须调用$handler才能往下执行，支持依赖注入
+   * // 闭包中间件，必须调用 $handler 才能继续执行，支持依赖注入
    * \Viswoole\Core\Facade\Middleware::register(function (RequestInterface $request, ResponseInterface $response, Closure $handler) {
-   *   // 中间件逻辑
    *   return $handler();
    * }, 'http');
-   * // 注册一个实现了MiddlewareInterface接口的类
+   * // 类中间件，必须实现 MiddlewareInterface
    * \Viswoole\Core\Facade\Middleware::register(UserAuthMiddleware::class, 'http');
    * ```
-   * @param callable|string|array $handler 中间件
-   * @param string|null $server 服务器名称，默认为null，表示应用于所有服务器
-   * @return void
+   *
+   * @param callable|string|array $handler 中间件处理器
+   * @param string|null $server 服务器名称，为 null 时注册为全局中间件
    */
   public function register(
     callable|string|array $handler,
@@ -64,10 +65,11 @@ class Middleware
   }
 
   /**
-   * 验证中间件是否有效
+   * 校验中间件处理器是否合法，类名中间件必须实现 MiddlewareInterface 接口
    *
-   * @param callable|string|array $handler
-   * @return callable|array
+   * @param callable|string|array $handler 中间件处理器
+   * @return callable|array 合法化的中间件处理器，类名转为 [ClassName, 'process']
+   * @throws InvalidArgumentException 中间件类未实现接口或处理器不可调用时抛出
    */
   public static function checkMiddleware(callable|string|array $handler): callable|array
   {
@@ -90,11 +92,11 @@ class Middleware
   }
 
   /**
-   * 运行中间件
+   * 以管道模式执行中间件链，全局→服务级→额外传入的中间件，最终调用核心处理器
    *
-   * @param callable $handler 最终的处理者,支持任意可调用的类型回调
-   * @param array<string|callable> $middlewares 额外的中间件
-   * @return mixed
+   * @param callable $handler 核心业务处理器
+   * @param array<string|callable> $middlewares 额外的中间件列表
+   * @return mixed 核心处理器的返回值
    */
   public function process(callable $handler, array $middlewares = []): mixed
   {
