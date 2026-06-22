@@ -21,7 +21,7 @@ namespace Viswoole\Router\ApiDoc;
 class DocCommentTool
 {
   /**
-   * 从属性文档注释中提取 @var 后的描述文本
+   * 从属性文档注释中提取
    *
    * @param string $doc 属性文档注释
    * @return string 描述文本
