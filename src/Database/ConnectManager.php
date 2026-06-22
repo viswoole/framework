@@ -59,6 +59,7 @@ class ConnectManager
    * @param Channel $channel 数据库通道
    * @param string $type 连接类型 read|write
    * @return mixed 数据库连接实例
+   * @noinspection PhpComposerExtensionStubsInspection
    */
   public function pop(Channel $channel, string $type): mixed
   {
