@@ -3,7 +3,7 @@
 // | 事件监听注册
 // +----------------------------------------------------------------------
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 use Viswoole\Core\Facade\Event;
 
