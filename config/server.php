@@ -23,7 +23,7 @@ return [
       // 构造参数 参考https://wiki.swoole.com/#/server/methods?id=__construct
       'construct' => [
         // 指定监听的 ip 地址。
-        'host' => '0,0,0,0',
+        'host' => '0.0.0.0',
         // 指定监听的端口
         'port' => 9501,
         // 运行模式
