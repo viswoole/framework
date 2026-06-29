@@ -2,3 +2,7 @@
 /vendor/
 # 忽略PHPUnit缓存
 /.phpunit.cache/
+# 忽略环境变量文件
+/.env
+# 忽略测试生成的运行时目录
+/runtime/
