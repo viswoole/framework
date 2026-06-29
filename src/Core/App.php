@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -112,7 +112,17 @@ class App extends Container
    */
   public function getRootPath(): string
   {
-    !defined('BASE_PATH') && define('BASE_PATH', dirname(realpath(__DIR__), 3));
+    if (!defined('BASE_PATH')) {
+      $dir = realpath(__DIR__);
+      // src/Core 向上 2 级是框架根目录
+      $frameworkRoot = dirname($dir, 2);
+      // 作为依赖包安装时结构为 app/vendor/组织名/包名，框架根目录向上 2 级为 vendor 目录；
+      // 框架自身开发时框架根目录即应用根目录
+      $appRoot = basename(dirname($frameworkRoot, 2)) === 'vendor'
+        ? dirname($frameworkRoot, 3)
+        : $frameworkRoot;
+      define('BASE_PATH', $appRoot);
+    }
     return rtrim(BASE_PATH, DIRECTORY_SEPARATOR);
   }
 
