@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Channel\PDO;
 
@@ -37,7 +37,7 @@ use Swoole\Database\PDOStatementProxy;
  * @method bool inTransaction() 检查是否处于事务中
  * @method false|string lastInsertId(?string $name = null) 获取最后插入行的 ID 或序列值
  * @method false|PDOStatementProxy|PDOStatement prepare(string $query, array $options = []) 预编译 SQL 语句
- * @method false|PDOStatementProxy|PDOStatement query(string $query, ?int $fetchMode = PDO::ATTR_DEFAULT_FETCH_MODE, mixed $fetchModeArgs = null) 执行 SQL 查询并返回语句对象
+ * @method false|PDOStatementProxy|PDOStatement query(string $query, ?int $fetchMode = null, mixed $fetchModeArgs = null) 执行 SQL 查询并返回语句对象
  * @method false|string quote(string $string, int $type = PDO::PARAM_STR) 转义 SQL 字符串
  * @method bool rollBack() 回滚事务，未启动事务时抛出 PDOException
  * @method bool setAttribute(int $attribute, mixed $value) 设置连接属性
