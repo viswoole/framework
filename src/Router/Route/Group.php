@@ -33,7 +33,7 @@ class Group extends BaseRoute
    * @param string|null $id 路由id,不传时返回所有子路由
    * @return array|Route|Group|null
    */
-  public function getItem(string $id = null): null|array|Route|Group
+  public function getItem(?string $id = null): null|array|Route|Group
   {
     if ($this->handler instanceof Closure) {
       call_user_func($this->handler);

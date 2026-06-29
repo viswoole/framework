@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Query;
 
@@ -158,7 +158,9 @@ trait Crud
   protected function runWrite(Raw $raw, false|string $getId): string|int
   {
     $statement = $this->channel->execute(
-      $raw->sql, $raw->bindings, $getId
+      $raw->sql,
+      $raw->bindings,
+      $getId
     );
     if ($statement instanceof PDOStatementProxy || $statement instanceof PDOStatement) {
       $result = $statement->rowCount();
@@ -170,11 +172,11 @@ trait Crud
     if ($this->options->cache) {
       if ($this->options->cache['tag']) {
         Cache::store($this->options->cache['store'])
-             ->tag($this->options->cache['tag'])
-             ->remove($this->options->cache['key']);
+          ->tag($this->options->cache['tag'])
+          ->remove($this->options->cache['key']);
       } else {
         Cache::store($this->options->cache['store'])
-             ->delete($this->options->cache['key']);
+          ->delete($this->options->cache['key']);
       }
     }
     return $result;
@@ -381,7 +383,7 @@ trait Crud
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function find(int|string $value = null, bool $allowEmpty = true): DataSet|Raw
+  public function find(int|string|null $value = null, bool $allowEmpty = true): DataSet|Raw
   {
     $this->limit(1);
     // 修复: 使用严格比较 === null 判断，避免主键值为 0 时被 empty() 误判为空导致无法查询

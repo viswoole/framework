@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -85,8 +85,8 @@ class Config
   {
     $configs = [];
     foreach ($files as $file) {
-      $type = pathinfo($file, PATHINFO_EXTENSION);//文件类型
-      $key = pathinfo($file, PATHINFO_FILENAME);//文件名
+      $type = pathinfo($file, PATHINFO_EXTENSION); //文件类型
+      $key = pathinfo($file, PATHINFO_FILENAME); //文件名
       $config = match ($type) {
         'php' => include $file,
         'yml', 'yaml' => function_exists('yaml_parse_file') ? yaml_parse_file($file) : [],
@@ -164,7 +164,7 @@ class Config
    * @param mixed $default 键不存在时的默认值
    * @return mixed 配置值或默认值
    */
-  public function get(string $name = null, mixed $default = null): mixed
+  public function get(?string $name = null, mixed $default = null): mixed
   {
     // 修复#3: empty()误判配置键'0'，改为严格判断null和空字符串
     if ($name === null || $name === '') return $this->config;

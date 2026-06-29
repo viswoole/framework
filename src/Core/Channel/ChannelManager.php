@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Channel;
 
@@ -35,7 +35,7 @@ use function Swoole\Coroutine\run;
  * @method bool isEmpty() 判断默认连接池是否为空
  * @method bool close() 关闭默认连接池
  * @method bool isFull() 判断默认连接池是否已满
- * @method void fill(int $size = null) 填充默认连接池
+ * @method void fill(?int $size = null) 填充默认连接池
  * @method int length() 获取默认连接池中当前连接数量
  * @method array stats() 获取默认连接池统计信息
  */
@@ -57,8 +57,7 @@ abstract class ChannelManager implements ChannelManagerInterface
   public function __construct(
     array  $channels,
     string $defaultChannel
-  )
-  {
+  ) {
     $this->defaultChannel = $defaultChannel;
     // 创建协程容器, 在其内部处理所有通道的创建
     run(function () use ($channels) {

@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -54,9 +54,8 @@ class Middleware
    */
   public function register(
     callable|string|array $handler,
-    string                $server = null
-  ): void
-  {
+    ?string               $server = null
+  ): void {
     if ($server) {
       $this->serverMiddlewares[$server][] = self::checkMiddleware($handler);
     } else {

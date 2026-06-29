@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\HttpServer\Exception;
 
@@ -45,10 +45,9 @@ class HttpException extends RuntimeException
     string    $message = 'error',
     int       $code = -1,
     int       $httpCode = 200,
-    Throwable $previous = null,
+    ?Throwable $previous = null,
     array     $headers = [],
-  )
-  {
+  ) {
     $this->httpCode = $httpCode;
     $this->headers = $headers;
     parent::__construct($message, $code, $previous);

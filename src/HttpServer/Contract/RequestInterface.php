@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\HttpServer\Contract;
 
@@ -174,7 +174,7 @@ interface RequestInterface
   public function param(
     ?string      $key = null,
     mixed        $default = null,
-    string|array $filter = null
+    string|array|null $filter = null
   ): mixed;
 
   /**

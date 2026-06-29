@@ -84,8 +84,8 @@ abstract class BaseRoute
   public function __construct(
     string|array          $paths,
     callable|string|array $handler,
-    BaseRoute             $parentOption = null,
-    string                $id = null,
+    ?BaseRoute            $parentOption = null,
+    ?string               $id = null,
   )
   {
     if ($parentOption) {

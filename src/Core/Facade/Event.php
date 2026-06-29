@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Facade;
 
@@ -23,7 +23,7 @@ use Viswoole\Core\Facade;
  *
  * @method static array|string on(string $event, callable|string $handle, int $limit = 0) 监听事件
  * @method static void emit(string $event, array $arguments = []) 触发事件
- * @method static void off(string $event, string $id = null) 关闭某个事件的监听器，如果id为null，则关闭该事件的所有监听器
+ * @method static void off(string $event, ?string $id = null) 关闭某个事件的监听器，如果id为null，则关闭该事件的所有监听器
  * @method static void offAll() 清除所有监听器
  * @method static array getEvents() 获取已监听的事件
  */

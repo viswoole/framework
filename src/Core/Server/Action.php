@@ -150,7 +150,7 @@ class Action
    * @param string|null $server_name 服务名称，为 null 时关闭所有服务
    * @throws ServerException 发送信号失败时抛出
    */
-  public static function close(string $server_name = null): void
+  public static function close(?string $server_name = null): void
   {
     if (empty($server_name)) {
       $pid_dir = self::getPidStore(null);

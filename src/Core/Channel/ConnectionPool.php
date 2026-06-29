@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Channel;
 
@@ -51,8 +51,7 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   public function __construct(
     protected int $max_size = self::DEFAULT_SIZE,
     ?int          $default_fill = null
-  )
-  {
+  ) {
     $this->pool = new Channel($max_size);
     if ($default_fill) {
       // hook服务启动事件，填充连接池
@@ -65,7 +64,7 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function fill(int $size = null): void
+  #[Override] public function fill(?int $size = null): void
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {

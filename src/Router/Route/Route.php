@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Router\Route;
 
@@ -65,10 +65,9 @@ class Route extends BaseRoute
   public function __construct(
     array|string          $paths,
     callable|array|string $handler,
-    BaseRoute             $parentOption = null,
-    string                $id = null
-  )
-  {
+    ?BaseRoute            $parentOption = null,
+    ?string               $id = null
+  ) {
     if (empty($paths)) {
       throw new InvalidArgumentException('route item paths is empty');
     }

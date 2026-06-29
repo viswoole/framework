@@ -10,7 +10,8 @@
  *  | Author: ZhuChongLin <8210856@qq.com>
  *  +----------------------------------------------------------------------
  */
-declare (strict_types=1);
+
+declare(strict_types=1);
 
 namespace Viswoole\Router\Annotation;
 
@@ -52,7 +53,7 @@ class RouteMapping extends RouteAnnotation
    * @param Status $status 接口状态，默认为Viswoole\Router\ApiDoc\Status::DEVELOPMENT 开发中
    */
   public function __construct(
-    array|string      $paths = null,
+    array|string|null $paths = null,
     ?string           $id = null,
     ?string           $parentId = null,
     null|array|string $method = null,
@@ -70,29 +71,28 @@ class RouteMapping extends RouteAnnotation
     public string     $updatedAt = '',
     public array      $tags = [],
     public Status     $status = Status::DEVELOPMENT,
-  )
-  {
+  ) {
     parent::__construct(
-      prefix     : $paths,
-      id         : $id,
-      parentId   : $parentId,
-      method     : $method,
+      prefix: $paths,
+      id: $id,
+      parentId: $parentId,
+      method: $method,
       middlewares: $middlewares,
-      patterns   : $patterns,
-      meta       : $meta,
-      suffix     : $suffix,
-      domain     : $domain,
-      hidden     : $hidden,
-      title      : $title,
+      patterns: $patterns,
+      meta: $meta,
+      suffix: $suffix,
+      domain: $domain,
+      hidden: $hidden,
+      title: $title,
       description: $description,
-      sort       : $sort
+      sort: $sort
     );
   }
 
   /**
    * @inheritDoc
    */
-  public function create(string|array|callable $handler, Group $routeGroup = null): Route
+  public function create(string|array|callable $handler, ?Group $routeGroup = null): Route
   {
     $route = parent::create($handler, $routeGroup);
     $route->setAuthor($this->author);

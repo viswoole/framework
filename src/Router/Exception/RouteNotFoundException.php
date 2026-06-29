@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Router\Exception;
 
@@ -29,9 +29,8 @@ class RouteNotFoundException extends RuntimeException
    */
   public function __construct(
     string    $message = 'routing resource not found',
-    Throwable $previous = null
-  )
-  {
+    ?Throwable $previous = null
+  ) {
     parent::__construct(message: $message, code: 404, previous: $previous);
   }
 }

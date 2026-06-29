@@ -41,7 +41,7 @@ interface CacheTagInterface
    * @param bool $NX 是否仅在缓存不存在时写入
    * @return bool 写入成功返回 true
    */
-  public function set(string $key, mixed $value, DateTime|int $expire = null, bool $NX = false
+  public function set(string $key, mixed $value, DateTime|int|null $expire = null, bool $NX = false
   ): bool;
 
   /**

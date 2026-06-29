@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\HttpServer;
 
@@ -153,12 +153,12 @@ class Request implements RequestInterface
     // 修复: port 为 0 时应视为无效端口，返回 null
     $port = (int)($parsed['port'] ?? 0) > 0 ? (int)$parsed['port'] : null;
     return Uri::create(
-      scheme  : $this->https() ? 'https' : 'http',
+      scheme: $this->https() ? 'https' : 'http',
       userInfo: $this->getBasicAuthCredentials(),
-      host    : $hostname,
-      port    : $port,
-      path    : $this->target(),
-      query   : $this->getServer('query_string', '')
+      host: $hostname,
+      port: $port,
+      path: $this->target(),
+      query: $this->getServer('query_string', '')
     );
   }
 
@@ -172,8 +172,7 @@ class Request implements RequestInterface
   #[Override] public function getHeader(
     ?string $key = null,
     mixed   $default = null
-  ): array|string|null
-  {
+  ): array|string|null {
     return is_null($key)
       ? $this->swooleRequest->header ?? $default
       : $this->swooleRequest->header[strtolower($key)] ?? $default;
@@ -368,9 +367,10 @@ class Request implements RequestInterface
    * @param bool $isShowNull 是否保留值为 null 的字段
    * @return array 参数名到值的关联数组
    */
-  #[Override] public function params(array|string|null $rule = null, bool $isShowNull = true
-  ): array
-  {
+  #[Override] public function params(
+    array|string|null $rule = null,
+    bool $isShowNull = true
+  ): array {
     $params = [];
     if (empty($rule)) {
       $params = $this->param();
@@ -401,9 +401,8 @@ class Request implements RequestInterface
   #[Override] public function param(
     ?string      $key = null,
     mixed        $default = null,
-    array|string $filter = null
-  ): mixed
-  {
+    array|string|null $filter = null
+  ): mixed {
     if ($this->getMethod() !== 'GET') {
       $data = $this->post($key, $default);
     } else {

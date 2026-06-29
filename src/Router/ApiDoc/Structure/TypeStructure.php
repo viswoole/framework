@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Router\ApiDoc\Structure;
 
@@ -39,9 +39,8 @@ class TypeStructure
    */
   public function __construct(
     Types  $type = Types::Mixed,
-    string $name = null
-  )
-  {
+    ?string $name = null
+  ) {
     $type = strtolower($type->name);
     $this->type = $type;
     $this->name = $name ?? $this->type;

@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Cache\Driver;
 
@@ -59,8 +59,7 @@ class File extends Driver
     string $tag_prefix = 'tag:',
     string $tag_store = 'TAG_STORE',
     int    $expire = 0
-  )
-  {
+  ) {
     $this->storage = rtrim($storage, '/');
     parent::__construct($prefix, $tag_prefix, $tag_store, $expire);
   }
@@ -175,10 +174,9 @@ class File extends Driver
   #[Override] public function set(
     string       $key,
     mixed        $value,
-    DateTime|int $expire = null,
+    DateTime|int|null $expire = null,
     bool         $NX = false
-  ): bool
-  {
+  ): bool {
     return $this->setRaw($key, $value, $expire, $NX);
   }
 
@@ -196,10 +194,9 @@ class File extends Driver
   protected function setRaw(
     string       $key,
     mixed        $value,
-    DateTime|int $expire = null,
+    DateTime|int|null $expire = null,
     bool         $NX = false
-  ): bool
-  {
+  ): bool {
     $filename = $this->filename($key);
     $data = $this->serialize($value);
     $expire = $expire === null ? $this->expire : $this->formatExpireTime($expire);
@@ -351,8 +348,7 @@ class File extends Driver
     bool      $autoUnlock = false,
     int       $retry = 5,
     float|int $sleep = 0.2
-  ): string
-  {
+  ): string {
     $expire = $expire <= 0 ? null : time() + $expire;
 
     if ($retry <= 0) $retry = 1;
@@ -482,8 +478,7 @@ class File extends Driver
   #[Override] public function sAddArray(
     string       $key,
     array|string $values,
-  ): false|int
-  {
+  ): false|int {
     if (is_string($values)) $values = [$values];
 
     $oldArray = $this->getArray($key);
@@ -519,8 +514,7 @@ class File extends Driver
   #[Override] public function sRemoveArray(
     string       $key,
     array|string $values,
-  ): false|int
-  {
+  ): false|int {
     $array = $this->getArray($key);
     if (empty($array)) return 0;
     if (is_string($values)) $values = [$values];

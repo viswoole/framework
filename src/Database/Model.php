@@ -1,4 +1,6 @@
-<?php /** @noinspection PhpUnused */
+<?php
+
+/** @noinspection PhpUnused */
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -11,7 +13,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database;
 
@@ -242,10 +244,9 @@ abstract class Model
    */
   protected function hasOne(
     Model|string $relationModel,
-    string       $foreignKey = null,
-    string       $localKey = null,
-  ): RelationQuery
-  {
+    ?string      $foreignKey = null,
+    ?string      $localKey = null,
+  ): RelationQuery {
     return $this->_relation($relationModel, $foreignKey, $localKey);
   }
 
@@ -260,11 +261,10 @@ abstract class Model
    */
   private function _relation(
     Model|string $relationModel,
-    string       $foreignKey = null,
-    string       $localKey = null,
+    ?string      $foreignKey = null,
+    ?string      $localKey = null,
     bool         $many = false
-  ): RelationQuery
-  {
+  ): RelationQuery {
     if (empty($localKey)) $localKey = $this->pk;
     if (empty($foreignKey)) $foreignKey = $this->table . '_' . $localKey;
     if (is_string($relationModel)) $relationModel = new $relationModel;
@@ -281,10 +281,9 @@ abstract class Model
    */
   protected function hasMany(
     Model|string $relationModel,
-    string       $foreignKey = null,
-    string       $localKey = null,
-  ): RelationQuery
-  {
+    ?string      $foreignKey = null,
+    ?string      $localKey = null,
+  ): RelationQuery {
     return $this->_relation($relationModel, $foreignKey, $localKey, true);
   }
 }

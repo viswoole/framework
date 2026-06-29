@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Channel\Contract;
 
@@ -71,7 +71,7 @@ interface ConnectionPoolInterface
    *
    * @param int|null $size 目标填充数量，必须大于当前连接池长度；为 null 时填充至池容量上限
    */
-  public function fill(int $size = null): void;
+  public function fill(?int $size = null): void;
 
   /**
    * 获取连接池中当前可用的连接数量

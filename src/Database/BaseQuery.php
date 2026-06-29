@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database;
 
@@ -54,8 +54,7 @@ class BaseQuery
     protected Channel $channel,
     string            $table,
     string            $pk
-  )
-  {
+  ) {
     $this->options = new Options($table, $pk);
   }
 
@@ -124,8 +123,7 @@ class BaseQuery
     string $operator,
     mixed  $value,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     $this->options->having[] = compact('column', 'operator', 'value', 'connector');
     return $this;
   }
@@ -286,7 +284,7 @@ class BaseQuery
    * @param string ...$column 列名，不传则查询所有列
    * @return static 支持链式调用
    */
-  public function columns(string...$column): static
+  public function columns(string ...$column): static
   {
     if (!empty($column)) {
       $columns = [];
@@ -350,10 +348,9 @@ class BaseQuery
   public function cache(
     string $key,
     int    $expire = 0,
-    string $tag = null,
-    string $store = null
-  ): static
-  {
+    ?string $tag = null,
+    ?string $store = null
+  ): static {
     $this->options->cache = compact('key', 'expire', 'tag', 'store');
     return $this;
   }

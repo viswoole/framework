@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Facade;
 
@@ -38,7 +38,7 @@ use Viswoole\Core\Facade;
  * @method static object invokeClass(string $class, array $params = []) 调用反射创建类实例，支持依赖注入。
  * @method static mixed invokeMethod(array|callable $method, array $params = []) 调用反射执行方法，支持依赖注入。
  * @method static string addHook(string $abstract, Closure $callback) 添加一个钩子，在解析类时触发，返回钩子id
- * @method static void removeHook(string $abstract, string $id = null) 删除解析钩子
+ * @method static void removeHook(string $abstract, ?string $id = null) 删除解析钩子
  * @method static void bind(string $abstract, object|string|null $concrete) 绑定接口
  * @method static void remove(string $abstract) 删除容器中的服务实例
  * @method static string getVersion() 获取当前版本号

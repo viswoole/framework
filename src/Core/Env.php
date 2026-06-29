@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -132,7 +132,7 @@ class Env implements ArrayAccess
    * @param mixed|null $default 默认值
    * @return mixed 变量值、默认值或全部数据
    */
-  public function get(string $name = null, mixed $default = null): mixed
+  public function get(?string $name = null, mixed $default = null): mixed
   {
     if (is_null($name)) return $this->data;
     $name = strtoupper(str_replace('.', '_', $name));

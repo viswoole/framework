@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 use Viswoole\Cache\CacheManager;
 use Viswoole\Core\App;
@@ -132,7 +132,7 @@ if (!function_exists('config')) {
    * @return mixed 配置值或默认值
    * @see Config::get()
    */
-  function config(string $name = null, mixed $default = null): mixed
+  function config(?string $name = null, mixed $default = null): mixed
   {
     /**
      * @var Config $config
@@ -157,8 +157,7 @@ if (!function_exists('dump')) {
     string $title = 'variable output',
     string $color = Output::COLORS['GREEN'],
     int    $backtrace = 1
-  ): void
-  {
+  ): void {
     Output::dump($data, $title, $color, $backtrace === 0 ? 0 : 2);
   }
 }
@@ -177,8 +176,7 @@ if (!function_exists('echo_log')) {
     string     $label = 'SUCCESS',
     ?string    $color = null,
     int        $backtrace = 1
-  ): void
-  {
+  ): void {
     Output::echo($message, $label, $color, $backtrace === 0 ? 0 : 2);
   }
 }

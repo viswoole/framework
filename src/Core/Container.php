@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -120,7 +120,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param string $abstract 类名或 '*'
    * @param string|null $id 钩子标识，为 null 时移除该类的所有钩子
    */
-  public function removeHook(string $abstract, string $id = null): void
+  public function removeHook(string $abstract, ?string $id = null): void
   {
     if (isset($this->invokeCallback[$abstract])) {
       if (is_null($id)) {
@@ -266,7 +266,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       $args = $constructor ? $this->injectParams($constructor, $params) : [];
     } catch (ValidateException $e) {
       $this->handleValidateError(
-        $reflector->getName() . "::$construct: " . $e->getMessage(), $e
+        $reflector->getName() . "::$construct: " . $e->getMessage(),
+        $e
       );
     }
     try {
@@ -312,11 +313,13 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         $value = Arr::arrayPopValue($params, $key, $default);
         // 前置注入
         $preInject = $shape->getAttributes(
-          PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF
+          PreInjectInterface::class,
+          ReflectionAttribute::IS_INSTANCEOF
         );
         // 扩展验证规则
         $validateAttributes = $shape->getAttributes(
-          BaseValidateRule::class, ReflectionAttribute::IS_INSTANCEOF
+          BaseValidateRule::class,
+          ReflectionAttribute::IS_INSTANCEOF
         );
         // 如果是可变参数则返回参数数组
         if ($shape->isVariadic()) {
@@ -329,7 +332,11 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
           }
           foreach ($params as &$item) {
             $item = $this->validateParam(
-              $name, $paramType, $item, $allowsNull, $validateAttributes
+              $name,
+              $paramType,
+              $item,
+              $allowsNull,
+              $validateAttributes
             );
           }
           return array_merge($args, $params);
@@ -340,7 +347,11 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         }
         // 验证参数类型
         $value = $this->validateParam(
-          $name, $paramType, $value, $allowsNull, $validateAttributes
+          $name,
+          $paramType,
+          $value,
+          $allowsNull,
+          $validateAttributes
         );
         $args[$index] = $value;
       } catch (ValidateException $e) {
@@ -369,8 +380,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     mixed               $value,
     bool                $allowsNull,
     array               $validateAttributes
-  ): mixed
-  {
+  ): mixed {
     if (!is_null($paramType)) {
       // 如果$value等于null 且设置的是内置类型 则判断是否允许为null，如果允许则返回null，否则抛出异常
       if (is_null($value) && $paramType->isBuiltin()) {
@@ -399,7 +409,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       throw $e;
     } else {
       throw new ValidateException(
-        "Argument #$index ($$name) " . $e->getMessage(), previous: $e
+        "Argument #$index ($$name) " . $e->getMessage(),
+        previous: $e
       );
     }
   }

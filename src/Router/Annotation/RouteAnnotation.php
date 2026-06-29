@@ -81,7 +81,7 @@ abstract class RouteAnnotation
    */
   public function create(
     string|array|callable $handler,
-    Group                 $routeGroup = null
+    ?Group                $routeGroup = null
   ): Route|Group
   {
     if ($this->type === 'group') {

@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -89,7 +89,7 @@ class Event
    * @param string $event 事件名称，不区分大小写
    * @param string|null $id 监听器ID，为 null 时移除该事件的所有监听器
    */
-  public function off(string $event, string $id = null): void
+  public function off(string $event, ?string $id = null): void
   {
     // 与 on/emit 保持一致，统一转换为小写
     $event = strtolower(trim($event));

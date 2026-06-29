@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database;
 
@@ -208,7 +208,7 @@ class DbManager
    *
    * @param Closure|null $query 闭包内执行事务操作，传入后自动 commit/rollBack
    */
-  public function startTransaction(Closure $query = null): void
+  public function startTransaction(?Closure $query = null): void
   {
     ConnectManager::factory()->start();
     if ($query instanceof Closure) {
@@ -274,7 +274,7 @@ class DbManager
    * @throws DbException 通道列表为空时抛出
    * @throws InvalidArgumentException 指定通道不存在时抛出
    */
-  public function channel(string $name = null): Channel
+  public function channel(?string $name = null): Channel
   {
     if (empty($this->channels)) {
       throw new DbException('数据库通道列表为空，请先配置数据库通道。', -1);

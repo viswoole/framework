@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Query;
 
@@ -57,9 +57,8 @@ trait Where
   public function orWhere(
     string                 $column,
     string|int|float|array $operator,
-    string|int|float|array $value = null,
-  ): static
-  {
+    string|int|float|array|null $value = null,
+  ): static {
     return $this->where($column, $operator, $value, 'OR');
   }
 
@@ -76,10 +75,9 @@ trait Where
   public function where(
     string                 $column,
     string|int|float|array $operator,
-    string|int|float|array $value = null,
+    string|int|float|array|null $value = null,
     string                 $connector = 'AND'
-  ): static
-  {
+  ): static {
     if ($value === null) {
       $value = $operator;
       $operator = is_array($operator) ? 'IN' : '=';
@@ -92,7 +90,10 @@ trait Where
       throw new InvalidArgumentException('无效的条件连接符，仅只支持AND和OR');
     }
     $this->options->where[] = compact(
-      'column', 'operator', 'value', 'connector'
+      'column',
+      'operator',
+      'value',
+      'connector'
     );
     return $this;
   }
@@ -121,9 +122,8 @@ trait Where
   public function andWhere(
     string                 $column,
     string|int|float|array $operator,
-    string|int|float|array $value = null,
-  ): static
-  {
+    string|int|float|array|null $value = null,
+  ): static {
     return $this->where($column, $operator, $value);
   }
 
@@ -140,8 +140,7 @@ trait Where
     string $column,
     array  $value,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     if (empty($value)) throw new InvalidArgumentException('IN条件值不能是空数组');
     return $this->where($column, 'IN', $value, $connector);
   }
@@ -159,8 +158,7 @@ trait Where
     string $column,
     array  $value,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     if (empty($value)) throw new InvalidArgumentException('NOT IN条件值不能是空数组');
     return $this->where($column, 'NOT IN', $value, $connector);
   }
@@ -175,8 +173,7 @@ trait Where
   public function whereNull(
     string $column,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     return $this->where($column, 'IS NULL', null, $connector);
   }
 
@@ -190,8 +187,7 @@ trait Where
   public function whereNotNull(
     string $column,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     return $this->where($column, 'IS NOT NULL', null, $connector);
   }
 
@@ -208,8 +204,7 @@ trait Where
     string $column,
     array  $value,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     if (empty($value)) throw new InvalidArgumentException('NOT BETWEEN条件值不能是空数组');
     return $this->where($column, 'NOT BETWEEN', $value, $connector);
   }
@@ -227,8 +222,7 @@ trait Where
     string $column,
     array  $value,
     string $connector = 'AND'
-  ): static
-  {
+  ): static {
     if (empty($value)) throw new InvalidArgumentException('BETWEEN条件值不能是空数组');
     return $this->where($column, 'BETWEEN', $value, $connector);
   }
@@ -268,8 +262,7 @@ trait Where
   public function whereRaw(
     string $sql,
     array  $bindings = []
-  ): static
-  {
+  ): static {
     $this->options->where[] = Db::raw($sql, $bindings);
     return $this;
   }

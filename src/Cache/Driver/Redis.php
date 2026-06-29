@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Cache\Driver;
 
@@ -80,22 +80,21 @@ class Redis extends Driver
     protected string $tag_store = 'TAG_STORE',
     int              $pool_max_size = 64,
     int              $pool_fill_size = 0
-  )
-  {
+  ) {
     $this->pool = new RedisPool(
       new RedisConfig(
-        host          : $host,
-        port          : $port,
-        password      : $password,
-        db_index      : $db_index,
-        timeout       : $timeout,
+        host: $host,
+        port: $port,
+        password: $password,
+        db_index: $db_index,
+        timeout: $timeout,
         retry_interval: $retry_interval,
-        read_timeout  : $read_timeout,
-        prefix        : $prefix,
-        tag_prefix    : $tag_prefix,
-        expire        : $expire,
-        tag_store     : $tag_store,
-        pool_max_size : $pool_max_size,
+        read_timeout: $read_timeout,
+        prefix: $prefix,
+        tag_prefix: $tag_prefix,
+        expire: $expire,
+        tag_store: $tag_store,
+        pool_max_size: $pool_max_size,
         pool_fill_size: $pool_fill_size
       )
     );
@@ -233,8 +232,7 @@ class Redis extends Driver
     bool      $autoUnlock = false,
     int       $retry = 5,
     float|int $sleep = 0.2
-  ): string
-  {
+  ): string {
     if ($retry <= 0) $retry = 1;
     $result = false;
     $key = $this->getLockKey($scene);
@@ -266,10 +264,9 @@ class Redis extends Driver
   #[Override] public function set(
     string       $key,
     mixed        $value,
-    DateTime|int $expire = null,
+    DateTime|int|null $expire = null,
     bool         $NX = false
-  ): bool
-  {
+  ): bool {
     if (is_null($expire)) $expire = $this->expire;
     $key = $this->getCacheKey($key);
     $expire = $this->formatExpireTime($expire);
