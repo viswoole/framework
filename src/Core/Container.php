@@ -658,7 +658,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * @param string $name 属性名
    */
-  public function __unset($name)
+  public function __unset(string $name)
   {
     $this->remove($name);
   }
@@ -697,7 +697,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @param string $name 绑定标识
    * @param mixed $value 实现类名、闭包或实例
    */
-  public function __set(string $name, $value): void
+  public function __set(string $name, mixed $value): void
   {
     $this->bind($name, $value);
   }
