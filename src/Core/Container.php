@@ -16,7 +16,6 @@ declare(strict_types=1);
 namespace Viswoole\Core;
 
 use ArrayAccess;
-use ArrayIterator;
 use Closure;
 use Countable;
 use InvalidArgumentException;
@@ -29,6 +28,7 @@ use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
 use ReflectionType;
+use Traversable;
 use TypeError;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Contract\PreInjectInterface;
@@ -641,9 +641,12 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @inheritDoc
    */
   #[Override]
-  public function getIterator(): ArrayIterator
+  public function getIterator(): Traversable
   {
-    return new ArrayIterator($this->bindings);
+    // 使用生成器遍历绑定映射，规避 PHP 8.5 起 ArrayIterator 传入对象的弃用告警，且更省内存
+    foreach ($this->bindings as $abstract => $concrete) {
+      yield $abstract => $concrete;
+    }
   }
 
   /**
