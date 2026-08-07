@@ -134,7 +134,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * @inheritDoc
    */
-  #[Override] public function offsetExists(mixed $offset): bool
+  #[Override]
+  public function offsetExists(mixed $offset): bool
   {
     return $this->has($offset);
   }
@@ -380,7 +381,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     mixed               $value,
     bool                $allowsNull,
     array               $validateAttributes
-  ): mixed {
+  ): mixed
+  {
     if (!is_null($paramType)) {
       // 如果$value等于null 且设置的是内置类型 则判断是否允许为null，如果允许则返回null，否则抛出异常
       if (is_null($value) && $paramType->isBuiltin()) {
@@ -536,7 +538,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         }
         $namespaceName = $class . '::' . $method[1];
       } else {
-        $reflect = new ReflectionMethod($method);
+        $reflect = ReflectionMethod::createFromMethodName($method);
         $namespaceName = $method;
       }
       try {
@@ -585,7 +587,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @inheritDoc
    * @throws NotFoundException
    */
-  #[Override] public function offsetGet(mixed $offset): mixed
+  #[Override]
+  public function offsetGet(mixed $offset): mixed
   {
     return $this->get($offset);
   }
@@ -593,7 +596,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * @inheritDoc
    */
-  #[Override] public function offsetSet(mixed $offset, mixed $value): void
+  #[Override]
+  public function offsetSet(mixed $offset, mixed $value): void
   {
     $this->bind($offset, $value);
   }
@@ -627,7 +631,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * @inheritDoc
    */
-  #[Override] public function offsetUnset(mixed $offset): void
+  #[Override]
+  public function offsetUnset(mixed $offset): void
   {
     unset($this->bindings[$offset]);
   }
@@ -635,7 +640,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * @inheritDoc
    */
-  #[Override] public function getIterator(): ArrayIterator
+  #[Override]
+  public function getIterator(): ArrayIterator
   {
     return new ArrayIterator($this->bindings);
   }
@@ -643,7 +649,8 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * @inheritDoc
    */
-  #[Override] public function count(): int
+  #[Override]
+  public function count(): int
   {
     return count($this->bindings);
   }
