@@ -85,7 +85,8 @@ class Server
 {
   /**
    * @var string 默认异常处理类
-   */  const string DEFAULT_EXCEPTION_HANDLE = Handle::class;
+   */
+  const string DEFAULT_EXCEPTION_HANDLE = Handle::class;
   /**
    * @var array Swoole\Server 构造参数默认值（host/port/mode/sock_type）
    */
@@ -100,45 +101,6 @@ class Server
     'sock_type' => SWOOLE_SOCK_TCP,
   ];
   // 修复#8: 类常量依赖BASE_PATH存在加载顺序风险，改为静态方法延迟计算
-  /**
-   * 获取 PID 文件默认存储目录
-   *
-   * @return string PID 目录绝对路径
-   */
-  public static function getDefaultPidStoreDir(): string
-  {
-    return BASE_PATH . '/runtime/server_pid';
-  }
-  /**
-   * 获取 Swoole 全局默认配置项
-   *
-   * @return array Swoole Server 全局选项默认值
-   */
-  public static function getDefaultGlobalOption(): array
-  {
-    return [
-    // 一键协程化Hook函数范围 参考https://wiki.swoole.com/#/server/setting?id=hook_flags
-    Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
-    // 是否启用异步风格服务器的协程支持
-    Constant::OPTION_ENABLE_COROUTINE => true,
-    // 最大协程数
-    Constant::OPTION_MAX_CONCURRENCY => 10000,
-    // 进程守护运行
-    Constant::OPTION_DAEMONIZE => false,
-    // 进程守护运行默认输出日志路径
-    Constant::OPTION_LOG_FILE => BASE_PATH . '/runtime/swoole.log',
-    // 最大请求数 0为不限制
-    Constant::OPTION_MAX_REQUEST => 100000,
-    // 客户端连接的缓存区长度
-    Constant::OPTION_SOCKET_BUFFER_SIZE => 2 * 1024 * 1024,
-    // 发送输出缓冲区内存尺寸
-    Constant::OPTION_BUFFER_OUTPUT_SIZE => 2 * 1024 * 1024,
-    // 数据包最大尺寸 最小64k
-    Constant::OPTION_PACKAGE_MAX_LENGTH => 2 * 1024 * 1024,
-    // 日志输出等级
-    Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
-    ];
-  }
   /**
    * @var string 当前服务名称
    */
@@ -236,6 +198,47 @@ class Server
     }
     $this->config = $config;
     return $config;
+  }
+
+  /**
+   * 获取 Swoole 全局默认配置项
+   *
+   * @return array Swoole Server 全局选项默认值
+   */
+  public static function getDefaultGlobalOption(): array
+  {
+    return [
+      // 一键协程化Hook函数范围 参考https://wiki.swoole.com/#/server/setting?id=hook_flags
+      Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
+      // 是否启用异步风格服务器的协程支持
+      Constant::OPTION_ENABLE_COROUTINE => true,
+      // 最大协程数
+      Constant::OPTION_MAX_CONCURRENCY => 10000,
+      // 进程守护运行
+      Constant::OPTION_DAEMONIZE => false,
+      // 进程守护运行默认输出日志路径
+      Constant::OPTION_LOG_FILE => BASE_PATH . '/runtime/swoole.log',
+      // 最大请求数 0为不限制
+      Constant::OPTION_MAX_REQUEST => 100000,
+      // 客户端连接的缓存区长度
+      Constant::OPTION_SOCKET_BUFFER_SIZE => 2 * 1024 * 1024,
+      // 发送输出缓冲区内存尺寸
+      Constant::OPTION_BUFFER_OUTPUT_SIZE => 2 * 1024 * 1024,
+      // 数据包最大尺寸 最小64k
+      Constant::OPTION_PACKAGE_MAX_LENGTH => 2 * 1024 * 1024,
+      // 日志输出等级
+      Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
+    ];
+  }
+
+  /**
+   * 获取 PID 文件默认存储目录
+   *
+   * @return string PID 目录绝对路径
+   */
+  public static function getDefaultPidStoreDir(): string
+  {
+    return BASE_PATH . '/runtime/server_pid';
   }
 
   /**
