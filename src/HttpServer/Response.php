@@ -432,7 +432,6 @@ class Response implements ResponseInterface
         $this->header('Content-Type', 'application/octet-stream');
       } else {
         $fileMimeType = finfo_file($finfo, $filePath);
-        finfo_close($finfo);
         if ($fileMimeType === false) {
           $fileMimeType = 'application/octet-stream';
         }
