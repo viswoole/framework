@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\HttpServer;
 
@@ -77,13 +77,14 @@ class Response implements ResponseInterface
    *
    * @param int $http_status_code 状态码，有效范围 100-599
    * @param string $reasonPhrase 状态描述，为空时自动从 Status 常量获取
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws InvalidArgumentException 状态码不在 100-599 范围时抛出
    */
-  #[Override] public function status(
+  #[Override]
+  public function status(
     int    $http_status_code,
     string $reasonPhrase = ''
-  ): ResponseInterface
+  ): self
   {
     // 检查状态码是否有效
     if ($http_status_code < 100 || $http_status_code >= 600) {
@@ -104,14 +105,15 @@ class Response implements ResponseInterface
    * @param string $key 标头名称
    * @param string $value 标头值
    * @param bool $format 是否按 HTTP 约定格式化键名
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws InvalidArgumentException 响应对象已结束或已分离时抛出
    */
-  #[Override] public function header(
+  #[Override]
+  public function header(
     string $key,
     string $value,
     bool   $format = true
-  ): ResponseInterface
+  ): self
   {
     $result = $this->swooleResponse->header($key, $value, $format);
     if (!$result) {
@@ -125,13 +127,14 @@ class Response implements ResponseInterface
    *
    * @param object|array|int $server Swoole\Server 对象、[Server, Request] 数组或文件描述符
    * @param int $fd 文件描述符，$server 为 Swoole\Server 时必填
-   * @return ResponseInterface 新创建的响应实例
+   * @return self 新创建的响应实例
    * @throws RuntimeException 创建失败时抛出
    */
-  #[Override] public static function create(
+  #[Override]
+  public static function create(
     object|array|int $server = -1,
     int              $fd = -1
-  ): ResponseInterface
+  ): self
   {
     $result = swooleResponse::create($server, $fd);
     if (!$result) throw new RuntimeException('创建响应对象失败，请检查参数是否正确。');
@@ -178,7 +181,7 @@ class Response implements ResponseInterface
    * @param mixed $value 属性值
    * @throws InvalidArgumentException 属性在 Swoole\Http\Response 中不存在时抛出
    */
-  public function __set(string $name, $value): void
+  public function __set(string $name, mixed $value): void
   {
     if (property_exists($this->swooleResponse, $name)) {
       $this->swooleResponse->$name = $value;
@@ -193,9 +196,10 @@ class Response implements ResponseInterface
    * 数组值为数组时会用逗号拼接为字符串。
    *
    * @param array<string, string|string[]> $headers 标头键值对
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    */
-  #[Override] public function setHeaders(array $headers): ResponseInterface
+  #[Override]
+  public function setHeaders(array $headers): self
   {
     foreach ($headers as $headerName => $headerValue) {
       $headerValue = is_array($headerValue)
@@ -214,7 +218,7 @@ class Response implements ResponseInterface
   public function setStatusCode(
     int    $http_status_code,
     string $reasonPhrase = ''
-  ): ResponseInterface
+  ): self
   {
     return $this->status($http_status_code, $reasonPhrase);
   }
@@ -238,7 +242,8 @@ class Response implements ResponseInterface
    * @param string|null $content 响应内容，为 null 时使用已设置的 content
    * @return bool 发送成功返回 true，响应已结束或不可写返回 false
    */
-  #[Override] public function end(?string $content = null): bool
+  #[Override]
+  public function end(?string $content = null): bool
   {
     if ($this->isWritable()) {
       if (is_null($content)) $content = $this->content;
@@ -263,7 +268,8 @@ class Response implements ResponseInterface
    *
    * @return bool true 表示可写入，false 表示已结束或已分离
    */
-  #[Override] public function isWritable(): bool
+  #[Override]
+  public function isWritable(): bool
   {
     return $this->swooleResponse->isWritable();
   }
@@ -273,7 +279,7 @@ class Response implements ResponseInterface
    *
    * @see header
    */
-  public function setHeader(string $key, string $value, bool $format = true): ResponseInterface
+  public function setHeader(string $key, string $value, bool $format = true): self
   {
     return $this->header($key, $value, $format);
   }
@@ -285,7 +291,8 @@ class Response implements ResponseInterface
    * @param string $value 标头值
    * @return bool 设置成功返回 true
    */
-  #[Override] public function trailer(string $key, string $value): bool
+  #[Override]
+  public function trailer(string $key, string $value): bool
   {
     return $this->swooleResponse->trailer($key, $value);
   }
@@ -297,7 +304,8 @@ class Response implements ResponseInterface
    * @param int $http_code 重定向状态码，默认 302
    * @return bool 重定向成功返回 true
    */
-  #[Override] public function redirect(string $uri, int $http_code = 302): bool
+  #[Override]
+  public function redirect(string $uri, int $http_code = 302): bool
   {
     return $this->swooleResponse->redirect($uri, $http_code);
   }
@@ -306,10 +314,11 @@ class Response implements ResponseInterface
    * 分段写入响应数据（HTTP Chunk 模式）
    *
    * @param string $data 数据内容，最大长度受 buffer_output_size 配置控制
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws RuntimeException 写入失败（连接上下文已不存在）时抛出
    */
-  #[Override] public function write(string $data): ResponseInterface
+  #[Override]
+  public function write(string $data): self
   {
     $result = $this->swooleResponse->write($data);
     if (!$result) throw new RuntimeException('分段写入数据失败，连接上下文已不存在。');
@@ -322,10 +331,11 @@ class Response implements ResponseInterface
    * 先编码再设置 Content-Type，避免编码失败但已修改了标头。
    *
    * @param mixed $data 任意可序列化为 JSON 的数据
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws RuntimeException JSON 编码失败时抛出
    */
-  #[Override] public function json(mixed $data): ResponseInterface
+  #[Override]
+  public function json(mixed $data): self
   {
     // 修复: 先 json_encode 成功后再 setContentType，避免编码失败但已设置了 Content-Type
     $data = json_encode($data, $this->jsonFlags);
@@ -342,12 +352,13 @@ class Response implements ResponseInterface
    *
    * @param string $contentType MIME 类型，如 application/json
    * @param string $charset 字符编码，默认 utf-8
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    */
-  #[Override] public function setContentType(
+  #[Override]
+  public function setContentType(
     string $contentType,
     string $charset = 'utf-8'
-  ): ResponseInterface
+  ): self
   {
     $this->header('Content-Type', $contentType . '; charset=' . $charset);
     return $this;
@@ -357,9 +368,10 @@ class Response implements ResponseInterface
    * 设置待发送的响应内容
    *
    * @param string $content 响应正文
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    */
-  #[Override] public function setContent(string $content): ResponseInterface
+  #[Override]
+  public function setContent(string $content): self
   {
     $this->content = $content;
     return $this;
@@ -370,7 +382,8 @@ class Response implements ResponseInterface
    *
    * @return swooleResponse Swoole 原始响应对象
    */
-  #[Override] public function getSwooleResponse(): swooleResponse
+  #[Override]
+  public function getSwooleResponse(): swooleResponse
   {
     return $this->swooleResponse;
   }
@@ -379,9 +392,10 @@ class Response implements ResponseInterface
    * 设置 HTML 响应内容
    *
    * @param string $html HTML 内容
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    */
-  #[Override] public function html(string $html): ResponseInterface
+  #[Override]
+  public function html(string $html): self
   {
     $this->setContentType('text/html');
     $this->setContent($html);
@@ -400,7 +414,8 @@ class Response implements ResponseInterface
    * @return bool 发送成功返回 true
    * @throws InvalidArgumentException 文件不存在时抛出
    */
-  #[Override] public function sendfile(
+  #[Override]
+  public function sendfile(
     string  $filePath,
     int     $offset = 0,
     int     $length = 0,
@@ -434,7 +449,8 @@ class Response implements ResponseInterface
    *
    * @return array<string, string> 标头键值对
    */
-  #[Override] public function getHeader(): array
+  #[Override]
+  public function getHeader(): array
   {
     // 修复: swooleResponse->header 可能为 null，使用 null 合并确保返回数组
     return $this->swooleResponse->header ?? [];
@@ -444,9 +460,10 @@ class Response implements ResponseInterface
    * 控制是否将响应内容输出到控制台（调试用）
    *
    * @param bool $echo true 开启控制台输出
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    */
-  #[Override] public function echo(bool $echo = true): ResponseInterface
+  #[Override]
+  public function echo(bool $echo = true): self
   {
     $this->echoToConsole = $echo;
     return $this;
@@ -464,11 +481,12 @@ class Response implements ResponseInterface
    * @param bool $httponly 是否禁止 JS 访问
    * @param string $samesite SameSite 策略
    * @param string $priority Cookie 优先级
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws RuntimeException 设置失败时抛出
    * @see cookie
    */
-  #[Override] public function rawCookie(
+  #[Override]
+  public function rawCookie(
     string $key,
     string $value = '',
     int    $expire = 0,
@@ -478,11 +496,19 @@ class Response implements ResponseInterface
     bool   $httponly = false,
     string $samesite = '',
     string $priority = ''
-  ): ResponseInterface
+  ): self
   {
     // 修复: rawCookie 应调用 swooleResponse->rawcookie() 而非 cookie()，保留 rawCookie 语义
     $result = $this->swooleResponse->rawcookie(
-      $key, $value, $expire, $path, $domain, $secure, $httponly, $samesite, $priority
+      $key,
+      $value,
+      $expire,
+      $path,
+      $domain,
+      $secure,
+      $httponly,
+      $samesite,
+      $priority
     );
     if (!$result) throw new RuntimeException('设置rawCookie失败。');
     return $this;
@@ -500,10 +526,11 @@ class Response implements ResponseInterface
    * @param bool $httponly 是否禁止 JS 访问
    * @param string $samesite SameSite 策略
    * @param string $priority Cookie 优先级
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws RuntimeException 设置失败时抛出
    */
-  #[Override] public function cookie(
+  #[Override]
+  public function cookie(
     string $key,
     string $value = '',
     int    $expire = 0,
@@ -513,10 +540,18 @@ class Response implements ResponseInterface
     bool   $httponly = false,
     string $samesite = '',
     string $priority = ''
-  ): ResponseInterface
+  ): self
   {
     $result = $this->swooleResponse->cookie(
-      $key, $value, $expire, $path, $domain, $secure, $httponly, $samesite, $priority
+      $key,
+      $value,
+      $expire,
+      $path,
+      $domain,
+      $secure,
+      $httponly,
+      $samesite,
+      $priority
     );
     if (!$result) throw new RuntimeException('设置cookie失败。');
     return $this;
@@ -527,10 +562,11 @@ class Response implements ResponseInterface
    *
    * 与 create 和 Server::send 配合使用，实现异步推送。
    *
-   * @return ResponseInterface 支持链式调用
+   * @return self 返回当前实例，支持链式调用
    * @throws RuntimeException 分离失败（连接上下文已不存在）时抛出
    */
-  #[Override] public function detach(): ResponseInterface
+  #[Override]
+  public function detach(): self
   {
     $result = $this->swooleResponse->detach();
     if (!$result) throw new RuntimeException('分离响应失败，连接上下文已不存在。');
