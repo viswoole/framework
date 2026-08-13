@@ -164,7 +164,7 @@ interface ResponseInterface
    * 任意格式的json响应
    *
    * @access public
-   * @param mixed $data 任意可虚拟化的数据
+   * @param mixed $data 任意可序列的数据
    * @return ResponseInterface
    */
   public function json(mixed $data): ResponseInterface;
