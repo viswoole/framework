@@ -52,18 +52,92 @@ class Env implements ArrayAccess
   }
 
   /**
-   * 解析 .env 文件（INI 格式）并合并到环境变量数据中
+   * 解析 .env 文件（逐行 KEY=VALUE 格式）并合并到环境变量数据中
+   *
+   * 不使用 parse_ini_file：.env 不是严格 INI 格式，注释中的特殊字符
+   * （~、(、; 等）会触发 parse_ini_file 语法错误并返回 false，导致整份
+   * .env 静默失效。此处逐行解析，仅将 # 开头行视为注释，值不做 INI 校验。
    *
    * @param string $file .env 文件路径
    */
   protected function load(string $file): void
   {
+    $env = [];
     if (is_file($file)) {
-      $env = parse_ini_file($file, true, INI_SCANNER_RAW) ?: [];
-    } else {
-      $env = [];
+      foreach (file($file, FILE_IGNORE_NEW_LINES) as $line) {
+        $parsed = $this->parseLine($line);
+        if ($parsed !== null) {
+          $env[$parsed[0]] = $parsed[1];
+        }
+      }
     }
     $this->set($env);
+  }
+
+  /**
+   * 解析单行 .env 配置
+   *
+   * 支持 KEY=VALUE 键值对、#/; 开头注释行与空行，兼容 bash 风格的
+   * export 前缀。值支持单/双引号包裹，双引号内支持 \n \r \t \" \\ 转义，
+   * 未加引号的值从首个 " #" 处截断行内注释。
+   *
+   * @param string $line 单行配置（不含换行符）
+   * @return array{0:string,1:string}|null [键, 值]；注释、空行或格式错误返回 null
+   */
+  protected function parseLine(string $line): ?array
+  {
+    $line = trim($line);
+    if ($line === '' || str_starts_with($line, '#') || str_starts_with($line, ';')) {
+      return null;
+    }
+    // 兼容 bash 风格的 export 前缀（export KEY=VALUE）
+    $line = (string)preg_replace('/^export\s+/i', '', $line);
+    $position = strpos($line, '=');
+    if ($position === false) {
+      return null;
+    }
+    $key = trim(substr($line, 0, $position));
+    if ($key === '') {
+      return null;
+    }
+    $value = trim(substr($line, $position + 1));
+    return [$key, $this->parseValue($value)];
+  }
+
+  /**
+   * 解析 .env 值，处理引号包裹与转义序列
+   *
+   * @param string $value 原始值
+   * @return string 解析后的值
+   */
+  protected function parseValue(string $value): string
+  {
+    if ($value === '') {
+      return '';
+    }
+    // 单引号包裹：内容原样保留，不处理转义
+    if (str_starts_with($value, "'") && str_ends_with($value, "'") && strlen($value) >= 2) {
+      return substr($value, 1, -1);
+    }
+    // 双引号包裹：处理 \n \r \t \" \\ 等转义序列
+    if (str_starts_with($value, '"') && str_ends_with($value, '"') && strlen($value) >= 2) {
+      $value = substr($value, 1, -1);
+      return (string)preg_replace_callback(
+        '/\\\\([nrt"\\\\])/',
+        static fn(array $match): string => match ($match[1]) {
+          'n' => "\n",
+          'r' => "\r",
+          't' => "\t",
+          default => $match[1],
+        },
+        $value
+      );
+    }
+    // 未加引号：从首个 " #" 截断行内注释（# 前需有空白，避免误截 URL 中的 #）
+    if (($position = strpos($value, ' #')) !== false) {
+      $value = substr($value, 0, $position);
+    }
+    return trim($value);
   }
 
   /**

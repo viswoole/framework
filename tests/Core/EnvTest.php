@@ -148,6 +148,48 @@ class EnvTest extends TestCase
   }
 
   /**
+   * 测试解析含特殊字符注释的 .env 文件
+   *
+   * 回归验证：注释中的 ~、(、; 等特殊字符不应导致 .env 整体解析失败
+   * （曾因使用 parse_ini_file 返回 false 使整份配置静默丢失）。
+   *
+   * @return void
+   */
+  public function testLoadEnvFileWithSpecialCommentChars(): void
+  {
+    $content = <<<'ENV'
+# Redis 配置（0 到 15）: ~ 特殊符号不影响解析
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+# 双引号包裹，含转义序列
+MESSAGE="hello\nworld"
+# 单引号包裹，内容原样保留
+RAW='a ( b ) ~ c'
+# 未加引号的值，从首个 " #" 截断行内注释
+DATABASE_URL=mysql://user:pass@host/db # 注释
+export EXPORTED_VAR=exported_value
+
+ENV;
+    $file = tempnam(sys_get_temp_dir(), 'env');
+    file_put_contents($file, $content);
+    try {
+      $method = new \ReflectionMethod(Env::class, 'load');
+      $method->invoke($this->env, $file);
+    } finally {
+      @unlink($file);
+    }
+
+    static::assertEquals('127.0.0.1', $this->env->get('REDIS_HOST'));
+    static::assertEquals('6379', $this->env->get('REDIS_PORT'));
+    static::assertEquals('', $this->env->get('REDIS_PASSWORD'));
+    static::assertEquals("hello\nworld", $this->env->get('MESSAGE'));
+    static::assertEquals('a ( b ) ~ c', $this->env->get('RAW'));
+    static::assertEquals('mysql://user:pass@host/db', $this->env->get('DATABASE_URL'));
+    static::assertEquals('exported_value', $this->env->get('EXPORTED_VAR'));
+  }
+
+  /**
    * 测试 ArrayAccess 接口 - offsetExists
    *
    * @return void
