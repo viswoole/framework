@@ -51,6 +51,27 @@ class DbManagerTest extends TestCase
   }
 
   /**
+   * 通道 execute 返回字符串（如自增ID）时，应原样返回而不强制转 int
+   */
+  public function testExecutePassesStringResultThrough(): void
+  {
+    $fake = new FakeChannel('5');
+    $manager = $this->makeManager($fake);
+    self::assertSame('5', $manager->execute('INSERT INTO users (name) VALUES (?)', ['a']));
+  }
+
+  /**
+   * DbManager::execute 应透传 $getId 到通道 execute
+   */
+  public function testExecutePassesGetIdToChannel(): void
+  {
+    $fake = new FakeChannel('5');
+    $manager = $this->makeManager($fake);
+    self::assertSame('5', $manager->execute('INSERT INTO users (name) VALUES (?)', ['a'], 'id'));
+    self::assertSame('id', $fake->calls[0]['getId']);
+  }
+
+  /**
    * DbManager::query 应透传 $master 到通道 execute，并返回通道结果
    */
   public function testQueryPassesMasterToChannel(): void

@@ -269,22 +269,25 @@ class DbManager
   /**
    * 执行原生写入（INSERT/UPDATE/DELETE），返回受影响行数
    *
-   * 与 think-orm 保持一致：始终在写库执行，返回影响的记录数。
+   * 与 think-orm 保持一致：始终在写库执行，返回影响的记录数；
+   * 传入 $getId 时返回该字段的自增ID（部分驱动以字符串返回）。
    *
    * @param string|Raw $sql SQL语句或 Raw 对象
    * @param array $bindings 绑定参数，与 SQL 中的占位符对应
-   * @return int 受影响的行数
+   * @param false|string $getId 传入字段名时返回该字段的自增ID，false 时不获取
+   * @return int|string 受影响行数或自增ID
    * @throws DbException SQL 执行失败时抛出
    */
-  public function execute(string|Raw $sql, array $bindings = []): int
+  public function execute(string|Raw $sql, array $bindings = [], false|string $getId = false): int|string
   {
-    $result = $this->channel()->execute($sql, $bindings);
+    $result = $this->channel()->execute($sql, $bindings, $getId);
     if ($result instanceof PDOStatement || $result instanceof PDOStatementProxy) {
       $count = $result->rowCount();
       $result->closeCursor();
       return $count;
     }
-    return (int)$result;
+    // 非 PDO 通道：受影响行数或自增ID，契约保证为 int|string，无需强转
+    return $result;
   }
 
   /**
