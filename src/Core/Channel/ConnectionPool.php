@@ -32,7 +32,7 @@ use Viswoole\Core\Server\ServerEventHook;
  */
 abstract class ConnectionPool implements ConnectionPoolInterface
 {
-  public const int DEFAULT_SIZE = 64;
+  public const int DEFAULT_SIZE = 10;
   public const array ERROR_MESSAGE = [
     SWOOLE_CHANNEL_OK => '正常',
     SWOOLE_CHANNEL_TIMEOUT => '失败：-1 连接超时',
@@ -54,8 +54,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   ) {
     $this->pool = new Channel($max_size);
     if ($default_fill) {
-      // hook服务启动事件，填充连接池
-      ServerEventHook::addEvent('start', function () use ($default_fill) {
+      // 在 workerStart 事件中填充连接池（每个 worker 进程独立填充）
+      // 不能用 start 事件：onStart 在 master 进程触发，此时 worker 已 fork，
+      // 主进程填充的连接无法共享给 worker 进程
+      ServerEventHook::addEvent('workerStart', function () use ($default_fill) {
         $this->fill($default_fill);
       });
     }
@@ -70,9 +72,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     if ($this->pool === null) {
       throw new RuntimeException('连接池已关闭');
     }
-    if (!$this->isCoroutine()) return;
     $size = $size === null ? $this->max_size : $size;
-    while ($size > $this->length()) {
+    // 非协程环境无需预填充连接池，连接池仅在协程环境下才有复用意义
+    if (!$this->isCoroutine()) return;
+    while ($size > $this->length() && !$this->isFull()) {
       $this->make();
     }
   }
@@ -139,8 +142,12 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     if ($this->pool === null) {
       throw new RuntimeException('连接池已关闭');
     }
-    // 非协程环境不归还连接
-    if (!$this->isCoroutine()) return;
+    // 非协程环境连接无法归还到协程通道，若直接丢弃会导致连接永不释放，
+    // 长循环脚本（如全量导入）会积压连接最终打爆数据库连接数（1040），因此改为显式关闭
+    if (!$this->isCoroutine()) {
+      $this->closeConnection($connection);
+      return;
+    }
     // 判断返回连接是否为NULL 和 连接是否可用 可用则归还连接
     if ($connection !== null && $this->connectionDetection($connection)) {
       $result = $this->pool->push($connection);
@@ -161,6 +168,16 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    * @return bool 可用返回 true
    */
   abstract protected function connectionDetection(mixed $connection): bool;
+
+  /**
+   * 关闭一个连接，子类必须实现
+   *
+   * 非协程环境下连接无法归还到协程通道，put() 时调用此方法显式释放连接，
+   * 避免长循环脚本（如全量导入）积压连接耗尽数据库连接数（1040）。
+   *
+   * @param mixed $connection 待关闭的连接
+   */
+  abstract protected function closeConnection(mixed $connection): void;
 
   /**
    * @inheritDoc

@@ -97,4 +97,18 @@ class RedisPool extends ConnectionPool
     // 修复：ping() 实际返回字符串 '+PONG' 或 true，与方法声明的 bool 返回类型冲突，统一转为布尔值
     return $result === true || $result === '+PONG';
   }
+
+  /**
+   * 关闭 Redis 连接
+   *
+   * 非协程环境下连接无法归还到连接池，put() 时调用此方法释放连接。
+   *
+   * @param Redis $connection 待关闭的连接
+   */
+  #[Override] protected function closeConnection(mixed $connection): void
+  {
+    if ($connection instanceof Redis) {
+      $connection->close();
+    }
+  }
 }

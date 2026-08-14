@@ -78,7 +78,7 @@ class Redis extends Driver
     protected string $tag_prefix = 'tag:',
     protected int    $expire = 0,
     protected string $tag_store = 'TAG_STORE',
-    int              $pool_max_size = 64,
+    int              $pool_max_size = 10,
     int              $pool_fill_size = 0
   ) {
     $this->pool = new RedisPool(

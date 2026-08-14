@@ -54,7 +54,7 @@ readonly class RedisConfig
     public string $tag_prefix = 'tag:',
     public int    $expire = 0,
     public string $tag_store = 'TAG_STORE',
-    public int    $pool_max_size = 64,
+    public int    $pool_max_size = 10,
     public int    $pool_fill_size = 0
   )
   {

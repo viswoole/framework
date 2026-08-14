@@ -69,7 +69,7 @@ class PDOChannel extends Channel
     string                     $password = 'root',
     string                     $charset = 'utf8mb4',
     array                      $options = [],
-    int                        $pool_max_size = 64,
+    int                        $pool_max_size = 10,
     int                        $pool_fill_size = 0,
     public int                 $pool_timeout_time = 5,
   )

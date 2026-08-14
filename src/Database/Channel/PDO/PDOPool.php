@@ -150,4 +150,18 @@ class PDOPool extends ConnectionPool
     }
     return true;
   }
+
+  /**
+   * 关闭 PDO 连接
+   *
+   * 非协程环境下连接无法归还到连接池，put() 时调用此方法释放底层连接。
+   *
+   * @param PDO|PDOProxy $connection 待关闭的连接
+   */
+  #[Override] protected function closeConnection(mixed $connection): void
+  {
+    if ($connection instanceof PDOProxy) {
+      $connection->close();
+    }
+  }
 }

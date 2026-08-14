@@ -63,4 +63,16 @@ class PDOProxy extends SwoolePDOProxy
     };
     parent::__construct($constructor);
   }
+
+  /**
+   * 显式关闭底层 PDO 连接
+   *
+   * 非协程环境下连接无法归还到连接池，调用此方法释放底层连接，
+   * 避免长循环脚本（如全量导入）积压连接耗尽数据库连接数（1040）。
+   * 关闭后该实例不应再被使用。
+   */
+  public function close(): void
+  {
+    $this->__object = null;
+  }
 }
