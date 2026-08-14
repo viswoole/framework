@@ -17,6 +17,8 @@ namespace Viswoole\Database;
 
 use Closure;
 use InvalidArgumentException;
+use PDOStatement;
+use Swoole\Database\PDOStatementProxy;
 use Swoole\Table;
 use Throwable;
 use Viswoole\Core\Config;
@@ -32,8 +34,6 @@ use Viswoole\Log\LogManager;
  * 所有数据库操作均通过通道代理执行，支持事务管理和原生SQL表达式构建。
  *
  * @method BaseQuery table(string $table, string $pk = 'id') 选择要查询的表
- * @method array query(string $sql, array $bindings = []) 原生查询 select
- * @method int|string execute(string $sql, array $bindings = []) 原生写入，包括 insert、update、delete
  * @method mixed pop(string $type) 获取可用的连接$type可选值为`read`|`write`
  * @method void put(mixed $connect) 归还一个可用的连接，如果连接已被损坏，请归还null
  * @see Channel
@@ -247,6 +247,44 @@ class DbManager
   public function raw(string $sql, array $bindings = []): Raw
   {
     return new Raw($sql, $bindings);
+  }
+
+  /**
+   * 执行原生查询（SELECT），返回关联数组结果集
+   *
+   * 与 think-orm 保持一致：读写分离场景下默认从读库执行，
+   * 传入 $master=true 时强制从主库（写库）读取。
+   *
+   * @param string|Raw $sql SQL语句或 Raw 对象
+   * @param array $bindings 绑定参数，与 SQL 中的占位符对应
+   * @param bool $master 是否强制从主库读取
+   * @return array 查询结果数组，每个元素为一行关联数组
+   * @throws DbException SQL 执行失败或通道返回类型不支持时抛出
+   */
+  public function query(string|Raw $sql, array $bindings = [], bool $master = false): array
+  {
+    return $this->channel()->query($sql, $bindings, $master);
+  }
+
+  /**
+   * 执行原生写入（INSERT/UPDATE/DELETE），返回受影响行数
+   *
+   * 与 think-orm 保持一致：始终在写库执行，返回影响的记录数。
+   *
+   * @param string|Raw $sql SQL语句或 Raw 对象
+   * @param array $bindings 绑定参数，与 SQL 中的占位符对应
+   * @return int 受影响的行数
+   * @throws DbException SQL 执行失败时抛出
+   */
+  public function execute(string|Raw $sql, array $bindings = []): int
+  {
+    $result = $this->channel()->execute($sql, $bindings);
+    if ($result instanceof PDOStatement || $result instanceof PDOStatementProxy) {
+      $count = $result->rowCount();
+      $result->closeCursor();
+      return $count;
+    }
+    return (int)$result;
   }
 
   /**

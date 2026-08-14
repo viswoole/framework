@@ -37,8 +37,8 @@ use Viswoole\Database\Raw;
  * @method static void rollBack() 回滚所有事务
  * @method static Raw raw(string $sql, array $bindings = []) 创建原生 SQL 表达式
  * @method static BaseQuery table(string $table, string $pk = 'id') 选择要查询的表
- * @method static array query(string $sql, array $bindings = []) 原生查询（SELECT）
- * @method static int|string execute(string $sql, array $bindings = []) 原生写入（INSERT/UPDATE/DELETE）
+ * @method static array query(string|Raw $sql, array $bindings = [], bool $master = false) 原生查询（SELECT），返回关联数组结果集
+ * @method static int execute(string|Raw $sql, array $bindings = []) 原生写入（INSERT/UPDATE/DELETE），返回受影响行数
  * @method static mixed pop(string $type) 获取可用连接，type 可选 read|write
  * @method static void put(mixed $connect) 归还连接，已损坏时归还 null
  * @method static void setDebug(bool $debug) 开启或关闭调试模式

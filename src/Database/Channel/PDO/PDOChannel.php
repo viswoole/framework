@@ -172,7 +172,8 @@ class PDOChannel extends Channel
   public function execute(
     string|Raw   $sql,
     array        $bindings = [],
-    false|string $getId = false
+    false|string $getId = false,
+    bool         $master = false
   ): PDOStatementProxy|PDOStatement|int|string
   {
     $manager = ConnectManager::factory();
@@ -183,7 +184,8 @@ class PDOChannel extends Channel
     /**
      * @var PDOProxy $connect
      */
-    $connect = $manager->pop($this, $this->getType($sql));
+    // $master 为 true 时强制从写库（主库）获取连接，与 think-orm 保持一致
+    $connect = $manager->pop($this, $master ? 'write' : $this->getType($sql));
     try {
       $stmt = $connect->prepare($sql);
       $stmt->execute($bindings);
