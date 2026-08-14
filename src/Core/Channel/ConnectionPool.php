@@ -39,10 +39,12 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     SWOOLE_CHANNEL_CLOSED => '失败：-2 连接已关闭',
     SWOOLE_CHANNEL_CANCELED => '失败：-3 意外取消'
   ];
+  /** @var int make() 最大递归深度，防止 createConnection() 持续返回无效连接导致无限递归 */
+  private const int MAX_MAKE_DEPTH = 3;
+  /** @var string 协程上下文中存储 make() 递归深度的键名（按协程隔离，互不干扰） */
+  private const string MAKE_DEPTH_CONTEXT_KEY = 'connection_pool.make_depth';
   /** @var Channel|null 当前连接池, close 后置为 null */
   protected ?Channel $pool = null;
-  /** @var int make() 递归深度, 用于防止 make()->put()->make() 无限递归 */
-  private int $makeDepth = 0;
 
   /**
    * @param int $max_size 连接池最大容量
@@ -51,7 +53,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   public function __construct(
     protected int $max_size = self::DEFAULT_SIZE,
     ?int          $default_fill = null
-  ) {
+  )
+  {
     $this->pool = new Channel($max_size);
     if ($default_fill) {
       // 在 workerStart 事件中填充连接池（每个 worker 进程独立填充）
@@ -66,7 +69,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function fill(?int $size = null): void
+  #[Override]
+  public function fill(?int $size = null): void
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {
@@ -93,7 +97,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function length(): int
+  #[Override]
+  public function length(): int
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {
@@ -103,26 +108,52 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   }
 
   /**
-   * 创建新连接并放入池中，递归深度超过 3 次时抛出异常防止无限递归
+   * @inheritDoc
+   */
+  #[Override]
+  public function isFull(): bool
+  {
+    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
+    if ($this->pool === null) {
+      throw new RuntimeException('连接池已关闭');
+    }
+    return $this->pool->isFull();
+  }
+
+  /**
+   * 创建新连接并放入池中，递归深度超过最大次数时抛出异常防止无限递归
    *
-   * @throws ConnectionPoolException 创建连接重试超过 3 次时抛出
+   * 递归深度存储在协程上下文而非实例属性：
+   *   多个协程共享同一个连接池实例，若用实例属性计数，并发协程各自的 make()
+   *   会互相累加深度，导致误判"达到最大重试次数"（第 4 个并发协程建连即抛异常）。
+   *   协程上下文按协程隔离，随协程销毁自动释放，无内存泄漏。
+   * 非协程环境（CLI）无并发、也无 make()->put()->make() 递归路径（put() 直接关闭连接），
+   *   因此无需深度限制，直接创建连接即可。
+   *
+   * @throws ConnectionPoolException 创建连接重试超过最大次数时抛出
    */
   protected function make(): void
   {
-    // 修复: 增加递归深度限制, 防止 createConnection() 持续返回无效连接
-    // 导致 make()->put()->make() 无限递归最终栈溢出
-    if ($this->makeDepth >= 3) {
+    // 非协程环境：无并发与递归路径，直接创建连接（连接池仅在协程环境下有复用意义）
+    if (!$this->isCoroutine()) {
+      $this->createConnection();
+      return;
+    }
+    $context = Coroutine::getContext();
+    $depth = (int)($context[self::MAKE_DEPTH_CONTEXT_KEY] ?? 0);
+    if ($depth >= self::MAX_MAKE_DEPTH) {
       throw new ConnectionPoolException(
-        '创建连接失败: 已达到最大重试次数(3次), 请检查 createConnection() 与 connectionDetection() 实现'
+        '创建连接失败: 已达到最大重试次数(' . self::MAX_MAKE_DEPTH . '次), 请检查 createConnection() 与 connectionDetection() 实现'
       );
     }
-    $this->makeDepth++;
+    /** @noinspection PhpArrayIndexImmediatelyRewrittenInspection */
+    $context[self::MAKE_DEPTH_CONTEXT_KEY] = $depth + 1;
     try {
       $connection = $this->createConnection();
-      if (!$this->isCoroutine()) return;
       $this->put($connection);
     } finally {
-      $this->makeDepth--;
+      // finally 保证异常路径也正确还原进入前的深度
+      $context[self::MAKE_DEPTH_CONTEXT_KEY] = $depth;
     }
   }
 
@@ -136,7 +167,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function put(mixed $connection): void
+  #[Override]
+  public function put(mixed $connection): void
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {
@@ -162,14 +194,6 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   }
 
   /**
-   * 检测连接是否可用，子类必须实现，在借出和归还时调用
-   *
-   * @param mixed $connection 待检测的连接
-   * @return bool 可用返回 true
-   */
-  abstract protected function connectionDetection(mixed $connection): bool;
-
-  /**
    * 关闭一个连接，子类必须实现
    *
    * 非协程环境下连接无法归还到协程通道，put() 时调用此方法显式释放连接，
@@ -180,9 +204,18 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   abstract protected function closeConnection(mixed $connection): void;
 
   /**
+   * 检测连接是否可用，子类必须实现，在借出和归还时调用
+   *
+   * @param mixed $connection 待检测的连接
+   * @return bool 可用返回 true
+   */
+  abstract protected function connectionDetection(mixed $connection): bool;
+
+  /**
    * @inheritDoc
    */
-  #[Override] public function get(float $timeout = -1): mixed
+  #[Override]
+  public function get(float $timeout = -1): mixed
   {
     return $this->pop($timeout);
   }
@@ -190,7 +223,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function pop(float $timeout = -1): mixed
+  #[Override]
+  public function pop(float $timeout = -1): mixed
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {
@@ -219,7 +253,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function isEmpty(): bool
+  #[Override]
+  public function isEmpty(): bool
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {
@@ -231,19 +266,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function isFull(): bool
-  {
-    // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
-    if ($this->pool === null) {
-      throw new RuntimeException('连接池已关闭');
-    }
-    return $this->pool->isFull();
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override] public function stats(): array
+  #[Override]
+  public function stats(): array
   {
     // 修复: close() 后 $this->pool 为 null，调用方法会触发 Fatal Error
     if ($this->pool === null) {
@@ -255,7 +279,8 @@ abstract class ConnectionPool implements ConnectionPoolInterface
   /**
    * @inheritDoc
    */
-  #[Override] public function close(): bool
+  #[Override]
+  public function close(): bool
   {
     $result = $this->pool->close();
     // 修复: 不能使用 unset() 销毁类型属性, 否则属性会变为"未初始化"状态,

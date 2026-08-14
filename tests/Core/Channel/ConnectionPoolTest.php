@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Viswoole\Tests\Core\Channel;
 
+use Override;
 use PHPUnit\Framework\TestCase;
 use Swoole\Coroutine;
+use Swoole\Coroutine\WaitGroup;
+use Viswoole\Core\Exception\ConnectionPoolException;
 
 /**
  * 连接池生命周期测试
@@ -116,5 +119,45 @@ class ConnectionPoolTest extends TestCase
     });
 
     static::assertSame(3, $pool->length(), '填充不应超过连接池最大容量');
+  }
+
+  /**
+   * 并发协程同时建连时，make() 递归深度应按协程隔离，不误判为递归过深
+   *
+   * 回归验证：此前递归深度用实例属性计数，多协程并发 pop() 建连时互相累加，
+   * 第 4 个并发协程即误抛"已达到最大重试次数(3次)"。
+   * createConnection() 内挂起制造协程切换点，确保多个协程同时停留在 make() 中。
+   *
+   * @return void
+   */
+  public function testConcurrentCoroutinesDoNotTriggerFalseMaxRetry(): void
+  {
+    $pool = new class(10) extends FakeConnectionPool {
+      #[Override]
+      protected function createConnection(): mixed
+      {
+        // 挂起 1ms，让其他协程切入并同时进入 make()，复现深度互相累加的并发场景
+        Coroutine::sleep(0.001);
+        return parent::createConnection();
+      }
+    };
+    $errors = [];
+    Coroutine\run(static function () use ($pool, &$errors): void {
+      $wg = new WaitGroup();
+      for ($i = 0; $i < 8; $i++) {
+        $wg->add();
+        go(static function () use ($pool, $wg, &$errors): void {
+          try {
+            $pool->pop();
+          } catch (ConnectionPoolException $e) {
+            $errors[] = $e->getMessage();
+          } finally {
+            $wg->done();
+          }
+        });
+      }
+      $wg->wait();
+    });
+    static::assertSame([], $errors, '并发协程建连不应误判为递归过深');
   }
 }
