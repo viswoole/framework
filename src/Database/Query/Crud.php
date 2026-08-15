@@ -437,30 +437,35 @@ trait Crud
    */
   public function chunk(int $size): Generator
   {
-    // 关闭缓存
-    $this->options->cache = false;
-    $this->options->type = 'select';
-    $this->limit($size);
-    // 偏移量
-    $offset = $this->options->offset ?? 0;
-    $this->offset($offset);
-    // 打包SQL
-    $raw = $this->channel->build($this->options);
-    while (true) {
-      $start = microtime(true);
-      // 替换 OFFSET 的值
-      $raw->sql = preg_replace('/OFFSET\s+\d+/', "OFFSET $offset", $raw->sql);
-      /**
-       * @var PDOStatement $statement
-       */
-      $statement = $this->channel->execute($raw);
-      $results = $statement->fetchAll(PDO::FETCH_ASSOC);
-      $statement->closeCursor();
-      $this->setRunInfo($start, $raw);
-      if (empty($results)) break;
-      yield new Collection($this->newQuery(), $results);
-      $offset += $size;
+    try {
+      // 关闭缓存
+      $this->options->cache = false;
+      $this->options->type = 'select';
+      $this->limit($size);
+      // 偏移量
+      $offset = $this->options->offset ?? 0;
+      $this->offset($offset);
+      // 打包SQL
+      $raw = $this->channel->build($this->options);
+      while (true) {
+        $start = microtime(true);
+        // 替换 OFFSET 的值
+        $raw->sql = preg_replace('/OFFSET\s+\d+/', "OFFSET $offset", $raw->sql);
+        /**
+         * @var PDOStatement $statement
+         */
+        $statement = $this->channel->execute($raw);
+        $results = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $statement->closeCursor();
+        $this->setRunInfo($start, $raw);
+        if (empty($results)) break;
+        yield new Collection($this->newQuery(), $results);
+        $offset += $size;
+      }
+    } finally {
+      // 无论正常耗尽、中途 break 还是生成器被废弃（GC 销毁），
+      // 都保证查询条件重置，避免 LIMIT/OFFSET 残留污染后续查询
+      $this->reset();
     }
-    $this->reset();
   }
 }

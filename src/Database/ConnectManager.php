@@ -112,7 +112,9 @@ class ConnectManager
       foreach ($array as $key => $item) {
         $item['connect']->commit();
         unset($this->connections[$key]);
-        $this->put($item['channel'], $item['connect']);
+        // 事务释放路径必须强制归还：此时事务标志尚未重置，
+        // 走 put() 会落入"仅标记非活跃"分支导致连接滞留
+        $this->forcePut($item['channel'], $item['connect']);
       }
     } finally {
       $this->close();
@@ -147,10 +149,36 @@ class ConnectManager
     $array = $this->connections;
     foreach ($array as $key => $item) {
       unset($this->connections[$key]);
-      $this->put($item['channel'], $item['connect']);
+      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
+      $this->forcePut($item['channel'], $item['connect']);
     }
     $this->inTransaction = false;
     $this->connections = [];
+  }
+
+  /**
+   * 强制归还连接到通道连接池（绕过事务标记分支），并兜底回滚未完成事务
+   *
+   * commit/rollBack/close 释放事务连接时使用：此时尚未重置事务标志，
+   * 不能走 put()（其只会把连接标记为非活跃），必须真正归还连接池。
+   * 连接若仍处于活跃事务（如 commit 因网络失败抛异常），归还前先回滚，
+   * 避免带事务状态的连接回池后被其他协程复用造成隐式事务污染。
+   *
+   * @param Channel $channel 连接所属通道
+   * @param mixed $connect 底层连接
+   */
+  private function forcePut(Channel $channel, mixed $connect): void
+  {
+    if ($connect instanceof PDO || $connect instanceof PDOProxy) {
+      if ($connect->inTransaction()) {
+        try {
+          $connect->rollBack();
+        } catch (Throwable) {
+          // 回滚失败说明连接已失效，仍归还交由连接池健康检查淘汰
+        }
+      }
+    }
+    $channel->put($connect);
   }
 
   /**
@@ -181,7 +209,8 @@ class ConnectManager
       foreach ($array as $key => $item) {
         $item['connect']->rollBack();
         unset($this->connections[$key]);
-        $this->put($item['channel'], $item['connect']);
+        // 强制归还：见 commit() 中说明，避免落入事务标记分支
+        $this->forcePut($item['channel'], $item['connect']);
       }
     } finally {
       $this->close();

@@ -7,7 +7,6 @@ namespace Viswoole\Tests\Database;
 use PDO;
 use PDOException;
 use PHPUnit\Framework\TestCase;
-use Swoole\Coroutine;
 use function Swoole\Coroutine\run;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
@@ -19,8 +18,6 @@ use Viswoole\Database\Collection;
 use Viswoole\Database\ConnectManager;
 use Viswoole\Database\DbManager;
 use Viswoole\Database\Exception\DbException;
-use Viswoole\Database\Model;
-use Viswoole\Database\Model\RelationQuery;
 use Viswoole\Database\Query\Options;
 use Viswoole\Database\Raw;
 
@@ -246,42 +243,6 @@ class ReviewRegressTest extends TestCase
 }
 
 /**
- * 带 IO 挂起点的通道替身
- *
- * execute() 中通过 Coroutine::sleep 模拟真实数据库的网络 IO 挂起，
- * 用于复现多协程并发查询下的数据竞争问题。
- */
-class SleepChannel extends Channel
-{
-  public function __construct(
-    private readonly \PDOStatement $statement,
-    private readonly float $delaySeconds
-  ) {}
-
-  public function execute(
-    string|Raw   $sql,
-    array        $bindings = [],
-    false|string $getId = false,
-    bool         $master = false
-  ): \Swoole\Database\PDOStatementProxy|\PDOStatement|int|string {
-    if ($this->delaySeconds > 0) Coroutine::sleep($this->delaySeconds);
-    return $this->statement;
-  }
-
-  public function pop(string $type): mixed
-  {
-    return null;
-  }
-
-  public function put(mixed $connect): void {}
-
-  public function build(Options $options): Raw
-  {
-    return new Raw('SELECT id, user_id FROM t');
-  }
-}
-
-/**
  * pop 返回 rollBack 必然失败的坏连接，用于验证析构保护
  */
 class BadRollBackChannel extends Channel
@@ -312,38 +273,4 @@ class BadRollBackChannel extends Channel
   {
     return new Raw('');
   }
-}
-
-/**
- * 问题1 测试用主模型：绑定三个测试通道
- */
-class ReviewMainModel extends Model
-{
-  protected string $table = 'main';
-  protected string $pk = 'id';
-  protected ?string $channelName = 'review_main';
-
-  public function profile(): RelationQuery
-  {
-    return $this->hasOne(ReviewRelAModel::class, 'user_id', 'id');
-  }
-
-  public function extra(): RelationQuery
-  {
-    return $this->hasOne(ReviewRelBModel::class, 'user_id', 'id');
-  }
-}
-
-class ReviewRelAModel extends Model
-{
-  protected string $table = 'rel_a';
-  protected string $pk = 'id';
-  protected ?string $channelName = 'review_rel_a';
-}
-
-class ReviewRelBModel extends Model
-{
-  protected string $table = 'rel_b';
-  protected string $pk = 'id';
-  protected ?string $channelName = 'review_rel_b';
 }

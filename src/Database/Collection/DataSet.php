@@ -33,6 +33,20 @@ class DataSet extends BaseCollection
   protected int $flags = ArrayObject::STD_PROP_LIST | ArrayObject::ARRAY_AS_PROPS;
   /** @var array 已修改的字段名列表，用于 save() 时增量更新 */
   protected array $change = [];
+  /** @var array 最近一次同步数据库时的数据快照，用于判断字段是否改回原值 */
+  protected array $original = [];
+
+  /**
+   * 构建单行数据集，保存原始数据快照用于变更追踪
+   *
+   * @param \Viswoole\Database\BaseQuery|\Viswoole\Database\Model\Query $query 查询对象
+   * @param array $data 行数据
+   */
+  public function __construct(\Viswoole\Database\BaseQuery|\Viswoole\Database\Model\Query $query, array $data)
+  {
+    parent::__construct($query, $data);
+    $this->original = $data;
+  }
 
   /**
    * 删除当前行记录
@@ -62,10 +76,28 @@ class DataSet extends BaseCollection
    */
   public function offsetSet(mixed $key, mixed $value): void
   {
-    if ($value !== $this->offsetGet($key)) {
-      $this->change[] = $key;
+    $originalValue = $this->original[$key] ?? null;
+    if ($value !== $originalValue) {
+      // 与原始快照不同才视为变更（同字段多次修改不重复记录）
+      if (!in_array($key, $this->change, true)) $this->change[] = $key;
+    } elseif (in_array($key, $this->change, true)) {
+      // 值改回原始值：从变更列表移除，避免 save() 产生无意义 UPDATE
+      $this->change = array_values(array_diff($this->change, [$key]));
     }
     parent::offsetSet($key, $value);
+  }
+
+  /**
+   * 清空变更追踪，将当前行标记为已同步
+   *
+   * 外部批量写库（如 Collection::update）成功后同步数据到行时调用，
+   * 避免后续 save() 把刚同步的字段再次写回数据库。
+   * 同步刷新原始快照，使后续变更判断以最新数据为基准。
+   */
+  public function markSynced(): void
+  {
+    $this->change = [];
+    $this->original = $this->getArrayCopy();
   }
 
   /**

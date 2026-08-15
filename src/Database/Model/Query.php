@@ -337,6 +337,22 @@ class Query extends BaseQuery
   protected function queryRelationData(array $data): array
   {
     if (empty($data)) return [];
+    // 非协程环境（CLI 脚本/单元测试）无法创建子协程与 WaitGroup，降级为串行查询
+    $maps = Coroutine::getCid() > 0
+      ? $this->queryRelationsConcurrently($data)
+      : $this->queryRelationsSerially($data);
+    return $this->mergeRelationData($data, $maps);
+  }
+
+  /**
+   * 协程环境：并发查询所有关联数据，各协程结果写入独立槽位
+   *
+   * @param array $data 主表查询结果（只读快照，协程内不修改）
+   * @return array 关联名 => 外键映射 的槽位集合
+   * @throws Throwable 任一协程查询失败时抛出首个捕获的异常
+   */
+  private function queryRelationsConcurrently(array $data): array
+  {
     // 捕获到的异常
     $throw = null;
     // 各协程独立的结果槽位：关联名 => 外键映射
@@ -361,7 +377,33 @@ class Query extends BaseQuery
     $wg->wait();
     // 如果捕获到了异常 则抛出异常
     if ($throw) throw $throw;
-    // 主协程串行合并各关联数据，逐行填充关联字段
+    return $maps;
+  }
+
+  /**
+   * 非协程环境：串行查询所有关联数据
+   *
+   * @param array $data 主表查询结果
+   * @return array 关联名 => 外键映射 的槽位集合
+   */
+  private function queryRelationsSerially(array $data): array
+  {
+    $maps = [];
+    foreach ($this->relations as $name => $relation) {
+      $maps[$name] = $relation->query($data, $name);
+    }
+    return $maps;
+  }
+
+  /**
+   * 将各关联的外键映射串行合并到主数据，逐行填充关联字段
+   *
+   * @param array $data 主表查询结果
+   * @param array $maps 关联名 => 外键映射
+   * @return array 填充关联数据后的结果
+   */
+  private function mergeRelationData(array $data, array $maps): array
+  {
     foreach ($maps as $name => $keyMap) {
       $relation = $this->relations[$name];
       $localKey = $relation->localKey();
@@ -369,7 +411,8 @@ class Query extends BaseQuery
       $relationQuery = $relation->relationModel()->query;
       array_walk($data, function (&$row) use ($localKey, $isMany, $relationQuery, $keyMap, $name) {
         $key = $row[$localKey] ?? null;
-        if (array_key_exists($key, $keyMap)) {
+        // PHP 8.5 起 array_key_exists 不接受 null 键，缺失外键直接视为未命中
+        if ($key !== null && array_key_exists($key, $keyMap)) {
           $row[$name] = $keyMap[$key];
         } else {
           // 未命中外键：一对多给空集合，一对一给空数据集

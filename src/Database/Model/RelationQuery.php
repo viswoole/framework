@@ -65,6 +65,11 @@ class RelationQuery
   public function query(array $data, string $name): array
   {
     $keys = array_column($data, $this->localKey);
+    // 过滤 null 并去重：null 参与 IN 永假且占位，重复外键导致无谓的巨型 IN 列表
+    $keys = array_values(array_unique(array_filter($keys, fn($v) => $v !== null)));
+    // 主数据无有效外键值时无需查询，直接返回空映射，
+    // 由调用方为每行填充空集合/空数据集（避免 whereIn 因空数组误报异常）
+    if ($keys === []) return [];
     // 构建查询实例
     $query = $this->relationModel->query->whereIn($this->foreignKey, $keys);
     // 交给处理回调，处理查询。

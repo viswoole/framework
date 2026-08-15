@@ -208,14 +208,16 @@ class Collection extends BaseCollection
    * 获取集合中指定列的最大值
    *
    * @param string $column 列名，字段值必须为 int 或 float 类型
-   * @return int|float|null 最大值，集合为空时返回 null
+   * @return int|float|null 最大值，集合为空或列值全为 NULL 时返回 null
    * @throws InvalidArgumentException 字段值非数值类型时抛出
    */
   public function max(string $column): int|float|null
   {
     $maxValue = null;
     foreach ($this as $item) {
-      $value = $item[$column] ?? 0;
+      // NULL 值跳过（与 SQL 聚合语义一致），而非按 0 参与比较
+      $value = $item[$column] ?? null;
+      if ($value === null) continue;
       // 检查值是否为 int 或 float 类型
       if (!is_int($value) && !is_float($value)) {
         throw new InvalidArgumentException(
@@ -233,14 +235,16 @@ class Collection extends BaseCollection
    * 获取集合中指定列的最小值
    *
    * @param string $column 列名，字段值必须为 int 或 float 类型
-   * @return int|float|null 最小值，集合为空时返回 null
+   * @return int|float|null 最小值，集合为空或列值全为 NULL 时返回 null
    * @throws InvalidArgumentException 字段值非数值类型时抛出
    */
   public function min(string $column): int|float|null
   {
     $minValue = null;
     foreach ($this as $item) {
-      $value = $item[$column] ?? 0;
+      // NULL 值跳过（与 SQL 聚合语义一致），而非按 0 参与比较
+      $value = $item[$column] ?? null;
+      if ($value === null) continue;
       // 检查值是否为 int 或 float 类型
       if (!is_int($value) && !is_float($value)) {
         throw new InvalidArgumentException(
@@ -356,6 +360,8 @@ class Collection extends BaseCollection
       // 更新每一行数据
       $this->each(function (DataSet $row) use ($data) {
         $row->merge($data);
+        // 同步的是已落库数据，清空变更标记防止 save() 重复更新
+        $row->markSynced();
       });
     }
     return $result;
