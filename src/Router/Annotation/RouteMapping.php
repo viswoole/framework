@@ -37,7 +37,7 @@ class RouteMapping extends RouteAnnotation
    * @param string|null $id id
    * @param string|null $parentId 父id，必须是分组路由id
    * @param string[]|string|null $method 路由方法，默认继承全局设定的方法
-   * @param array[]|null $middlewares 中间件
+   * @param string[]|null $middlewares 中间件
    * @param array<string,string>|null $patterns 动态路由正则约束
    * @param array|null $meta 路由元数据
    * @param array|null $suffix 目标后缀
@@ -49,7 +49,7 @@ class RouteMapping extends RouteAnnotation
    * @param string $author 作者
    * @param string $createdAt 创建时间
    * @param string $updatedAt 更新时间
-   * @param array $tags 标签
+   * @param string[] $tags 标签
    * @param Status $status 接口状态，默认为Viswoole\Router\ApiDoc\Status::DEVELOPMENT 开发中
    */
   public function __construct(
@@ -71,21 +71,22 @@ class RouteMapping extends RouteAnnotation
     public string     $updatedAt = '',
     public array      $tags = [],
     public Status     $status = Status::DEVELOPMENT,
-  ) {
+  )
+  {
     parent::__construct(
-      prefix: $paths,
-      id: $id,
-      parentId: $parentId,
-      method: $method,
+      prefix     : $paths,
+      id         : $id,
+      parentId   : $parentId,
+      method     : $method,
       middlewares: $middlewares,
-      patterns: $patterns,
-      meta: $meta,
-      suffix: $suffix,
-      domain: $domain,
-      hidden: $hidden,
-      title: $title,
+      patterns   : $patterns,
+      meta       : $meta,
+      suffix     : $suffix,
+      domain     : $domain,
+      hidden     : $hidden,
+      title      : $title,
       description: $description,
-      sort: $sort
+      sort       : $sort
     );
   }
 
