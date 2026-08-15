@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Channel\PDO;
 
@@ -72,11 +72,17 @@ class PDOChannel extends Channel
     int                        $pool_max_size = 10,
     int                        $pool_fill_size = 0,
     public int                 $pool_timeout_time = 5,
-  )
-  {
+  ) {
     $config = compact(
-      'type', 'port', 'database', 'username', 'password',
-      'charset', 'options', 'pool_max_size', 'pool_fill_size'
+      'type',
+      'port',
+      'database',
+      'username',
+      'password',
+      'charset',
+      'options',
+      'pool_max_size',
+      'pool_fill_size'
     );
     if (empty($host)) throw new InvalidArgumentException('host cannot be empty');
     if (is_array($host)) {
@@ -174,8 +180,7 @@ class PDOChannel extends Channel
     array        $bindings = [],
     false|string $getId = false,
     bool         $master = false
-  ): PDOStatementProxy|PDOStatement|int|string
-  {
+  ): PDOStatementProxy|PDOStatement|int|string {
     $manager = ConnectManager::factory();
     if ($sql instanceof Raw) {
       $bindings = $sql->bindings;
@@ -189,20 +194,17 @@ class PDOChannel extends Channel
     try {
       $stmt = $connect->prepare($sql);
       $stmt->execute($bindings);
-      if (
-        !empty($getId)
-        && (
-          str_starts_with($sql, 'INSERT')
-          || str_starts_with($sql, 'REPLACE')
-        )
-      ) {
+      // 大小写不敏感判定写语句类型：小写 SQL 同样需要返回自增 ID，
+      // 否则 insertGetId 会静默退化为返回 statement
+      $isInsertLike = stripos($sql, 'INSERT') === 0 || stripos($sql, 'REPLACE') === 0;
+      if (!empty($getId) && $isInsertLike) {
         return $connect->lastInsertId($getId);
       }
     } catch (PDOException $e) {
-      // 抛出异常
+      // 抛出异常（errorInfo[1] 在部分驱动下可能未定义，回退到异常码）
       throw new DbException(
         $e->getMessage(),
-        $e->errorInfo[1],
+        $e->errorInfo[1] ?? $e->getCode(),
         Raw::merge($sql, $bindings),
         $e
       );
@@ -274,14 +276,18 @@ class PDOChannel extends Channel
   }
 
   /**
-   * 根据 SQL 语句判断操作类型：SELECT 为读，其余为写
+   * 根据 SQL 语句判断操作类型：查询语句为读，其余为写
+   *
+   * 复用基类 isQueryStatement 判定（SELECT/SHOW/EXPLAIN/WITH/PRAGMA 等），
+   * 避免仅识别 SELECT 时 SHOW 等读语句被路由到写库，
+   * 并触发 sticky 将该协程后续读全部粘到写库。
    *
    * @param string $sql SQL 语句
    * @return string read 或 write
    */
   protected function getType(string $sql): string
   {
-    return str_starts_with(strtoupper($sql), 'SELECT') ? 'read' : 'write';
+    return self::isQueryStatement($sql) ? 'read' : 'write';
   }
 
   /**
