@@ -34,7 +34,7 @@ abstract class Facade
    * @param array $params 方法参数
    * @return mixed 方法返回值
    */
-  public static function __callStatic($method, $params)
+  public static function __callStatic(string $method, array $params)
   {
     return call_user_func_array([static::createFacade(), $method], $params);
   }
