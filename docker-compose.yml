@@ -22,13 +22,9 @@ services:
     environment:
       TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: "123456"  # 将密码设置为一个键值对
-    # 未映射宿主机端口，仅容器网络内访问，与 api-php(youqu-mysql:3307) 不冲突
-    # 注：mysql 8.4+ 已移除 --default-authentication-plugin 参数（此前配置该参数导致
-    # mysqld 启动 Aborting、容器反复重启），默认认证插件为 caching_sha2_password
   redis:
     image: redis:latest
     ports:
-      # 宿主机 6380 -> 容器 6379，避开 api-php 项目的 youqu-redis:6379
       - "6380:6379"
     volumes:
       - redis:/data
