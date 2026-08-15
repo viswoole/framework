@@ -326,6 +326,10 @@ class Query extends BaseQuery
   /**
    * 使用协程并发查询关联数据并填充到主数据中
    *
+   * 并发安全设计：各协程把查询结果写入独立槽位（$maps[关联名]），
+   * 互不覆盖；全部完成后由当前协程串行合并到主数据，
+   * 避免整体赋值 $data 导致后完成协程覆盖先完成协程的关联数据。
+   *
    * @param array $data 主表查询结果
    * @return array 填充关联数据后的结果
    * @throws Throwable 关联查询异常时抛出
@@ -335,13 +339,16 @@ class Query extends BaseQuery
     if (empty($data)) return [];
     // 捕获到的异常
     $throw = null;
+    // 各协程独立的结果槽位：关联名 => 外键映射
+    $maps = [];
     $wg = new WaitGroup();
     foreach ($this->relations as $name => $relation) {
       if ($throw) break;
       $wg->add();
-      Coroutine::create(function () use ($wg, $name, $relation, &$data, &$throw) {
+      // $data 按值捕获（协程内不修改主数据），结果仅写入自己的槽位
+      Coroutine::create(function () use ($wg, $name, $relation, $data, &$maps, &$throw) {
         try {
-          $data = $relation->query($data, $name);
+          $maps[$name] = $relation->query($data, $name);
         } catch (Throwable $e) {
           // 捕获一切异常并记录
           $throw = $e;
@@ -354,6 +361,24 @@ class Query extends BaseQuery
     $wg->wait();
     // 如果捕获到了异常 则抛出异常
     if ($throw) throw $throw;
+    // 主协程串行合并各关联数据，逐行填充关联字段
+    foreach ($maps as $name => $keyMap) {
+      $relation = $this->relations[$name];
+      $localKey = $relation->localKey();
+      $isMany = $relation->isMany();
+      $relationQuery = $relation->relationModel()->query;
+      array_walk($data, function (&$row) use ($localKey, $isMany, $relationQuery, $keyMap, $name) {
+        $key = $row[$localKey] ?? null;
+        if (array_key_exists($key, $keyMap)) {
+          $row[$name] = $keyMap[$key];
+        } else {
+          // 未命中外键：一对多给空集合，一对一给空数据集
+          $row[$name] = $isMany
+            ? new \Viswoole\Database\Collection($relationQuery->newQuery(), [])
+            : new DataSet($relationQuery->newQuery(), []);
+        }
+      });
+    }
     return $data;
   }
 

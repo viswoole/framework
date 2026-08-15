@@ -50,11 +50,16 @@ class RelationQuery
   }
 
   /**
-   * 查询关联数据并按外键映射填充到主数据中
+   * 查询关联数据并构建外键值到关联结果的映射
    *
-   * @param array $data 主表查询结果
-   * @param string $name 关联名称，作为填充到主数据中的键名
-   * @return array 填充关联数据后的主数据
+   * 注意：本方法只基于传入的 $data 提取外键值并查询关联数据，
+   * 不修改、不返回主数据本身——多关联并发查询时各协程基于同一份主数据
+   * 快照独立计算，由调用方（Query::queryRelationData）串行合并，
+   * 避免协程间相互覆盖已填充的关联字段。
+   *
+   * @param array $data 主表查询结果（仅读取其中的 localKey 列）
+   * @param string $name 关联名称（仅用于异常信息，不再作为填充键名）
+   * @return array<mixed,DataSet|Collection> 外键值 => 关联数据（一对一为 DataSet，一对多为 Collection）
    * @throws DbException 数据库操作失败时抛出
    */
   public function query(array $data, string $name): array
@@ -93,20 +98,7 @@ class RelationQuery
         );
       }
     }
-    // 遍历数据，将关联数据填充到主数据中
-    array_walk($data, function (&$row) use ($keyMapData, $name) {
-      $key = $row[$this->localKey];
-      if (!array_key_exists($key, $keyMapData)) {
-        $value = $this->many ?
-          new Collection($this->relationModel->query->newQuery(), [])
-          : new DataSet($this->relationModel->query->newQuery(), []);
-      } else {
-        $value = $keyMapData[$key];
-      }
-      $row[$name] = $value;
-    });
-    // 返回主数据
-    return $data;
+    return $keyMapData;
   }
 
   /**
@@ -119,5 +111,35 @@ class RelationQuery
   {
     $this->handle = $handle;
     return $this;
+  }
+
+  /**
+   * 获取当前模型的主键名（关联查询的本地键）
+   *
+   * @return string 本地键字段名
+   */
+  public function localKey(): string
+  {
+    return $this->localKey;
+  }
+
+  /**
+   * 判断是否为一对多关联
+   *
+   * @return bool 一对多返回 true，一对一返回 false
+   */
+  public function isMany(): bool
+  {
+    return $this->many;
+  }
+
+  /**
+   * 获取关联模型实例
+   *
+   * @return Model 关联模型实例
+   */
+  public function relationModel(): Model
+  {
+    return $this->relationModel;
   }
 }
