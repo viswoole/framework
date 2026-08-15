@@ -89,6 +89,11 @@ trait Where
       $value = $operator;
       $operator = is_array($operator) ? 'IN' : '=';
     }
+    // 显式三参调用时 operator 由调用方提供，必须校验白名单，
+    // 防止非法运算符被 SqlBuilder 直接内插进 SQL 造成注入
+    if (!in_array($operator, self::OPERATORS, true)) {
+      throw new InvalidArgumentException("无效的查询条件运算符：$operator");
+    }
     if (is_array($value)) {
       if (empty($value)) throw new InvalidArgumentException("$operator 条件值不能是空数组");
     }

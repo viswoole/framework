@@ -81,11 +81,16 @@ class WhereGroup
         if (!in_array($operator, BaseQuery::OPERATORS)) {
           throw new InvalidArgumentException("无效的查询条件运算符 index：$key");
         }
+        $connector = strtoupper($item[3] ?? 'AND');
+        // 连接符必须限定 AND/OR 白名单，防止非法值被拼入 SQL 造成注入
+        if (!in_array($connector, ['AND', 'OR'], true)) {
+          throw new InvalidArgumentException("无效的查询条件连接符 index：$key");
+        }
         $where = [
           'column' => $item[0],
           'operator' => $operator,
           'value' => $item[2],
-          'connector' => strtoupper($item[3] ?? 'AND')
+          'connector' => $connector
         ];
       }
       if (is_array($where['value']) && empty($where['value'])) {
