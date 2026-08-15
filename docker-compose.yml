@@ -3,7 +3,9 @@ services:
   app:
     build: ./
     ports:
-      - "9501:9501"
+      # 宿主机 9511 -> 容器 9501（容器内监听端口与框架 config/server.php 一致保持 9501，
+      # 宿主端口避开 api-php 项目的 youqu-php:9501，避免端口冲突无法启动）
+      - "9511:9501"
     volumes:
       - ./:/var/www/app
     environment:
@@ -13,17 +15,21 @@ services:
     command: [ "tail", "-f", "/dev/null" ]
   mysql:
     image: mysql:latest
-    command: --default-authentication-plugin=mysql_native_password
     restart: always
     volumes:
-      - mysql:/data
+      # MySQL 官方镜像数据目录为 /var/lib/mysql（此前误挂 /data 导致数据不持久化）
+      - mysql:/var/lib/mysql
     environment:
       TZ: Asia/Shanghai
       MYSQL_ROOT_PASSWORD: "123456"  # 将密码设置为一个键值对
+    # 未映射宿主机端口，仅容器网络内访问，与 api-php(youqu-mysql:3307) 不冲突
+    # 注：mysql 8.4+ 已移除 --default-authentication-plugin 参数（此前配置该参数导致
+    # mysqld 启动 Aborting、容器反复重启），默认认证插件为 caching_sha2_password
   redis:
     image: redis:latest
     ports:
-      - "6379:6379"
+      # 宿主机 6380 -> 容器 6379，避开 api-php 项目的 youqu-redis:6379
+      - "6380:6379"
     volumes:
       - redis:/data
     environment:
