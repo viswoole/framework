@@ -71,6 +71,11 @@ class DbManager
     if (!empty($channels)) {
       $this->defaultChannel = $config->get('database.default', array_key_first($channels));
       foreach ($channels as $key => $driver) $this->addChannel($key, $driver);
+    } else {
+      // 空配置时也必须初始化 readonly 属性，
+      // 否则运行时 addChannel() 动态注册后再访问 channel() 会因
+      // 属性未初始化抛出 Error（channel() 内会回退到首个已注册通道）
+      $this->defaultChannel = '';
     }
     $this->table = new Table(1);
     $this->table->column('debug', Table::TYPE_INT, 4);
@@ -288,7 +293,12 @@ class DbManager
     if (empty($this->channels)) {
       throw new DbException('数据库通道列表为空，请先配置数据库通道。', -1);
     }
-    $name = $name ?? $this->defaultChannel;
+    if ($name === null) {
+      // 默认通道未配置（空配置后动态注册）或已失效时，回退到首个已注册通道
+      $name = ($this->defaultChannel !== '' && $this->hasChannel($this->defaultChannel))
+        ? $this->defaultChannel
+        : (string)array_key_first($this->channels);
+    }
     if (!$this->hasChannel($name)) {
       throw new InvalidArgumentException('数据库通道 ' . $name . ' 不存在');
     }
@@ -343,7 +353,9 @@ class DbManager
   {
     $channel = $this->channel();
     if (!method_exists($channel, $name)) {
-      throw new InvalidArgumentException('数据库通道 ' . $name . ' 方法不存在');
+      // 修复: 原文案把方法名误标为通道名（"数据库通道 xxx 方法不存在"）
+      $channelClass = $channel::class;
+      throw new InvalidArgumentException("数据库通道 $channelClass 不存在 $name 方法");
     }
     return $channel->$name(...$arguments);
   }

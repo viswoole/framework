@@ -19,6 +19,7 @@ use PDO;
 use RuntimeException;
 use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
+use Throwable;
 use Viswoole\Core\Coroutine\Context;
 
 /**
@@ -154,10 +155,19 @@ class ConnectManager
 
   /**
    * 析构时回滚未完成的事务，防止连接泄漏
+   *
+   * 析构阶段（协程结束、GC 或请求收尾）连接可能已失效，回滚抛出的
+   * 异常无法被调用方捕获，向外抛会引发 PHP 致命错误
+   * （"Exception thrown without a stack frame"），因此静默吞掉，
+   * 连接的回收交由 rollBack 内部 finally 与连接池的健康检查兜底。
    */
   public function __destruct()
   {
-    $this->rollBack();
+    try {
+      $this->rollBack();
+    } catch (Throwable) {
+      // 析构阶段无法向外传递异常，吞掉以避免致命错误
+    }
   }
 
   /**

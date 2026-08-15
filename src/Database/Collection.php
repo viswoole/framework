@@ -292,6 +292,8 @@ class Collection extends BaseCollection
   {
     $pk = $this->query->getPrimaryKey();
     $pkList = $this->getPks($pk);
+    // 空集合没有可删除的记录，直接返回 0 而非构造空 IN 条件
+    if ($pkList === []) return 0;
     return $this->query->whereIn($pk, $pkList)->delete($real);
   }
 
@@ -299,10 +301,10 @@ class Collection extends BaseCollection
    * 收集集合中所有行的主键值
    *
    * @param string $pk 主键字段名
-   * @return array|int 主键值数组，集合为空时返回 0
+   * @return array 主键值数组，集合为空时返回空数组
    * @throws RuntimeException 某行缺少主键字段时抛出
    */
-  private function getPks(string $pk): array|int
+  private function getPks(string $pk): array
   {
     $pkList = [];
     foreach ($this as /** @var DataSet $row */ $row) {
@@ -314,7 +316,6 @@ class Collection extends BaseCollection
         );
       }
     }
-    if (empty($pkList)) return 0;
     return $pkList;
   }
 
@@ -348,6 +349,8 @@ class Collection extends BaseCollection
   {
     $pk = $this->query->getPrimaryKey();
     $pkList = $this->getPks($pk);
+    // 空集合没有可更新的记录，直接返回 0 而非构造空 IN 条件
+    if ($pkList === []) return 0;
     $result = $this->query->strict(false)->whereIn($pk, $pkList)->update($data);
     if ($result) {
       // 更新每一行数据

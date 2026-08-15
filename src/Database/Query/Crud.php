@@ -96,21 +96,20 @@ trait Crud
         return $cacheStore->get($this->options->cache['key']);
       }
     }
-    if (!isset($result)) {
-      /**
-       * @var PDOStatement $statement
-       */
-      $statement = $this->channel->execute($raw->sql, $raw->bindings);
-      // 获取查询结果
-      $result = $statement->fetchAll(PDO::FETCH_ASSOC);
-      $statement->closeCursor();
-      if ($cacheStore) {
-        if ($this->options->cache['tag']) {
-          $cacheStore = $cacheStore->tag($this->options->cache['tag']);
-        }
-        // 写入缓存
-        $cacheStore->set($this->options->cache['key'], $result, $this->options->cache['expire']);
+    // 缓存未命中：执行查询（移除原恒真的 `isset($result)` 死代码分支）
+    /**
+     * @var PDOStatement $statement
+     */
+    $statement = $this->channel->execute($raw->sql, $raw->bindings);
+    // 获取查询结果
+    $result = $statement->fetchAll(PDO::FETCH_ASSOC);
+    $statement->closeCursor();
+    if ($cacheStore) {
+      if ($this->options->cache['tag']) {
+        $cacheStore = $cacheStore->tag($this->options->cache['tag']);
       }
+      // 写入缓存
+      $cacheStore->set($this->options->cache['key'], $result, $this->options->cache['expire']);
     }
     return $result;
   }

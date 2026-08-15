@@ -287,6 +287,11 @@ class PDOChannel extends Channel
   /**
    * 归还连接
    *
+   * 读写分离时依据协程上下文中记录的池索引定位目标连接池；
+   * 索引可能被事务期间的中间操作（如表结构查询）清除，
+   * 此时降级归还到首个写库池，保证连接不泄漏（池间连接可互用，
+   * 仅影响读写路由的均衡性）。
+   *
    * @param PDOProxy $connect
    * @return void
    */
@@ -294,7 +299,10 @@ class PDOChannel extends Channel
   {
     if (is_array($this->pool)) {
       $indexInfo = $this->getCurrentPoolIndex();
-      $this->pool[$indexInfo['type']][$indexInfo['index']]->put($connect);
+      // 索引缺失时降级到写库首池，避免对 null 取下标引发 Fatal Error
+      $type = is_array($indexInfo) ? $indexInfo['type'] : 'write';
+      $index = is_array($indexInfo) ? $indexInfo['index'] : 0;
+      $this->pool[$type][$index]->put($connect);
       $this->removeCurrentPoolIndex();
     } else {
       $this->pool->put($connect);

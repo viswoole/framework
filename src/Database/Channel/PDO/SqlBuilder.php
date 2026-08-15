@@ -18,6 +18,7 @@ namespace Viswoole\Database\Channel\PDO;
 
 use InvalidArgumentException;
 use PDO;
+use PDOException;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
@@ -177,26 +178,35 @@ class SqlBuilder
       default => "DESCRIBE $quotedTable"
     };
     $conn = $this->channel->pop('read');
-    // 修复#1: pgsql/oci/sqlsrv 使用参数绑定代替直接拼接表名
-    if (in_array($this->channel->type->value, ['pgsql', 'oci', 'sqlsrv'])) {
-      $statement = $conn->prepare($sql);
-      $statement->execute([$table]);
-    } else {
-      $statement = $conn->query($sql);
+    try {
+      // 修复#1: pgsql/oci/sqlsrv 使用参数绑定代替直接拼接表名
+      if (in_array($this->channel->type->value, ['pgsql', 'oci', 'sqlsrv'])) {
+        $statement = $conn->prepare($sql);
+        $statement->execute([$table]);
+      } else {
+        $statement = $conn->query($sql);
+      }
+      if ($this->channel->type === DriverType::SQLite) {
+        $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $fields = array_column($fields, 'name');
+      } else {
+        $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
+      }
+    } catch (PDOException $e) {
+      // 异常模式下（ERRMODE_EXCEPTION）查询失败抛 PDOException，
+      // 统一包装为携带 SQL 信息的 DbException，满足模块异常契约
+      throw new DbException(
+        "获取表 {$table} 字段失败（表可能不存在）：{$e->getMessage()}",
+        $e->getCode(),
+        $sql,
+        $e
+      );
+    } finally {
+      // 成功与失败路径都必须归还连接，防止异常时连接泄漏
+      $this->channel->put($conn);
     }
-    $this->channel->put($conn);
-    if (!$statement) throw new DbException(
-      $statement->errorInfo()[2], $statement->errorInfo()[1], $sql
-    );
-    if ($this->channel->type === DriverType::SQLite) {
-      $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
-      $fields = array_column($fields, 'name');
-    } else {
-      $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
-    }
-    if (!$fields) throw new DbException(
-      $statement->errorInfo()[2], $statement->errorInfo()[1], $sql
-    );
+    // 静默模式下查询失败返回 false；或查询成功但表无字段（表不存在）
+    if (!$fields) throw new DbException("获取表 {$table} 字段失败，表可能不存在", 0, $sql);
     self::$tableColumns[$table] = $fields;
     return $fields;
   }
