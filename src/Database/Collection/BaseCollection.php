@@ -77,6 +77,11 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
     $withAttrColumn = array_keys($this->withAttr);
     $array = [];
     foreach ($this as $key => $value) {
+      // 修复: 顶层字段（含标量）此前从未经过 hidden 过滤（仅数组值递归处理），
+      // 导致模型 $hidden 对顶层标量字段（如 password 哈希）不生效
+      if ($hidden && is_string($key) && in_array($key, $this->hidden, true)) {
+        continue;
+      }
       if ($value instanceof BaseCollection) {
         // 修复#18: 递归深度检查，超过最大深度时停止递归
         if ($maxDepth <= 0) {
@@ -91,7 +96,8 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
         }
       }
       // 修复#7: removeHiddenKeys通过引用修改参数，需要确保对数组类型的value也生效
-      if (is_array($value)) {
+      // 修复: 此前 $hidden 形参未参与判断，传 false 仍会过滤隐藏字段
+      if ($hidden && is_array($value)) {
         $this->removeHiddenKeys($value, $this->hidden);
       }
       // 修复: 此前 $withAttr 形参未参与判断，传 false 仍会应用获取器
