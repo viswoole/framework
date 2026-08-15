@@ -164,7 +164,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
-   * 获取单例实例，优先从进程级实例池取，协程环境下从协程上下文取
+   * 获取单例实例，优先从进程级实例池取，协程环境下从请求根协程上下文取
+   *
+   * 读取位置与 setSingleInstance 写入位置对称（同为根协程 getTopId）：
+   * 若读当前协程，子协程内将 miss 并重复实例化，且新实例会覆盖根协程上的旧单例。
    *
    * @param string $class 类名
    * @return object|null 存在则返回实例，否则返回 null
@@ -172,7 +175,9 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   protected function getSingleton(string $class): ?object
   {
     if (isset($this->instances[$class])) return $this->instances[$class];
-    if (Coroutine::isCoroutine()) return Context::get($this->CONTEXT_PREFIX . $class);
+    if (Coroutine::isCoroutine()) {
+      return Context::get($this->CONTEXT_PREFIX . $class, null, Coroutine::getTopId());
+    }
     return null;
   }
 
