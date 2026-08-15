@@ -106,7 +106,8 @@ class ParamParseTool
         $reflection = new ReflectionFunction($callable);
       } elseif (is_string($callable)) {
         if (str_contains($callable, '::')) {
-          $reflection = new ReflectionMethod($callable);
+          // PHP 8.5 起 ReflectionMethod 单参构造弃用，须用 createFromMethodName
+          $reflection = ReflectionMethod::createFromMethodName($callable);
         } else {
           $reflection = new ReflectionFunction($callable);
         }
