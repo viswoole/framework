@@ -78,7 +78,9 @@ class DbManager
     $this->table->create();
     $debug = $config->get('database.debug', true);
     // 修复: 配置路径错误，应与 database.debug 一致使用 database 命名空间下的 info_save_manner
-    $save = $config->get('database.info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER);
+    $save = $config->get(
+      'database.info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER
+    );
     if (!is_int($save)) {
       $save = self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER;
     }
@@ -207,6 +209,7 @@ class DbManager
    * 传入闭包时自动管理事务：闭包执行成功则提交，异常则回滚。
    *
    * @param Closure|null $query 闭包内执行事务操作，传入后自动 commit/rollBack
+   * @throws Throwable 事务回滚后抛出
    */
   public function startTransaction(?Closure $query = null): void
   {
@@ -215,8 +218,9 @@ class DbManager
       try {
         $query();
         $this->commit();
-      } catch (Throwable) {
+      } catch (Throwable $e) {
         $this->rollBack();
+        throw $e;
       }
     }
   }
@@ -267,47 +271,6 @@ class DbManager
   }
 
   /**
-   * 执行原生写入（INSERT/UPDATE/DELETE），返回受影响行数
-   *
-   * 与 think-orm 保持一致：始终在写库执行，返回影响的记录数；
-   * 传入 $getId 时返回该字段的自增ID（部分驱动以字符串返回）。
-   *
-   * @param string|Raw $sql SQL语句或 Raw 对象
-   * @param array $bindings 绑定参数，与 SQL 中的占位符对应
-   * @param false|string $getId 传入字段名时返回该字段的自增ID，false 时不获取
-   * @return int|string 受影响行数或自增ID
-   * @throws DbException SQL 执行失败时抛出
-   */
-  public function execute(string|Raw $sql, array $bindings = [], false|string $getId = false): int|string
-  {
-    $result = $this->channel()->execute($sql, $bindings, $getId);
-    if ($result instanceof PDOStatement || $result instanceof PDOStatementProxy) {
-      $count = $result->rowCount();
-      $result->closeCursor();
-      return $count;
-    }
-    // 非 PDO 通道：受影响行数或自增ID，契约保证为 int|string，无需强转
-    return $result;
-  }
-
-  /**
-   * 将方法调用转发到默认数据库通道
-   *
-   * @param string $name 方法名
-   * @param array $arguments 方法参数
-   * @return mixed 通道方法的返回值
-   * @throws DbException 通道方法不存在时抛出
-   */
-  public function __call(string $name, array $arguments)
-  {
-    $channel = $this->channel();
-    if (!method_exists($channel, $name)) {
-      throw new InvalidArgumentException('数据库通道 ' . $name . ' 方法不存在');
-    }
-    return $channel->$name(...$arguments);
-  }
-
-  /**
    * 获取指定名称的数据库通道
    *
    * @param string|null $name 通道名称，为 null 时使用默认通道
@@ -336,6 +299,48 @@ class DbManager
   public function hasChannel(string $channel_name): bool
   {
     return isset($this->channels[strtolower($channel_name)]);
+  }
+
+  /**
+   * 执行原生写入（INSERT/UPDATE/DELETE），返回受影响行数
+   *
+   * 与 think-orm 保持一致：始终在写库执行，返回影响的记录数；
+   * 传入 $getId 时返回该字段的自增ID（部分驱动以字符串返回）。
+   *
+   * @param string|Raw $sql SQL语句或 Raw 对象
+   * @param array $bindings 绑定参数，与 SQL 中的占位符对应
+   * @param false|string $getId 传入字段名时返回该字段的自增ID，false 时不获取
+   * @return int|string 受影响行数或自增ID
+   * @throws DbException SQL 执行失败时抛出
+   */
+  public function execute(string|Raw $sql, array $bindings = [], false|string $getId = false
+  ): int|string
+  {
+    $result = $this->channel()->execute($sql, $bindings, $getId);
+    if ($result instanceof PDOStatement || $result instanceof PDOStatementProxy) {
+      $count = $result->rowCount();
+      $result->closeCursor();
+      return $count;
+    }
+    // 非 PDO 通道：受影响行数或自增ID，契约保证为 int|string，无需强转
+    return $result;
+  }
+
+  /**
+   * 将方法调用转发到默认数据库通道
+   *
+   * @param string $name 方法名
+   * @param array $arguments 方法参数
+   * @return mixed 通道方法的返回值
+   * @throws DbException 通道方法不存在时抛出
+   */
+  public function __call(string $name, array $arguments)
+  {
+    $channel = $this->channel();
+    if (!method_exists($channel, $name)) {
+      throw new InvalidArgumentException('数据库通道 ' . $name . ' 方法不存在');
+    }
+    return $channel->$name(...$arguments);
   }
 
   /**
