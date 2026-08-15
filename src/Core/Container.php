@@ -58,7 +58,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    */
   protected array $bindings = [];
   /**
-   * @var object[] 已解析的单例实例池（非协程环境使用）
+   * @var array{string,object} 已解析的单例实例池（非协程环境使用）
    */
   protected array $instances = [];
   /**
