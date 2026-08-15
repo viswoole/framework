@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Collection;
 
@@ -48,8 +48,7 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   public function __construct(
     protected BaseQuery|Query $query,
     array                     $data
-  )
-  {
+  ) {
     // 同步隐藏字段
     if ($this->query instanceof Query) {
       $this->hidden = array_merge($this->hidden, $this->query->getHiddenColumn());
@@ -83,6 +82,11 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
         if ($maxDepth <= 0) {
           $value = [];
         } else {
+          // 修复: 传播集合级获取器到子集合——多行 Collection 中字段转换发生在子 DataSet
+          // 的递归 toArray 内，此前配置仅存于外层导致 withAttr 对多行集合永不生效
+          foreach ($this->withAttr as $attrColumn => $attrCallback) {
+            $value->withAttr($attrColumn, $attrCallback);
+          }
           $value = $value->toArray($withAttr, $hidden, $maxDepth - 1);
         }
       }
@@ -90,7 +94,8 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
       if (is_array($value)) {
         $this->removeHiddenKeys($value, $this->hidden);
       }
-      if (is_string($key)) {
+      // 修复: 此前 $withAttr 形参未参与判断，传 false 仍会应用获取器
+      if ($withAttr && is_string($key)) {
         if (in_array($key, $withAttrColumn)) {
           $value = $this->withAttr[$key]($value);
         } elseif ($this->query instanceof Query) {
