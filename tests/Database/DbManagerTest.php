@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Viswoole\Tests\Database;
 
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Viswoole\Core\App;
 use Viswoole\Database\DbManager;
 
@@ -83,5 +84,49 @@ class DbManagerTest extends TestCase
     self::assertSame('execute', $fake->calls[0]['method']);
     self::assertTrue($fake->calls[0]['master']);
     self::assertSame(['id' => 1], $fake->calls[0]['bindings']);
+  }
+
+  /**
+   * 闭包事务应把闭包返回值透传给调用方（修复：原实现返回 void 丢失返回值）
+   */
+  public function testStartTransactionReturnsClosureReturnValue(): void
+  {
+    $manager = $this->makeManager(new FakeChannel(0));
+    // 空事务（闭包内无 DB 操作）下 commit 无连接可提交，仅验证返回值透传
+    $result = $manager->startTransaction(fn() => ['uid' => 12345]);
+    self::assertSame(['uid' => 12345], $result);
+    self::assertSame(42, $manager->startTransaction(fn(): int => 42));
+  }
+
+  /**
+   * 闭包抛异常时应先回滚再原样重抛，且事务状态重置允许再次开启事务
+   */
+  public function testStartTransactionRethrowsClosureExceptionAfterRollback(): void
+  {
+    $manager = $this->makeManager(new FakeChannel(0));
+    try {
+      $manager->startTransaction(function () {
+        throw new RuntimeException('boom');
+      });
+      self::fail('闭包异常应被重抛而非吞掉');
+    } catch (RuntimeException $e) {
+      self::assertSame('boom', $e->getMessage());
+    }
+    // 回滚后事务状态应已重置，可再次开启新事务
+    self::assertSame('ok', $manager->startTransaction(fn(): string => 'ok'));
+  }
+
+  /**
+   * 未传闭包时仅开启事务并返回 null，语义等同 start()
+   */
+  public function testStartTransactionWithoutClosureReturnsNull(): void
+  {
+    $manager = $this->makeManager(new FakeChannel(0));
+    try {
+      self::assertNull($manager->startTransaction());
+    } finally {
+      // 复位事务状态，避免污染后续用例
+      $manager->commit();
+    }
   }
 }

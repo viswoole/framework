@@ -32,7 +32,7 @@ use Viswoole\Database\Raw;
  * @method static Channel channel(?string $name = null) 获取数据库通道
  * @method static bool hasChannel(string $channel_name) 判断通道是否存在
  * @method static void start() 开启事务
- * @method static void startTransaction(?Closure $query = null) 开启事务，传入闭包则自动管理事务
+ * @method static mixed startTransaction(?Closure $query = null) 开启事务，传入闭包则自动管理事务并返回闭包返回值
  * @method static void commit() 提交事务
  * @method static void rollBack() 回滚所有事务
  * @method static Raw raw(string $sql, array $bindings = []) 创建原生 SQL 表达式

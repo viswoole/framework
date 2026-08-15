@@ -206,23 +206,28 @@ class DbManager
   /**
    * 开启事务
    *
-   * 传入闭包时自动管理事务：闭包执行成功则提交，异常则回滚。
+   * 传入闭包时自动管理事务：闭包执行成功则提交并返回闭包返回值，异常则回滚并重抛。
+   * 未传闭包时仅开启事务（等同 start()），返回 null。
    *
    * @param Closure|null $query 闭包内执行事务操作，传入后自动 commit/rollBack
-   * @throws Throwable 事务回滚后抛出
+   * @return mixed 闭包的返回值；未传闭包时返回 null
+   * @throws Throwable 闭包抛出的异常在回滚后原样重抛
    */
-  public function startTransaction(?Closure $query = null): void
+  public function startTransaction(?Closure $query = null): mixed
   {
     ConnectManager::factory()->start();
     if ($query instanceof Closure) {
       try {
-        $query();
+        // 先捕获闭包返回值，提交成功后透传给调用方（修复：原实现丢弃返回值）
+        $result = $query();
         $this->commit();
+        return $result;
       } catch (Throwable $e) {
         $this->rollBack();
         throw $e;
       }
     }
+    return null;
   }
 
   /**
