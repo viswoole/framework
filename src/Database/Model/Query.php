@@ -124,7 +124,8 @@ class Query extends BaseQuery
    * @return int|Raw 受影响的记录数或 Raw 对象
    * @throws DbException 数据库操作失败时抛出
    */
-  #[Override] public function delete(bool $real = false): int|Raw
+  #[Override]
+  public function delete(bool $real = false): int|Raw
   {
     if ($this->enableSoftDelete && !$real) {
       return parent::update([
@@ -249,7 +250,8 @@ class Query extends BaseQuery
    * @param string $type 操作类型 insert|insertGetId|update|delete|select
    * @return Raw|string|array|int 查询结果
    */
-  #[Override] protected function runCrud(string $type): Raw|string|array|int
+  #[Override]
+  protected function runCrud(string $type): Raw|string|array|int
   {
     $this->handleCrud($type);
     $result = parent::runCrud($type);
@@ -266,7 +268,7 @@ class Query extends BaseQuery
    *
    * @param string $type 操作类型
    */
-  private function handleCrud($type): void
+  private function handleCrud(string $type): void
   {
     switch ($type) {
       case 'select':
