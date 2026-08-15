@@ -151,8 +151,10 @@ class Returned
     $showData = [];
     foreach ($data as $key => $value) {
       [$key, $description, $allowNull] = $this->parseKey((string)$key);
-      $showData[$key] = $value;
+      // 先递归解析值再写入展示数据：嵌套数组的键名同样使用 |? 语法，
+      // 此前先写后解析导致嵌套层展示数据键名残留 "字段|描述" 原始语法
       [$value, $type] = $this->parseValueType($value);
+      $showData[$key] = $value;
       $props[] = new FieldStructure($key, $description, $allowNull, $value, $type);
     }
     $data = $showData;
