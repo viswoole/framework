@@ -40,14 +40,18 @@ class WhereGroup
 
   /**
    * @param array $wheres 原始条件数组，支持简写语法
-   * @param string $connector 组间连接符，AND 或 OR（不区分大小写，其他值默认 OR）
+   * @param string $connector 组间连接符，AND 或 OR（不区分大小写）
+   * @throws InvalidArgumentException 连接符不是 AND/OR 时抛出
    */
   public function __construct(array $wheres, string $connector)
   {
 
     $this->items = self::parsing($wheres);
     $connector = strtoupper($connector);
-    $connector = $connector === 'AND' ? 'AND' : 'OR';
+    // 与 parsing() 保持一致：非法连接符直接拒绝而非静默纠正为 OR
+    if (!in_array($connector, ['AND', 'OR'], true)) {
+      throw new InvalidArgumentException("无效的条件分组连接符：{$connector}，仅支持 AND 或 OR");
+    }
     $this->connector = $connector;
   }
 

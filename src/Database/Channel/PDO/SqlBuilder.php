@@ -60,7 +60,10 @@ class SqlBuilder
     ]
   ];
   /**
-   * @var array<string,string[]> 表字段列表缓存，键为表名
+   * @var array<string,string[]> 表字段列表缓存，键为"通道实例ID:表名"
+   *
+   * 必须按通道实例隔离：不同通道（库）可能存在同名表但结构不同，
+   * 仅按表名缓存会导致跨库结构污染。
    */
   private static array $tableColumns = [];
   /**
@@ -116,11 +119,29 @@ class SqlBuilder
     $keys = Arr::isIndexArray($this->options->data)
       ? array_keys(reset($this->options->data))
       : array_keys($this->options->data);
+    if (Arr::isIndexArray($this->options->data)) {
+      // 批量写入：校验各行字段集合一致，避免以首行为准时静默丢弃后续行的多余字段
+      foreach ($this->options->data as $index => $item) {
+        $rowKeys = array_keys($item);
+        if (array_diff($rowKeys, $keys) || array_diff($keys, $rowKeys)) {
+          throw new InvalidArgumentException(
+            "批量写入失败：第 {$index} 行字段与首行不一致"
+          );
+        }
+      }
+    }
     if (!$this->options->strict) {
       $tableColumns = $this->getTableColumns();
       $keys = array_filter($keys, function ($key) use ($tableColumns) {
         return in_array($key, $tableColumns);
       });
+      // 过滤后无有效字段会生成 "INSERT INTO t () VALUES ()" 非法 SQL，构建期拦截
+      if ($keys === []) {
+        throw new InvalidArgumentException(
+          "写入表 {$this->options->table} 失败：过滤后无有效字段"
+        );
+      }
+      $keys = array_values($keys);
     }
     // 要写入的列
     $quotedKeys = array_map([$this, 'quote'], $keys);
@@ -159,7 +180,7 @@ class SqlBuilder
   }
 
   /**
-   * 获取当前表的字段名列表，结果会按表名缓存
+   * 获取当前表的字段名列表，结果按"通道实例:表名"缓存
    *
    * @return string[] 字段名列表
    * @throws DbException 查询表结构失败时抛出
@@ -167,7 +188,9 @@ class SqlBuilder
   protected function getTableColumns(): array
   {
     $table = $this->options->table;
-    if (isset(self::$tableColumns[$table])) return self::$tableColumns[$table];
+    // 缓存键包含通道实例标识：不同通道（库）可能存在同名表但结构不同
+    $cacheKey = spl_object_id($this->channel) . ':' . $table;
+    if (isset(self::$tableColumns[$cacheKey])) return self::$tableColumns[$cacheKey];
     // 修复#1: 对表名使用反引号包裹，防止SQL注入风险
     $quotedTable = $this->quote($table);
     $sql = match ($this->channel->type->value) {
@@ -207,8 +230,20 @@ class SqlBuilder
     }
     // 静默模式下查询失败返回 false；或查询成功但表无字段（表不存在）
     if (!$fields) throw new DbException("获取表 {$table} 字段失败，表可能不存在", 0, $sql);
-    self::$tableColumns[$table] = $fields;
+    self::$tableColumns[$cacheKey] = $fields;
     return $fields;
+  }
+
+  /**
+   * 清空表结构静态缓存
+   *
+   * 表结构在进程内长期缓存（strict 检测、字段过滤依赖），
+   * ALTER TABLE 等结构变更后需调用本方法使缓存失效；
+   * 亦用于测试隔离，避免跨用例污染。
+   */
+  public static function flushTableColumnsCache(): void
+  {
+    self::$tableColumns = [];
   }
 
   /**
@@ -352,6 +387,17 @@ class SqlBuilder
         return $where;
       }
       if (is_array($value)) {
+        // BETWEEN 语法为 "col BETWEEN ? AND ?"，不能复用 IN 的 (?, ?) 形式
+        if (in_array($operator, ['BETWEEN', 'NOT BETWEEN'], true)) {
+          if (count($value) !== 2) {
+            throw new InvalidArgumentException(
+              "{$operator} 条件必须且只能提供两个边界值"
+            );
+          }
+          $this->params[] = $value[0];
+          $this->params[] = $value[1];
+          return "$connector $column $operator ? AND ?";
+        }
         array_walk($value, function (&$item) {
           $this->params[] = $item;
           $item = '?';
@@ -481,6 +527,12 @@ class SqlBuilder
       $fullFields = array_filter($this->getTableColumns(), function ($item) use ($withoutField) {
         return !in_array($item, $withoutField);
       });
+      // 排除全部字段会生成 "SELECT  FROM" 非法 SQL，构建期拦截
+      if ($fullFields === []) {
+        throw new InvalidArgumentException(
+          "withoutColumns 排除了表 {$this->options->table} 的全部字段，请至少保留一个字段"
+        );
+      }
       // 将索引数组转换为关联数组
       $fullFields = array_combine($fullFields, array_fill(0, count($fullFields), null));
       array_walk($fullFields, function (&$item, $key) {

@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace Viswoole\Database;
 
+use InvalidArgumentException;
 use Viswoole\Database\Query\Crud;
 use Viswoole\Database\Query\Join;
 use Viswoole\Database\Query\Options;
@@ -117,6 +118,7 @@ class BaseQuery
    * @param mixed $value 比较值
    * @param string $connector 条件连接符 AND|OR，默认 AND
    * @return static 支持链式调用
+   * @throws InvalidArgumentException 运算符或连接符无效时抛出
    */
   public function having(
     string $column,
@@ -124,6 +126,17 @@ class BaseQuery
     mixed  $value,
     string $connector = 'AND'
   ): static {
+    // HAVING 子句由 SqlBuilder 原样内插 operator 与 connector，
+    // 必须与 where() 同等做白名单校验，防止恶意片段注入 HAVING 子句
+    $operator = strtoupper(trim($operator));
+    // 仅放行标量比较运算符：IN/BETWEEN/IS NULL 等需独立生成逻辑，当前 HAVING 生成器不支持
+    if (!in_array($operator, ['=', '!=', '<>', '>', '>=', '<', '<=', 'LIKE'], true)) {
+      throw new InvalidArgumentException("无效的聚合条件运算符：$operator");
+    }
+    $connector = strtoupper($connector);
+    if (!in_array($connector, ['AND', 'OR'], true)) {
+      throw new InvalidArgumentException("无效的聚合条件连接符：{$connector}，仅支持 AND 和 OR");
+    }
     $this->options->having[] = compact('column', 'operator', 'value', 'connector');
     return $this;
   }

@@ -26,7 +26,7 @@ use Viswoole\Database\Facade\Db;
  */
 trait Where
 {
-  /** @var array 支持的 SQL 比较运算符列表 */
+  /** @var array 支持的 SQL 比较运算符列表（EXISTS/NOT EXISTS 仅限 whereExists()/whereNotExists() 原生入口） */
   public const array OPERATORS = [
     '=',
     '!=',
@@ -41,9 +41,7 @@ trait Where
     'IN',
     'NOT IN',
     'IS NULL',
-    'IS NOT NULL',
-    'EXISTS',
-    'NOT EXISTS'
+    'IS NOT NULL'
   ];
 
   /**
