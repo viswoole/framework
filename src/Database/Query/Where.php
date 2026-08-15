@@ -78,7 +78,14 @@ trait Where
     string|int|float|array|null $value = null,
     string                 $connector = 'AND'
   ): static {
-    if ($value === null) {
+    // IS NULL / IS NOT NULL 是 whereNull()/whereNotNull() 传入的合法操作符，
+    // 不能进入下方"两参调用"兼容分支——否则 operator 被挪给 value，
+    // 存为 {operator:'=', value:'IS NULL'}，SqlBuilder 的 null 分支永不触发，
+    // 生成 "col = 'IS NULL'" 坏 SQL（MySQL 报 Incorrect DATETIME value）
+    if (
+      $value === null
+      && !in_array($operator, ['IS NULL', 'IS NOT NULL'], true)
+    ) {
       $value = $operator;
       $operator = is_array($operator) ? 'IN' : '=';
     }
