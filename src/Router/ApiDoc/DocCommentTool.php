@@ -40,7 +40,29 @@ class DocCommentTool
   }
 
   /**
+   * 从方法文档注释中提取指定参数的类型声明
+   *
+   * 支持含空格的 PHPStan 复杂类型（如 array{id: int, name: string}），
+   * 非贪婪匹配确保类型部分在参数名前截止
+   *
+   * @param string $docComment 完整的文档注释
+   * @param string $param_name 参数名称
+   * @return string 类型声明字符串，无类型声明时返回空字符串
+   */
+  public static function extractParamType(string $docComment, string $param_name): string
+  {
+    if (empty($docComment)) return '';
+    $pattern = '/@param\s+([^\n]*?)\s*\$' . preg_quote($param_name, '/') . '\b/';
+    if (preg_match($pattern, $docComment, $matches)) {
+      return trim($matches[1]);
+    }
+    return '';
+  }
+
+  /**
    * 从方法文档注释中提取指定参数的描述文本
+   *
+   * 类型部分使用非贪婪匹配，兼容含空格的 PHPstan 复杂类型（如 array{id: int}）
    *
    * @param string $docComment 完整的文档注释
    * @param string $param_name 参数名称
@@ -50,7 +72,7 @@ class DocCommentTool
   {
     if (empty($docComment)) return $docComment;
     if (preg_match(
-      '/@param\s+\S+\s+\$' . preg_quote(
+      '/@param\s+[^\n]*?\s+\$' . preg_quote(
         $param_name, '/'
       ) . '\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/', $docComment,
       $matches

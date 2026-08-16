@@ -21,6 +21,7 @@ use ReflectionException;
 use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
+use ReflectionType;
 use RuntimeException;
 use Viswoole\Router\ApiDoc\Annotation\IgnoreGlobal;
 use Viswoole\Router\ApiDoc\Annotation\Returned;
@@ -165,23 +166,46 @@ class ParamParseTool
       // 参数来源
       $source = self::parseParamSource($instance);
       if ($source === 'file') {
+        // 文件参数归入body来源展示
         $source = 'body';
-        $typeString = (string)$type;
-        $type = [];
-        // 如果类型当中包含了数组，则视为要求上传多个文件
-        if (str_contains($typeString, 'array')) {
-          $type[] = new ArrayTypeStructure(new TypeStructure(Types::File));
-        }
-        if (empty($type) || str_contains($typeString, 'File')) {
-          // 否则视为上传单个文件
-          $type[] = new TypeStructure(Types::File);
-        }
+        $fieldType = self::parseFileType($type);
+      } else {
+        // docblock @param 类型声明优先于反射类型，
+        // 用于补充反射无法表达的信息（如数组元素类型 array{id:int}、int[]）
+        $docType = DocCommentTool::extractParamType($docComment, $name);
+        $dependMap = [];
+        $parsedType = $docType === '' ? [] : DocTypeParser::parse($docType, $dependMap);
+        // 解析失败时回退到反射类型
+        $fieldType = $parsedType === [] ? $type : $parsedType;
       }
       $params[$source][$name] = new FieldStructure(
-        $name, $description, $allowNull, $default, $type
+        $name, $description, $allowNull, $default, $fieldType
       );
     }
     return $params;
+  }
+
+  /**
+   * 解析文件上传参数的类型结构
+   *
+   * 参数类型包含 array 时视为多文件上传，包含 File 或未声明类型时视为单文件上传
+   *
+   * @param ReflectionType|null $type 反射参数类型
+   * @return TypeStructure[] 类型结构列表
+   */
+  private static function parseFileType(?ReflectionType $type): array
+  {
+    $typeString = (string)$type;
+    $types = [];
+    // 如果类型当中包含了数组，则视为要求上传多个文件
+    if (str_contains($typeString, 'array')) {
+      $types[] = new ArrayTypeStructure(new TypeStructure(Types::File));
+    }
+    if (empty($types) || str_contains($typeString, 'File')) {
+      // 否则视为上传单个文件
+      $types[] = new TypeStructure(Types::File);
+    }
+    return $types;
   }
 
   /**
