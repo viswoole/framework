@@ -31,6 +31,7 @@ use Viswoole\Router\ApiDoc\Annotation\Returned;
 use Viswoole\Router\ApiDoc\ApiDocParseTool;
 use Viswoole\Router\ApiDoc\DocCommentTool;
 use Viswoole\Router\ApiDoc\Structure\FieldStructure;
+use Viswoole\Router\ApiDoc\Structure\Types;
 use Viswoole\Router\Exception\RouteNotFoundException;
 use Viswoole\Router\Route\BaseRoute;
 use Viswoole\Router\Route\Collector;
@@ -110,15 +111,74 @@ class Router extends Collector
       throw new InvalidArgumentException("$name 配置错误，必须是数组类型");
     }
     $newParams = [];
-    $class = FieldStructure::class;
     foreach ($params as $index => $field) {
-      if ($field instanceof FieldStructure) {
-        $newParams[$field->name] = $field;
-      } else {
-        throw new InvalidArgumentException("$name($index)必须是{$class}实例");
-      }
+      $fieldStructure = $this->toFieldStructure($field, $name, $index);
+      $newParams[$fieldStructure->name] = $fieldStructure;
     }
     $this->config->set($name, $newParams);
+  }
+
+  /**
+   * 将全局参数配置项转换为字段结构实例
+   *
+   * 支持三种配置格式：
+   * 1. FieldStructure 实例
+   * 2. 极简格式：'参数名' => '参数描述'（类型默认 string）
+   * 3. 关联数组：['name'=>..., 'description'=>..., 'allowNull'=>..., 'default'=>..., 'type'=>...]
+   *    type 支持 Types 枚举或类型字符串（string/int/float/bool/array/object）
+   *
+   * @param mixed $field 配置项
+   * @param string $configName 配置名称（用于异常提示）
+   * @param int|string $index 配置键（极简格式下作为参数名）
+   * @return FieldStructure
+   */
+  private function toFieldStructure(mixed $field, string $configName, int|string $index): FieldStructure
+  {
+    if ($field instanceof FieldStructure) return $field;
+    if (is_string($field) && is_string($index)) {
+      // 极简格式：参数名 => 描述
+      return new FieldStructure($index, $field, type: Types::String);
+    }
+    if (is_array($field)) {
+      $fieldName = $field['name'] ?? (is_string($index) ? $index : null);
+      if (empty($fieldName)) {
+        throw new InvalidArgumentException("$configName($index) 配置错误，缺少name字段");
+      }
+      return new FieldStructure(
+        (string)$fieldName,
+        (string)($field['description'] ?? ''),
+        (bool)($field['allowNull'] ?? false),
+        $field['default'] ?? null,
+        self::parseType($field['type'] ?? Types::Mixed)
+      );
+    }
+    throw new InvalidArgumentException(
+      "$configName($index) 配置错误，必须是FieldStructure实例、字符串或数组"
+    );
+  }
+
+  /**
+   * 解析类型配置为内置类型枚举
+   *
+   * @param mixed $type Types枚举或类型字符串（string/int/float/bool/array/object）
+   * @return Types
+   */
+  private static function parseType(mixed $type): Types
+  {
+    if ($type instanceof Types) return $type;
+    if (is_string($type)) {
+      return match (strtolower($type)) {
+        'string', 'str' => Types::String,
+        'int', 'integer' => Types::Int,
+        'float', 'double' => Types::Float,
+        'bool', 'boolean' => Types::Bool,
+        'array' => Types::Array,
+        'object' => Types::Object,
+        'null' => Types::Null,
+        default => Types::Mixed,
+      };
+    }
+    return Types::Mixed;
   }
 
   /**

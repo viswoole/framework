@@ -22,6 +22,7 @@ use ReflectionFunction;
 use ReflectionMethod;
 use ReflectionParameter;
 use RuntimeException;
+use Viswoole\Router\ApiDoc\Annotation\IgnoreGlobal;
 use Viswoole\Router\ApiDoc\Annotation\Returned;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BaseSourceInterface;
 use Viswoole\Router\ApiDoc\ParamSourceInterface\BodyParamInterface;
@@ -46,11 +47,22 @@ class ParamParseTool
    */
   public static function parse(callable|array $handler): array
   {
-    $globalBody = config('router.api_doc.body', []);
-    $globalHeader = config('router.api_doc.header', []);
-    $globalQuery = config('router.api_doc.query', []);
-    $globalReturned = config('router.api_doc.returned', []);
     $reflector = self::toReflector($handler);
+    // 解析全局参数排除规则（类级+方法级），先于全局配置读取以支持过滤
+    $ignoreRules = self::parseIgnoreRules($reflector);
+    // 读取全局配置并应用排除规则
+    $globalBody = self::filterGlobalFields(
+      config('router.api_doc.body', []), IgnoreGlobal::SOURCE_BODY, $ignoreRules
+    );
+    $globalHeader = self::filterGlobalFields(
+      config('router.api_doc.header', []), IgnoreGlobal::SOURCE_HEADER, $ignoreRules
+    );
+    $globalQuery = self::filterGlobalFields(
+      config('router.api_doc.query', []), IgnoreGlobal::SOURCE_QUERY, $ignoreRules
+    );
+    $globalReturned = self::filterGlobalReturned(
+      config('router.api_doc.returned', []), $ignoreRules
+    );
     // 参数列表
     $parameters = $reflector->getParameters();
     // 文档注释
@@ -170,6 +182,85 @@ class ParamParseTool
       );
     }
     return $params;
+  }
+
+  /**
+   * 解析处理方法上的全局参数排除规则
+   *
+   * 类级规则作用于控制器内所有路由方法，方法/函数级规则仅作用于自身，两者叠加生效
+   *
+   * @param ReflectionMethod|ReflectionFunction $reflector 处理方法反射
+   * @return IgnoreGlobal[] 排除规则列表
+   */
+  private static function parseIgnoreRules(ReflectionMethod|ReflectionFunction $reflector): array
+  {
+    $rules = [];
+    // 类级排除规则（如整个控制器无需鉴权头）
+    if ($reflector instanceof ReflectionMethod) {
+      foreach ($reflector->getDeclaringClass()->getAttributes(IgnoreGlobal::class) as $attribute) {
+        $rules[] = $attribute->newInstance();
+      }
+    }
+    // 方法/函数级排除规则
+    foreach ($reflector->getAttributes(IgnoreGlobal::class) as $attribute) {
+      $rules[] = $attribute->newInstance();
+    }
+    return $rules;
+  }
+
+  /**
+   * 应用排除规则过滤全局请求参数
+   *
+   * @param array<string,mixed> $fields 全局参数列表，键为参数名
+   * @param string $source 参数来源（header/query/body）
+   * @param IgnoreGlobal[] $rules 排除规则列表
+   * @return array<string,mixed> 过滤后的参数列表
+   */
+  private static function filterGlobalFields(array $fields, string $source, array $rules): array
+  {
+    if (empty($rules)) return $fields;
+    foreach ($fields as $name => $field) {
+      if (self::hitIgnoreRules($rules, $source, (string)$name)) {
+        unset($fields[$name]);
+      }
+    }
+    return $fields;
+  }
+
+  /**
+   * 应用排除规则过滤全局返回声明
+   *
+   * @param Returned[] $returned 全局返回声明列表
+   * @param IgnoreGlobal[] $rules 排除规则列表
+   * @return Returned[] 过滤后的返回声明列表
+   */
+  private static function filterGlobalReturned(array $returned, array $rules): array
+  {
+    if (empty($rules)) return $returned;
+    foreach ($returned as $index => $item) {
+      // returned 的标识为标题，按标题匹配字段名规则
+      $title = $item instanceof Returned ? $item->title : null;
+      if (self::hitIgnoreRules($rules, IgnoreGlobal::SOURCE_RETURNED, $title)) {
+        unset($returned[$index]);
+      }
+    }
+    return array_values($returned);
+  }
+
+  /**
+   * 判断指定来源与字段名是否命中任意一条排除规则
+   *
+   * @param IgnoreGlobal[] $rules 排除规则列表
+   * @param string $source 参数来源
+   * @param string|null $name 字段名或返回声明标题
+   * @return bool 命中返回 true
+   */
+  private static function hitIgnoreRules(array $rules, string $source, ?string $name): bool
+  {
+    foreach ($rules as $rule) {
+      if ($rule->matches($source, $name)) return true;
+    }
+    return false;
   }
 
   /**

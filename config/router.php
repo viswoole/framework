@@ -3,7 +3,7 @@
 // | 路由配置
 // +----------------------------------------------------------------------
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 return [
   // 是否区分大小写
@@ -31,13 +31,18 @@ return [
   'api_doc' => [
     // 是否启用
     'enable' => false,
-    // 全局返回数据声明
+    // 全局返回数据声明，值为 Viswoole\Router\ApiDoc\Annotation\Returned 实例数组
     'returned' => [],
-    // 全局请求头
+    // 全局请求头，支持三种格式：
+    //   new FieldStructure('authorization', '鉴权令牌', type: Types::String)
+    //   'authorization' => '鉴权令牌'
+    //   ['name' => 'authorization', 'description' => '鉴权令牌', 'type' => 'string']
     'header' => [],
-    // 全局查询参数(GET)
+    // 全局查询参数(GET)，格式同 header
     'query' => [],
-    // 全局请求参数(POST)
+    // 全局请求参数(POST)，格式同 header
     'body' => [],
+    // 个别接口如需排除全局参数，可在控制器类或方法上使用 #[IgnoreGlobal] 注解，
+    // 例如 #[IgnoreGlobal('header', 'authorization')] 可排除全局鉴权头
   ],
 ];
