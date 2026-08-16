@@ -135,6 +135,8 @@ class FieldStructure
         'int' => new TypeStructure(Types::Int),
         'null' => new TypeStructure(Types::Null),
         'string' => new TypeStructure(Types::String),
+        // 纯array类型无法得知元素类型，元素按mixed处理
+        'array' => new ArrayTypeStructure(new TypeStructure()),
         default => new TypeStructure(Types::Mixed),
       };
     }
