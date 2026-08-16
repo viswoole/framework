@@ -32,7 +32,7 @@ class InArray extends BaseValidateRule
    */
   public function __construct(
     public array $haystack,
-    public bool  $strict,
+    public bool  $strict = true,
     string       $message = ''
   )
   {
@@ -42,11 +42,14 @@ class InArray extends BaseValidateRule
   /**
    * 校验值是否在候选列表中
    */
-  #[Override] public function validate(mixed $value): mixed
+  #[Override]
+  public function validate(mixed $value): mixed
   {
     $valid = in_array($value, $this->haystack, $this->strict);
     // 修复: implode 前将数组值转为字符串，避免 null/bool 导致 TypeError
-    if (!$valid) $this->error('必须是' . implode('、', array_map('strval', $this->haystack)) . '之一');
+    if (!$valid) $this->error(
+      '必须是' . implode('、', array_map('strval', $this->haystack)) . '之一'
+    );
     return $value;
   }
 }
