@@ -605,10 +605,13 @@ class Router extends Collector
     }
     try {
       if (is_null($route)) throw new RouteNotFoundException('routing resource not found');
-      // 判断请求方法
-      $this->checkOption(
-        $route->getMethod(), strtoupper($method), "request method '$method' is not allowed"
-      );
+      // 判断请求方法（OPTIONS 预检请求跳过方法校验：预检不对应真实处理器，
+      // 需放行进入中间件管道，由跨域中间件短路响应，避免预检被 404 拦截）
+      if (strtoupper($method) !== 'OPTIONS') {
+        $this->checkOption(
+          $route->getMethod(), strtoupper($method), "request method '$method' is not allowed"
+        );
+      }
       // 判断域名
       $this->checkOption($route->getDomain(), $domain, "request domain '$domain' is not allowed");
       // 判断伪静态后缀

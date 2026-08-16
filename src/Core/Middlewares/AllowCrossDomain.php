@@ -39,18 +39,24 @@ class AllowCrossDomain implements MiddlewareInterface
   }
 
   /**
-   * 处理跨域请求：OPTIONS 预检请求直接返回 CORS 头，其他请求放行至下一中间件
+   * 处理跨域请求：为所有响应添加 CORS 头，OPTIONS 预检请求短路直接返回
+   *
+   * CORS 头必须对预检与实际请求都存在（浏览器对两者均校验），故无条件设置；
+   * 预检请求无业务语义，短路返回避免落入路由处理器。
    *
    * @param Closure $handler 下一个中间件的处理闭包
    * @return mixed OPTIONS 请求返回响应对象，其他请求返回后续处理结果
    */
   #[Override] public function process(Closure $handler): mixed
   {
+    // Access-Control-Max-Age 缓存预检结果，减少重复预检（单位秒，1 天）
+    $this->response->setHeaders([
+      'Access-Control-Allow-Origin' => '*',
+      'Access-Control-Allow-Headers' => '*',
+      'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+      'Access-Control-Max-Age' => '86400',
+    ]);
     if ($this->request->getMethod() === 'OPTIONS') {
-      $this->response->setHeaders([
-        'Access-Control-Allow-Origin' => '*',
-        'Access-Control-Allow-Headers' => '*'
-      ]);
       return $this->response;
     }
     return $handler();
