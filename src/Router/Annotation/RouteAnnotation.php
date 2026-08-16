@@ -38,7 +38,7 @@ abstract class RouteAnnotation
    * @param string|null $id id
    * @param string|null $parentId 父id，必须是分组路由id
    * @param string[]|string|null $method 路由方法，默认继承全局设定的方法
-   * @param array[]|null $middlewares 中间件
+   * @param string[]|null $middlewares 中间件
    * @param array<string,string>|null $patterns 动态路由正则约束
    * @param array|null $meta 路由元数据
    * @param array|null $suffix 目标后缀
