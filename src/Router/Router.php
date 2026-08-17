@@ -39,7 +39,7 @@ use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
 
 /**
- * 路由收集器
+ * 路由器，负责路由的收集、匹配与分发，支持路由缓存与 API 文档生成
  */
 class Router extends Collector
 {
@@ -182,7 +182,7 @@ class Router extends Collector
   }
 
   /**
-   * 获取全局返回值列表
+   * 校验全局返回值配置
    *
    * @return void
    */
@@ -359,7 +359,6 @@ class Router extends Collector
    * 解析路由(最后执行)
    *
    * @return void
-   * @access private
    */
   private function parseRoute(): void
   {
@@ -436,13 +435,13 @@ class Router extends Collector
   {
     $regexPattern = '';
     foreach ($segments as $segment) {
-      //判断是否为变量字段
+      // 判断是否为变量字段
       if (RouterTool::isVariable($segment)) {
-        //判断是否为可选变量
+        // 判断是否为可选变量
         $isRequire = RouterTool::isOptionalVariable($segment);
-        //提取变量名称
+        // 提取变量名称
         $segment = RouterTool::extractVariableName($segment);
-        //删除结尾斜杠
+        // 删除结尾斜杠
         if ($isRequire) $regexPattern = rtrim($regexPattern, '/');
         // 设置规则
         $regexPattern .= $isRequire
@@ -463,7 +462,7 @@ class Router extends Collector
 
   /**
    * 添加动态路由
-   * @param string[] $urlSegments 规则数组
+   * @param string[] $urlSegments URL 路径段数组
    * @param string $regex
    * @param string $routeIndex
    * @return void
@@ -509,7 +508,6 @@ class Router extends Collector
   /**
    * 获取路由文档
    *
-   * @access public
    * @return array{count: int,routes: array} 路由数量和路由列表
    * @throws RuntimeException 路由正在初始化
    * @see ApiDocParseTool::generateGroup() 分组结构
@@ -525,7 +523,6 @@ class Router extends Collector
   /**
    * 获取API文档的详情，包含请求参数，接口返回值
    *
-   * @access public
    * @param string $citeLink 路由线路的引用链接
    * @return array
    * @throws InvalidArgumentException 路由不存在
@@ -554,7 +551,6 @@ class Router extends Collector
   /**
    * 匹配路由，返回路由实例
    *
-   * @access public
    * @param string $path 路由路径
    * @param string $method 请求方式
    * @param string $domain 请求域名
@@ -578,13 +574,13 @@ class Router extends Collector
     $pattern = [];
     /** @var Route $route 路由 */
     $route = null;
-    //判断是否存在静态路由
+    // 判断是否存在静态路由
     if (isset($this->staticRoute[$path])) {
       $route = $this->getRoute($this->staticRoute[$path]);
     } else {
-      //转换为urlPath数组
+      // 转换为 URL 路径数组
       $segments = substr_count($path, '/');
-      //判断是否存在动态路由
+      // 判断是否存在动态路由
       $routes = $this->dynamicRoute['segment_' . $segments] ?? [];
       $regexArray = array_keys($routes);
       // 遍历正则匹配路由

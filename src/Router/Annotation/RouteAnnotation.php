@@ -35,14 +35,14 @@ abstract class RouteAnnotation
    * 构建路由组
    *
    * @param string|array|null $prefix 路径匹配前缀，默认为控制器类名
-   * @param string|null $id id
-   * @param string|null $parentId 父id，必须是分组路由id
+   * @param string|null $id 路由 ID
+   * @param string|null $parentId 父级路由 ID，必须是分组路由 ID
    * @param string[]|string|null $method 路由方法，默认继承全局设定的方法
    * @param string[]|null $middlewares 中间件
    * @param array<string,string>|null $patterns 动态路由正则约束
    * @param array|null $meta 路由元数据
-   * @param array|null $suffix 目标后缀
-   * @param array|null $domain 域名校验
+   * @param array|string|null $suffix 目标后缀
+   * @param array|string|null $domain 域名校验
    * @param bool $hidden 是否隐藏文档
    * @param string|null $title 路由标题
    * @param string|null $description 描述

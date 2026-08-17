@@ -16,12 +16,12 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc;
 
 /**
- * 公共类
+ * 文档注释解析工具，提供从 docblock 中提取描述、类型、标题等信息的静态方法
  */
 class DocCommentTool
 {
   /**
-   * 从属性文档注释中提取
+   * 从属性文档注释中提取描述文本
    *
    * @param string $doc 属性文档注释
    * @return string 描述文本

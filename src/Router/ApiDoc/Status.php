@@ -59,11 +59,11 @@ enum Status: string
   {
     return match ($this) {
       self::PUBLISHED => '#28a745', // 绿色
-      self::DEVELOPMENT => '#17a2b8', // 黄色
+      self::DEVELOPMENT => '#17a2b8', // 青色
       self::DEPRECATED => '#6c757d', // 灰色
       self::ERROR => '#dc3545', // 红色
       self::TO_BE_DEPRECATED => '#e9ecef', // 浅灰色
-      self::TESTING => '#ffc107', // 蓝色
+      self::TESTING => '#ffc107', // 黄色
     };
   }
 }

@@ -32,7 +32,6 @@ class ArrayTypeStructure extends TypeStructure
   /**
    * 追加数组元素结构
    *
-   * @access public
    * @param TypeStructure ...$items
    * @return void
    */

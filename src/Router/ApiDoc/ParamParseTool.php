@@ -304,7 +304,7 @@ class ParamParseTool
     foreach ($sources as $source => $interface) {
       if ($instance instanceof $interface) return $source;
     }
-    // 如果都没有匹配 则默认为body
+    // 如果都没有匹配，则默认为 body
     return 'body';
   }
 }

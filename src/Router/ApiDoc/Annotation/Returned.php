@@ -34,11 +34,11 @@ use Viswoole\Router\ApiDoc\Structure\TypeStructure;
 #[Attribute(Attribute::TARGET_METHOD | Attribute::TARGET_FUNCTION | Attribute::IS_REPEATABLE)]
 class Returned
 {
-  /** json */
+  /** JSON */
   const string TYPE_JSON = 'application/json';
   /** XML */
   const string TYPE_XML = 'application/xml';
-  /** html */
+  /** HTML */
   const string TYPE_HTML = 'text/html';
   /** 纯文本 */
   const string TYPE_TEXT = 'text/plain';
@@ -56,9 +56,9 @@ class Returned
   /**
    * @param string $title 标题
    * @param array|string $data 支持传入数组或者字符串
-   * @param int $statusCode 状态码，默认为200
-   * @param string $type 响应类型，默认为application/json
-   * @param int $sort 排序，默认为0,值越大越靠前
+   * @param int $statusCode 状态码，默认为 200
+   * @param string $type 响应类型，默认为 application/json
+   * @param int $sort 排序，默认为 0，值越大越靠前
    */
   public function __construct(
     public string $title,

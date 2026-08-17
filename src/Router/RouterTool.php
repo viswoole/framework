@@ -18,7 +18,7 @@ use Viswoole\Router\Route\Group;
 /**
  * 路由器工具类
  *
- * 存放了一些工具方法
+ * 提供路由路径解析、缓存读写、控制器类名推导等静态工具方法
  */
 class RouterTool
 {
@@ -27,7 +27,7 @@ class RouterTool
    *
    * @param string $server 服务名称
    * @param string $controller 控制器类完全名称，包含命名空间
-   * @param string $hash 类文件哈希值，如果不匹配，则返回null
+   * @param string $hash 类文件哈希值，如果不匹配，则返回 null
    * @return null|Group
    */
   public static function getCache(string $server, string $controller, string $hash): ?Group

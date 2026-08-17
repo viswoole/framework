@@ -23,14 +23,14 @@ use Closure;
 class Group extends BaseRoute
 {
   /**
-   * @var Route[]|static[] 分组、域名路由存储items
+   * @var Route[]|static[] 分组、域名路由存储的子路由项
    */
   private array $children = [];
 
   /**
    * 获取子路由
    *
-   * @param string|null $id 路由id,不传时返回所有子路由
+   * @param string|null $id 路由 ID，不传时返回所有子路由
    * @return array|Route|Group|null
    */
   public function getItem(?string $id = null): null|array|Route|Group

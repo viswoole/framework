@@ -107,7 +107,7 @@ abstract class BaseRoute
       $defaultDomain = config('router.domain', ['*']);
       $this->setDomain(...(is_string($defaultDomain) ? [$defaultDomain] : $defaultDomain));
     }
-    [$paths, $pattern] = $this->handelPaths($paths);
+    [$paths, $pattern] = $this->handlePaths($paths);
     // 路由path
     $this->paths = $paths;
     // 路由正则
@@ -160,9 +160,9 @@ abstract class BaseRoute
    * 处理路径前缀补全、大小写转换、与父级路径合并，并从路径中提取动态变量约束。
    *
    * @param string|array $paths 原始路径
-   * @return array{paths:array,pattern:array} [0=>规范化后的路径列表, 1=>变量名到正则的映射]
+   * @return array{0:array,1:array} [0=>规范化后的路径列表, 1=>变量名到正则的映射]
    */
-  private function handelPaths(string|array $paths): array
+  private function handlePaths(string|array $paths): array
   {
     $default_pattern_regex = config('router.default_pattern_regex', '\w+');
     $case = config('router.case_sensitive', false);

@@ -31,7 +31,7 @@ use Viswoole\Core\Facade\Server;
 abstract class Collector
 {
   /**
-   * @var array{string:Miss} miss路由404
+   * @var array<string,Miss> miss 路由（404 兜底）
    */
   protected array $missRoutes = [];
 
@@ -168,7 +168,6 @@ abstract class Collector
   /**
    * 定义一个HEAD方式访问的路由
    *
-   * @access public
    * @param string|array $paths
    * @param string|array|callable $handler
    * @return Route
@@ -193,7 +192,6 @@ abstract class Collector
   /**
    * 定义一个PATCH方式访问的路由
    *
-   * @access public
    * @param string|array $paths
    * @param string|array|callable $handler
    * @return Route
@@ -218,7 +216,6 @@ abstract class Collector
   /**
    * 分组路由
    *
-   * @access public
    * @param string|array $prefix 前缀
    * @param Closure $closure 闭包
    * @param string $id 非注解路由，系统无法生成唯一且不变的id，需手动指定id
@@ -238,7 +235,6 @@ abstract class Collector
 
   /**
    * miss路由（在未匹配到路由的时候输出）
-   * @access public
    * @param Closure $handler
    * @param string|string[] $method
    * @return void
@@ -263,7 +259,7 @@ abstract class Collector
    */
   public function server(string $serverName, Closure $closure): void
   {
-    // 如果是是当前正在运行的服务，则加载路由
+    // 如果是当前正在运行的服务，则加载路由
     if (strtolower($serverName) === strtolower(Server::getName())) {
       $closure();
     }

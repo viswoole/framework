@@ -31,17 +31,17 @@ class RouteMapping extends RouteAnnotation
   protected string $type = 'item';
 
   /**
-   * 构建路由线路
+   * 构建路由项
    *
-   * @param array|string|null $paths 路径匹配前缀，默认为控制器类名
+   * @param array|string|null $paths 路径匹配前缀，默认为方法名
    * @param string|null $id id
    * @param string|null $parentId 父id，必须是分组路由id
    * @param string[]|string|null $method 路由方法，默认继承全局设定的方法
    * @param string[]|null $middlewares 中间件
    * @param array<string,string>|null $patterns 动态路由正则约束
    * @param array|null $meta 路由元数据
-   * @param array|null $suffix 目标后缀
-   * @param array|null $domain 域名校验
+   * @param array|string|null $suffix 目标后缀
+   * @param array|string|null $domain 域名校验
    * @param bool $hidden 是否隐藏文档
    * @param string|null $title 路由标题
    * @param string|null $description 说明
@@ -50,7 +50,7 @@ class RouteMapping extends RouteAnnotation
    * @param string $createdAt 创建时间
    * @param string $updatedAt 更新时间
    * @param string[] $tags 标签
-   * @param Status $status 接口状态，默认为Viswoole\Router\ApiDoc\Status::DEVELOPMENT 开发中
+   * @param Status $status 接口状态，默认为 Status::DEVELOPMENT（开发中）
    */
   public function __construct(
     array|string|null $paths = null,
