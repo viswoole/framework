@@ -3,7 +3,7 @@
 // | swoole服务配置文件
 // +----------------------------------------------------------------------
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 use Swoole\Constant;
 use Swoole\Http\Server as httpServer;
@@ -20,9 +20,9 @@ return [
       'type' => httpServer::class,
       // 服务异常处理类
       'exception_handle' => HttpExceptionHandle::class,
-      // 构造参数 参考https://wiki.swoole.com/#/server/methods?id=__construct
+      // 构造参数，参考 https://wiki.swoole.com/#/server/methods?id=__construct
       'construct' => [
-        // 指定监听的 ip 地址。
+        // 指定监听的 IP 地址。
         'host' => '0.0.0.0',
         // 指定监听的端口
         'port' => 9501,
@@ -32,14 +32,14 @@ return [
         'sock_type' => SWOOLE_SOCK_TCP,
       ],
       'options' => [
-        // 上传文件最大尺寸 单位kb
+        // 上传文件最大尺寸，单位 KB
         Constant::OPTION_UPLOAD_MAX_FILESIZE => 5 * 1024,
-        // 启用HTTP2协议解析
+        // 启用 HTTP2 协议解析
         Constant::OPTION_OPEN_HTTP2_PROTOCOL => true,
-        // 如果需要ssl访问则需要配置 Constant::OPTION_SSL_CERT_FILE 和 Constant::OPTION_SSL_KEY_FILE
+        // 如果需要 SSL 访问，则需配置 Constant::OPTION_SSL_CERT_FILE 和 Constant::OPTION_SSL_KEY_FILE
         // 进程守护运行
         Constant::OPTION_DAEMONIZE => false,
-        // 任务进程数量 最大值不得超过 swoole_cpu_num() * 1000  0代表不开启
+        // 任务进程数量，最大值不得超过 swoole_cpu_num() * 1000，0 代表不开启
         Constant::OPTION_TASK_WORKER_NUM => swoole_cpu_num(),
         // 任务协程
         Constant::OPTION_TASK_ENABLE_COROUTINE => true
@@ -52,7 +52,7 @@ return [
   ],
   // 全局配置
   'options' => [
-    // 一键协程化Hook函数范围 参考https://wiki.swoole.com/#/server/setting?id=hook_flags
+    // 一键协程化 Hook 函数范围，参考 https://wiki.swoole.com/#/server/setting?id=hook_flags
     Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
     // 是否启用异步风格服务器的协程支持
     Constant::OPTION_ENABLE_COROUTINE => true,
@@ -60,23 +60,23 @@ return [
     Constant::OPTION_MAX_CONCURRENCY => 100000,
     // 进程守护运行
     Constant::OPTION_DAEMONIZE => false,
-    // 进程守护运行默认输出日志路径
+    // 进程守护运行时的日志输出路径
     Constant::OPTION_LOG_FILE => BASE_PATH . '/runtime/sysLog.log',
     // 工作进程数量
     Constant::OPTION_WORKER_NUM => swoole_cpu_num(),
-    // 任务进程数量 最大值不得超过 swoole_cpu_num() * 1000  0代表不开启
+    // 任务进程数量，最大值不得超过 swoole_cpu_num() * 1000，0 代表不开启
     Constant::OPTION_TASK_WORKER_NUM => 0,
-    // 最大请求数 0为不限制
+    // 最大请求数，0 为不限制
     Constant::OPTION_MAX_REQUEST => 100000,
-    // 客户端连接的缓存区长度
+    // 客户端连接的缓冲区长度
     Constant::OPTION_SOCKET_BUFFER_SIZE => 2 * 1024 * 1024,
     // 发送输出缓冲区内存尺寸
     Constant::OPTION_BUFFER_OUTPUT_SIZE => 2 * 1024 * 1024,
-    // 数据包最大尺寸 最小64k
+    // 数据包最大尺寸，最小 64K
     Constant::OPTION_PACKAGE_MAX_LENGTH => 2 * 1024 * 1024,
     // 日志输出等级
     Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
   ],
-  // 全局EVENTS
+  // 全局事件
   'events' => []
 ];

@@ -9,7 +9,7 @@ use Viswoole\HttpServer\Request;
 use Viswoole\HttpServer\Response;
 use Viswoole\Router\Facade\Router;
 
-// 该路由系统生成的默认路由，访问根目录时，返回一个随机数字
+// 这是路由系统生成的默认路由示例，访问根目录时返回一个随机数字
 Router::get('/', function (Request $request, Response $response) {
   return $response->send('<h1>Hello Viswoole. #' . rand(1000, 9999) . '</h1>');
 })->setTitle('Welcome');

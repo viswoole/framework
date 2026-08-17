@@ -10,9 +10,9 @@ return [
   'case_sensitive' => false,
   // 伪静态后缀，支持通过数组设置多个。
   'suffix' => '*',
-  // 域名校验 例如 [www.baidu.com]
+  // 域名校验，例如 ['www.baidu.com']
   'domain' => '*',
-  // HTTP请求方法
+  // HTTP 请求方法
   'method' => '*',
   // 默认的路由变量正则表达式
   'default_pattern_regex' => '[\w\.]+',

@@ -14,7 +14,7 @@ return [
   'debug' => env('app_debug', true),
   // 服务提供者注册
   'services' => [
-    // swoole异步任务管理服务 如果不使用可以删除
+    // Swoole 异步任务管理服务，如果不使用可以删除
     TaskService::class
   ],
   // 命令处理程序注册
