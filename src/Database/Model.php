@@ -26,7 +26,9 @@ use Viswoole\Database\Query\RunInfo;
 /**
  * 数据模型基类
  *
- * 提供ORM核心能力：自动推断表名、软删除、时间戳自动写入、关联查询、获取器等。
+ * 提供ORM核心能力：自动推断表名、软删除、时间戳自动写入、关联查询、获取器、修改器等。
+ * 修改器约定：定义 set{Field}Attr 方法（如 user_name 字段对应 setUserNameAttr），
+ * 写入（insert/update/create）前自动对字段值做转换（密码哈希、JSON 序列化等）。
  * 子类通过定义属性来声明表名、主键、软删除字段等元信息，框架自动处理查询与写入逻辑。
  * 静态方法通过 __callStatic 转发到 Query 实例，支持链式调用。
  *
@@ -163,7 +165,7 @@ abstract class Model
    */
   public static function __callStatic(string $name, array $arguments)
   {
-    return call_user_func_array([(new static())->query, $name], $arguments);
+    return call_user_func_array([new static()->query, $name], $arguments);
   }
 
   /**
@@ -246,7 +248,8 @@ abstract class Model
     Model|string $relationModel,
     ?string      $foreignKey = null,
     ?string      $localKey = null,
-  ): RelationQuery {
+  ): RelationQuery
+  {
     return $this->_relation($relationModel, $foreignKey, $localKey);
   }
 
@@ -264,7 +267,8 @@ abstract class Model
     ?string      $foreignKey = null,
     ?string      $localKey = null,
     bool         $many = false
-  ): RelationQuery {
+  ): RelationQuery
+  {
     if (empty($localKey)) $localKey = $this->pk;
     if (empty($foreignKey)) $foreignKey = $this->table . '_' . $localKey;
     if (is_string($relationModel)) $relationModel = new $relationModel;
@@ -283,7 +287,8 @@ abstract class Model
     Model|string $relationModel,
     ?string      $foreignKey = null,
     ?string      $localKey = null,
-  ): RelationQuery {
+  ): RelationQuery
+  {
     return $this->_relation($relationModel, $foreignKey, $localKey, true);
   }
 }

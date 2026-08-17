@@ -55,6 +55,17 @@ class FakeChannel extends Channel
   #[Override]
   public function build(Options $options): Raw
   {
-    return new Raw('');
+    // 写入路径断言支持：将 options->data 平铺为位置绑定参数
+    // （单行为值列表，批量按行顺序展开），select 等无 data 路径不受影响
+    $bindings = [];
+    if (!empty($options->data)) {
+      $rows = (array_is_list($options->data) && isset($options->data[0]) && is_array($options->data[0]))
+        ? $options->data
+        : [$options->data];
+      foreach ($rows as $row) {
+        foreach ($row as $value) $bindings[] = $value;
+      }
+    }
+    return new Raw('', $bindings);
   }
 }

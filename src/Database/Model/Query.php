@@ -122,7 +122,6 @@ class Query extends BaseQuery
    *
    * @param bool $real 是否硬删除，仅启用软删除时有效
    * @return int|Raw 受影响的记录数或 Raw 对象
-   * @throws DbException 数据库操作失败时抛出
    */
   #[Override]
   public function delete(bool $real = false): int|Raw
@@ -159,7 +158,6 @@ class Query extends BaseQuery
    * @param int|string|array|null $id 要恢复记录的主键值，为空时需指定 where 条件
    * @return int|Raw 受影响的记录数或 Raw 对象，未启用软删除时返回 0
    * @throws RuntimeException 未启用软删除或未指定条件时抛出
-   * @throws DbException 数据库操作失败时抛出
    */
   public function restore(int|string|array|null $id = null): int|Raw
   {
@@ -249,6 +247,8 @@ class Query extends BaseQuery
    *
    * @param string $type 操作类型 insert|insertGetId|update|delete|select
    * @return Raw|string|array|int 查询结果
+   * @throws DbException
+   * @throws Throwable
    */
   #[Override]
   protected function runCrud(string $type): Raw|string|array|int
@@ -257,19 +257,23 @@ class Query extends BaseQuery
     $result = parent::runCrud($type);
     if ($result instanceof Raw) return $result;
     if ($type === 'select' && !empty($this->relations)) {
-      /** @noinspection PhpUnhandledExceptionInspection */
       $result = $this->queryRelationData($result);
     }
     return $result;
   }
 
   /**
-   * 根据 CRUD 类型注入模型业务逻辑：软删除过滤、时间戳自动写入、主键自动生成
+   * 根据 CRUD 类型注入模型业务逻辑：修改器、软删除过滤、时间戳自动写入、主键自动生成
    *
    * @param string $type 操作类型
    */
   private function handleCrud(string $type): void
   {
+    // 写入类操作先应用模型修改器（set{Field}Attr），再做时间戳/主键注入：
+    // 框架注入字段（create_time 等）不应经过用户修改器，用户数据的转换必须先行
+    if ($type === 'insert' || $type === 'insertGetId' || $type === 'update') {
+      $this->options->data = $this->applyMutators($this->options->data);
+    }
     switch ($type) {
       case 'select':
         // 排除已被软删除的数据
@@ -324,6 +328,58 @@ class Query extends BaseQuery
   }
 
   /**
+   * 对写入数据批量应用模型修改器，支持单行（关联数组）与批量（索引数组）两种形态
+   *
+   * @param array $data 待写入数据
+   * @return array 应用修改器后的数据
+   */
+  private function applyMutators(array $data): array
+  {
+    if (Arr::isIndexArray($data)) {
+      foreach ($data as &$row) {
+        $row = $this->applyRowMutators($row);
+      }
+    } else {
+      $data = $this->applyRowMutators($data);
+    }
+    return $data;
+  }
+
+  /**
+   * 对单行数据的每个字段应用修改器
+   *
+   * @param array<string,mixed> $row 单行数据
+   * @return array<string,mixed> 转换后的单行数据
+   */
+  private function applyRowMutators(array $row): array
+  {
+    foreach ($row as $key => $value) {
+      $row[$key] = $this->withSetAttr($key, $value);
+    }
+    return $row;
+  }
+
+  /**
+   * 应用模型修改器，将蛇形字段名转换为驼峰后查找对应的 set{Field}Attr 方法
+   *
+   * 与获取器（get{Field}Attr）对称：如 user_name 字段对应 setUserNameAttr()，
+   * 在写入（insert/insertGetId/update/create）前对字段值做转换（如密码哈希、
+   * JSON 序列化、金额单位换算等）。仅转换字段值，不改变字段名；无修改器时原值返回。
+   *
+   * @param string $key 字段名（蛇形）
+   * @param mixed $value 原始值
+   * @return mixed 转换后的值，无修改器时返回原值
+   */
+  public function withSetAttr(string $key, mixed $value): mixed
+  {
+    $camelKey = Str::snakeCaseToCamelCase($key);
+    if (method_exists($this->model, "set{$camelKey}Attr")) {
+      return call_user_func([$this->model, "set{$camelKey}Attr"], $value);
+    }
+    return $value;
+  }
+
+  /**
    * 使用协程并发查询关联数据并填充到主数据中
    *
    * 并发安全设计：各协程把查询结果写入独立槽位（$maps[关联名]），
@@ -332,7 +388,8 @@ class Query extends BaseQuery
    *
    * @param array $data 主表查询结果
    * @return array 填充关联数据后的结果
-   * @throws Throwable 关联查询异常时抛出
+   * @throws DbException
+   * @throws Throwable
    */
   protected function queryRelationData(array $data): array
   {
@@ -381,10 +438,47 @@ class Query extends BaseQuery
   }
 
   /**
+   * 创建一条数据并返回 DataSet
+   *
+   * @param array $data 关联数组数据
+   * @param array $columns 仅允许写入的列名，为空时不限制
+   * @return DataSet 包含写入数据（含主键）的 DataSet
+   * @throws InvalidArgumentException 数据非关联数组时抛出
+   */
+  public function create(array $data, array $columns = []): DataSet
+  {
+    if (!Arr::isAssociativeArray($data)) {
+      throw new InvalidArgumentException('Model::create() 输入数据必须是关联数组');
+    }
+    // 拿到只写入的列
+    $filteredData = empty($columns) ? $data : array_intersect_key($data, array_flip($columns));
+    // 写入数据并获取主键
+    $id = $this->insertGetId($filteredData);
+    // 返回值与实际写入保持一致：insertGetId 内部已对写入数据应用修改器，
+    // 此处同步应用后再补充主键，避免 DataSet 中的值与库中数据不一致
+    $data = $this->applyMutators($data);
+    $data[$this->pk] = $id;
+    return new DataSet($this->newQuery(), $data);
+  }
+
+  /**
+   * 创建全新的查询实例，基于当前模型的新实例
+   *
+   * @return static 新的查询实例
+   */
+  public function newQuery(): static
+  {
+    $class = get_class($this->model);
+    $model = new $class();
+    return $model->query;
+  }
+
+  /**
    * 非协程环境：串行查询所有关联数据
    *
    * @param array $data 主表查询结果
    * @return array 关联名 => 外键映射 的槽位集合
+   * @throws DbException
    */
   private function queryRelationsSerially(array $data): array
   {
@@ -423,38 +517,5 @@ class Query extends BaseQuery
       });
     }
     return $data;
-  }
-
-  /**
-   * 创建一条数据并返回 DataSet
-   *
-   * @param array $data 关联数组数据
-   * @param array $columns 仅允许写入的列名，为空时不限制
-   * @return DataSet 包含写入数据（含主键）的 DataSet
-   * @throws DbException 数据库操作失败时抛出
-   * @throws InvalidArgumentException 数据非关联数组时抛出
-   */
-  public function create(array $data, array $columns = []): DataSet
-  {
-    if (!Arr::isAssociativeArray($data)) {
-      throw new InvalidArgumentException('Model::create() 输入数据必须是关联数组');
-    }
-    // 拿到只写入的列
-    $filteredData = empty($columns) ? $data : array_intersect_key($data, array_flip($columns));
-    // 写入数据并获取主键
-    $data[$this->pk] = $this->insertGetId($filteredData);
-    return new DataSet($this->newQuery(), $data);
-  }
-
-  /**
-   * 创建全新的查询实例，基于当前模型的新实例
-   *
-   * @return static 新的查询实例
-   */
-  public function newQuery(): static
-  {
-    $class = get_class($this->model);
-    $model = new $class();
-    return $model->query;
   }
 }
