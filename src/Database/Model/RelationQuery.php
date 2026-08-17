@@ -11,14 +11,16 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Model;
 
+use InvalidArgumentException;
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model;
+use Viswoole\Database\Raw;
 
 /**
  * 关联查询
@@ -28,6 +30,7 @@ use Viswoole\Database\Model;
  *
  * @see Model::hasOne()
  * @see Model::hasMany()
+ * @see BelongsToMany
  */
 class RelationQuery
 {
@@ -45,9 +48,7 @@ class RelationQuery
     protected string $foreignKey,
     protected string $localKey,
     protected bool   $many = false
-  )
-  {
-  }
+  ) {}
 
   /**
    * 查询关联数据并构建外键值到关联结果的映射
@@ -58,11 +59,10 @@ class RelationQuery
    * 避免协程间相互覆盖已填充的关联字段。
    *
    * @param array $data 主表查询结果（仅读取其中的 localKey 列）
-   * @param string $name 关联名称（仅用于异常信息，不再作为填充键名）
    * @return array<mixed,DataSet|Collection> 外键值 => 关联数据（一对一为 DataSet，一对多为 Collection）
    * @throws DbException 数据库操作失败时抛出
    */
-  public function query(array $data, string $name): array
+  public function query(array $data): array
   {
     $keys = array_column($data, $this->localKey);
     // 过滤 null 并去重：null 参与 IN 永假且占位，重复外键导致无谓的巨型 IN 列表
@@ -82,7 +82,8 @@ class RelationQuery
       $key = $row[$this->foreignKey];
       if ($this->many) {
         $row = new DataSet(
-          $this->relationModel->query->newQuery(), $row
+          $this->relationModel->query->newQuery(),
+          $row
         );
         if (array_key_exists($key, $keyMapData)) {
           /**
@@ -94,12 +95,12 @@ class RelationQuery
           $collection = new Collection($this->relationModel->query, [$row]);
           $keyMapData[$key] = $collection;
         }
-
       } else {
         // 如果是一对一关联，则只保留一条数据，多余数据丢弃
         if (array_key_exists($key, $keyMapData)) continue;
         $keyMapData[$key] = new DataSet(
-          $this->relationModel->query->newQuery(), $row
+          $this->relationModel->query->newQuery(),
+          $row
         );
       }
     }
@@ -116,6 +117,85 @@ class RelationQuery
   {
     $this->handle = $handle;
     return $this;
+  }
+
+  /**
+   * 新增一条关联数据（自动绑定外键）
+   *
+   * 将主表键值强制写入关联表外键列后落库，其余逻辑与 Query::create 一致
+   * （列白名单过滤、修改器应用、返回含主键的 DataSet）。
+   * 外键由框架写入，调用方传入的同名字段会被覆盖，防止越权绑定。
+   * ```
+   * // 为 1 号用户新增文章（user_id 自动写入 1）
+   * (new UserModel())->articles()->create(1, ['title' => '标题']);
+   * // $parent 也可直接传主表行数据集
+   * $user = UserModel::find(1);
+   * (new UserModel())->articles()->create($user, ['title' => '标题']);
+   * ```
+   *
+   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param array $data 关联表数据（关联数组）
+   * @param array $columns 仅允许写入的列名，为空时不限制
+   * @return DataSet 含主键的写入结果
+   * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   */
+  public function create(int|string|DataSet $parent, array $data, array $columns = []): DataSet
+  {
+    // 先按白名单过滤，再强制写入外键：外键由框架持有，
+    // 必须在过滤之后写入，否则会被白名单意外滤掉导致关联悬空
+    if (!empty($columns)) {
+      $data = array_intersect_key($data, array_flip($columns));
+    }
+    $data[$this->foreignKey] = $this->resolveParentKey($parent);
+    return $this->relationModel->query->create($data);
+  }
+
+  /**
+   * 解析主表键值
+   *
+   * 统一处理标量键值与主表行数据集两种父级入参形态，
+   * 供关联写入（create/delete/attach/detach）复用。
+   *
+   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @return int|string 主表键值
+   * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   */
+  protected function resolveParentKey(int|string|DataSet $parent): int|string
+  {
+    if ($parent instanceof DataSet) {
+      $key = $parent[$this->localKey] ?? null;
+      if ($key === null) {
+        throw new InvalidArgumentException(
+          '主表数据集中缺少关联键(' . $this->localKey . ')，无法执行关联写入'
+        );
+      }
+      return $key;
+    }
+    return $parent;
+  }
+
+  /**
+   * 删除全部关联数据（按外键匹配）
+   *
+   * 一对一与一对多行为一致：删除外键等于主表键值的所有关联行；
+   * 关联模型启用软删除时默认软删除，传 $real = true 强制硬删除。
+   * ```
+   * // 删除 1 号用户的全部文章
+   * (new UserModel())->articles()->delete(1);
+   * // 硬删除（跳过软删除）
+   * (new UserModel())->articles()->delete(1, true);
+   * ```
+   *
+   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param bool $real 是否硬删除，仅关联模型启用软删除时有效
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   */
+  public function delete(int|string|DataSet $parent, bool $real = false): int|Raw
+  {
+    return $this->relationModel->query
+      ->where($this->foreignKey, '=', $this->resolveParentKey($parent))
+      ->delete($real);
   }
 
   /**

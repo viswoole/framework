@@ -421,7 +421,7 @@ class Query extends BaseQuery
       // $data 按值捕获（协程内不修改主数据），结果仅写入自己的槽位
       Coroutine::create(function () use ($wg, $name, $relation, $data, &$maps, &$throw) {
         try {
-          $maps[$name] = $relation->query($data, $name);
+          $maps[$name] = $relation->query($data);
         } catch (Throwable $e) {
           // 捕获一切异常并记录
           $throw = $e;
@@ -484,7 +484,7 @@ class Query extends BaseQuery
   {
     $maps = [];
     foreach ($this->relations as $name => $relation) {
-      $maps[$name] = $relation->query($data, $name);
+      $maps[$name] = $relation->query($data);
     }
     return $maps;
   }

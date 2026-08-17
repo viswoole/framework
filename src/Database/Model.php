@@ -19,6 +19,7 @@ namespace Viswoole\Database;
 
 use Generator;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Model\BelongsToMany;
 use Viswoole\Database\Model\Query;
 use Viswoole\Database\Model\RelationQuery;
 use Viswoole\Database\Query\RunInfo;
@@ -129,32 +130,6 @@ abstract class Model
   protected ?string $channelName = null;
   /** @var bool 是否自动生成主键值并写入 */
   protected bool $autoWritePk = false;
-
-  public function __construct()
-  {
-    if (!isset($this->table)) {
-      // 获取类名，不包含命名空间
-      $className = substr(strrchr(get_called_class(), "\\"), 1);
-      // 去除类名中的尾部的 "Model" 字符
-      $className = preg_replace('/' . preg_quote($this->suffix, '/') . '$/', '', $className);
-      // 转换为蛇形命名
-      $className = strtolower(preg_replace('/([a-z])([A-Z])/', '$1_$2', $className));
-      $this->table = $className;
-    }
-    $this->query = $this->createQuery();
-  }
-
-  /**
-   * 创建模型查询构造器实例
-   *
-   * 子类可重写此方法以使用自定义的 Query 类。
-   *
-   * @return Query 模型查询构造器
-   */
-  protected function createQuery(): Query
-  {
-    return new Query($this);
-  }
 
   /**
    * 将静态方法调用转发到 Query 实例，实现 Model::where() 等链式调用
@@ -290,5 +265,112 @@ abstract class Model
   ): RelationQuery
   {
     return $this->_relation($relationModel, $foreignKey, $localKey, true);
+  }
+
+  /**
+   * 定义多对多关联关系
+   *
+   * 通过中间表关联两个模型，例如用户与角色：
+   * ```
+   * // 默认推断：中间表 users_roles，外键 users_id / roles_id
+   * return $this->belongsToMany(RoleModel::class);
+   * // 指定中间表与外键（中间表直接传表名）
+   * return $this->belongsToMany(RoleModel::class, 'role_user', 'user_id', 'role_id');
+   * // 中间表传模型实例
+   * return $this->belongsToMany(RoleModel::class, RoleUserModel::class, 'user_id', 'role_id');
+   * ```
+   * 关联查询结果为 Collection，每条数据附带 pivot 键保存对应的中间表行数据
+   * （可读取绑定时间等扩展字段）；with() 闭包条件作用于关联模型的查询。
+   * 写入支持：attach() 新增绑定、detach() 解除绑定、sync() 多退少补同步绑定、
+   * wherePivot() 过滤绑定条件。
+   * 推断规则与 hasOne/hasMany 保持一致：外键名为"{表名}_{关联键}"，
+   * 中间表名默认推断为"{当前表名}_{关联表名}"。
+   *
+   * @param Model|string $relationModel 关联模型类名或实例
+   * @param Model|string|null $pivot 中间表模型类名、实例或表名，为 null 时按表名推断
+   * @param string|null $foreignPivotKey 中间表中指向当前模型的外键名，为空时自动推断
+   * @param string|null $relatedPivotKey 中间表中指向关联模型的外键名，为空时自动推断
+   * @param string|null $localKey 当前模型的关联键名，为空时使用 $pk 属性值
+   * @param string|null $relatedKey 关联模型的关联键名，为空时使用关联模型 $pk 属性值
+   * @return BelongsToMany 多对多关联查询实例
+   */
+  protected function belongsToMany(
+    Model|string $relationModel,
+    Model|string|null $pivot = null,
+    ?string $foreignPivotKey = null,
+    ?string $relatedPivotKey = null,
+    ?string $localKey = null,
+    ?string $relatedKey = null
+  ): BelongsToMany
+  {
+    if (is_string($relationModel)) $relationModel = new $relationModel;
+    if (empty($localKey)) $localKey = $this->pk;
+    if (empty($relatedKey)) $relatedKey = $relationModel->pk;
+    if (empty($foreignPivotKey)) $foreignPivotKey = $this->table . '_' . $localKey;
+    if (empty($relatedPivotKey)) $relatedPivotKey = $relationModel->table . '_' . $relatedKey;
+    // 中间表：模型实例直接复用；字符串为已存在的类时实例化，否则视为表名创建匿名模型
+    $pivotModel = match (true) {
+      $pivot instanceof Model => $pivot,
+      is_string($pivot) && class_exists($pivot) => new $pivot(),
+      default => $this->createPivotModel(
+        $pivot ?? $this->table . '_' . $relationModel->table, $this->channelName
+      ),
+    };
+    return new BelongsToMany(
+      $relationModel, $pivotModel, $foreignPivotKey, $relatedPivotKey, $localKey, $relatedKey
+    );
+  }
+
+  /**
+   * 按表名动态创建中间表模型实例
+   *
+   * 中间表通常无业务语义，为其定义实体模型反而增加维护成本，
+   * 因此直接以匿名模型承载表名，并继承当前模型的数据库通道配置。
+   *
+   * @param string $table 中间表名
+   * @param string|null $channelName 数据库通道名，与当前模型保持一致
+   * @return Model 匿名中间表模型实例
+   */
+  private static function createPivotModel(string $table, ?string $channelName): Model
+  {
+    return new class($table, $channelName) extends Model {
+      /**
+       * @param string $table 中间表名
+       * @param string|null $channelName 数据库通道名
+       */
+      public function __construct(string $table, ?string $channelName)
+      {
+        // 先于父类构造赋值，跳过基于类名的表名推断
+        $this->table = $table;
+        $this->channelName = $channelName;
+        parent::__construct();
+      }
+    };
+  }
+
+  public function __construct()
+  {
+    if (!isset($this->table)) {
+      // 获取类名，不包含命名空间
+      $className = substr(strrchr(get_called_class(), "\\"), 1);
+      // 去除类名中的尾部的 "Model" 字符
+      $className = preg_replace('/' . preg_quote($this->suffix, '/') . '$/', '', $className);
+      // 转换为蛇形命名
+      $className = strtolower(preg_replace('/([a-z])([A-Z])/', '$1_$2', $className));
+      $this->table = $className;
+    }
+    $this->query = $this->createQuery();
+  }
+
+  /**
+   * 创建模型查询构造器实例
+   *
+   * 子类可重写此方法以使用自定义的 Query 类。
+   *
+   * @return Query 模型查询构造器
+   */
+  protected function createQuery(): Query
+  {
+    return new Query($this);
   }
 }
