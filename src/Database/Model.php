@@ -55,7 +55,7 @@ use Viswoole\Database\Query\RunInfo;
  * @method static string getTableName() 获取表名。
  * @method static Query with(array|string $relation) 关联查询。
  * @method static Query withoutColumns(string $column) 排除字段
- * @method static Query cache(string $key, int $expiry = 0, null|string $tag = null) 自动写入缓存
+ * @method static Query cache(string $key, int $expire = 0, null|string $tag = null) 自动写入缓存
  * @method static Query lockForUpdate() 锁定记录以进行更新。
  * @method static Query sharedLock() 共享锁定记录。
  * @method static Query toRaw() 返回Raw对象，不执行查询

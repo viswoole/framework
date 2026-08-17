@@ -35,7 +35,7 @@ use Viswoole\Database\Raw;
 class SqlBuilder
 {
   /**
-   * @var array<string,array{columns:string[]}> 各驱动对应的标识符包裹符号
+   * @var array<string,array{left:string,right:string}> 各驱动对应的标识符包裹符号
    */
   const array TAG = [
     DriverType::MYSQL->name => [
@@ -120,7 +120,7 @@ class SqlBuilder
       ? array_keys(reset($this->options->data))
       : array_keys($this->options->data);
     if (Arr::isIndexArray($this->options->data)) {
-      // 批量写入：校验各行字段集合一致，避免以首行为准时静默丢弃后续行的多余字段
+      // 批量写入：校验各行字段集合一致，避免以首行为准，静默丢弃后续行的多余字段
       foreach ($this->options->data as $index => $item) {
         $rowKeys = array_keys($item);
         if (array_diff($rowKeys, $keys) || array_diff($keys, $rowKeys)) {
@@ -279,7 +279,7 @@ class SqlBuilder
   {
     $table = $this->quote($this->options->table);
     $sql = [];
-    // SELECT 和 FROM 子句
+    // UPDATE 子句
     $sql[] = "UPDATE $table SET";
     // 数据
     $sql[] = $this->parseUpdateData();
@@ -455,7 +455,7 @@ class SqlBuilder
   {
     $table = $this->quote($this->options->table);
     $sql = [];
-    // SELECT 和 FROM 子句
+    // DELETE FROM 子句
     $sql[] = "DELETE FROM $table";
     // WHERE 子句
     $sql[] = $this->parseWhere();

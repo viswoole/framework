@@ -62,8 +62,7 @@ class PDOPool extends ConnectionPool
   /**
    * 获取数据库连接
    *
-   * @param float $timeout 超时时间
-   * @return PDOProxy
+   * @inheritDoc
    */
   public function pop(float $timeout = -1): PDOProxy
   {

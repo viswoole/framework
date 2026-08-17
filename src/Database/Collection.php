@@ -42,7 +42,7 @@ class Collection extends BaseCollection
   public function __construct(protected BaseQuery|Query $query, array $data)
   {
     /**
-     * 遍历数据集，将每个元素转换为Row对象
+     * 遍历数据集，将每个元素转换为DataSet对象
      */
     array_walk($data, function (&$item) {
       $item = is_array($item) ? new DataSet($this->query->newQuery(), $item) : $item;
@@ -271,7 +271,7 @@ class Collection extends BaseCollection
       parent::append($value);
     } else {
       if (!is_array($value)) {
-        throw new InvalidArgumentException('Value must be an array or Row object.');
+        throw new InvalidArgumentException('Value must be an array or DataSet object.');
       }
       $query = $this->query->newQuery();
       if ($autoWrite) {
@@ -292,7 +292,8 @@ class Collection extends BaseCollection
    * @throws RuntimeException 缺少主键字段时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  #[Override] public function delete(bool $real = false): int
+  #[Override]
+  public function delete(bool $real = false): int
   {
     $pk = $this->query->getPrimaryKey();
     $pkList = $this->getPks($pk);

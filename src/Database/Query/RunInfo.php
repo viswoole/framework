@@ -29,7 +29,7 @@ readonly class RunInfo
    */
   public Raw $sql;
   /**
-   * @var bool|array{tag:string,expire:int,expiry:int} 缓存策略，false 表示未启用缓存
+   * @var bool|array{tag:string,expire:int} 缓存策略，false 表示未启用缓存
    */
   public bool|array $cache;
   /**
