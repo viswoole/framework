@@ -65,7 +65,6 @@ class HttpException extends RuntimeException
 
   /**
    * 获取响应头
-   * @access public
    * @return array
    */
   public function getHeaders(): array

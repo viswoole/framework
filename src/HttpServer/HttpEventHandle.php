@@ -88,7 +88,7 @@ class HttpEventHandle
       if ($result instanceof ResponseInterface) {
         $result->send();
       } elseif (is_array($result) || is_object($result)) {
-        // 返回的不是response对象 则对返回的参数进行json格式化。
+        // 返回的不是 Response 对象，则对返回的参数进行 JSON 格式化。
         $psr7Response->json($result)->send();
       } else {
         $psr7Response->send((string)$result);

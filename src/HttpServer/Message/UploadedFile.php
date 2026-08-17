@@ -20,7 +20,7 @@ use InvalidArgumentException;
 use RuntimeException;
 
 /**
- * 客户端上传文件的价值对象
+ * 客户端上传文件的值对象
  *
  * 封装 Swoole 上传文件信息，提供文件流获取、文件移动、
  * 错误码查询等能力，移动后不可再获取流。

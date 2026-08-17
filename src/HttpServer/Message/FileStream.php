@@ -105,7 +105,6 @@ class FileStream
   public function getSize(): ?int
   {
     if (!is_resource($this->stream)) return null;
-    // 获取流的大小（字节数）
     return fstat($this->stream)['size'];
   }
 
@@ -120,7 +119,6 @@ class FileStream
     if (!is_resource($this->stream)) {
       throw new RuntimeException('FileStream is not a resource.');
     }
-    // 返回当前流的读/写指针位置
     return ftell($this->stream);
   }
 
@@ -134,7 +132,6 @@ class FileStream
     if (!is_resource($this->stream)) {
       return true;
     }
-    // 检查是否已到达流的末尾
     return feof($this->stream);
   }
 
@@ -161,7 +158,6 @@ class FileStream
     if (!$this->isSeekable()) {
       throw new RuntimeException('FileStream is not seekable.');
     }
-    // 将读/写指针移动到流中的指定位置
     fseek($this->stream, $offset, $whence);
   }
 
@@ -172,7 +168,6 @@ class FileStream
    */
   public function isSeekable(): bool
   {
-    // 检查流是否支持随机访问（seek）
     return is_resource($this->stream) && stream_get_meta_data($this->stream)['seekable'];
   }
 
@@ -188,7 +183,6 @@ class FileStream
     if (!$this->isWritable()) {
       throw new RuntimeException('FileStream is not writable.');
     }
-    // 向流中写入数据，并返回写入的字节数
     return fwrite($this->stream, $string);
   }
 
@@ -218,7 +212,6 @@ class FileStream
     if (!$this->isReadable()) {
       throw new RuntimeException('FileStream is not readable.');
     }
-    // 从流中读取指定长度的数据
     return fread($this->stream, $length);
   }
 
@@ -247,7 +240,6 @@ class FileStream
     if (!$this->isReadable()) {
       throw new RuntimeException('FileStream is not readable.');
     }
-    // 读取整个流的内容并返回
     return stream_get_contents($this->stream, -1, 0);
   }
 
@@ -259,7 +251,6 @@ class FileStream
    */
   public function getMetadata(?string $key = null): mixed
   {
-    // 获取流的元数据信息，可以传递一个键来获取特定的元数据
     $metadata = stream_get_meta_data($this->stream);
     if ($key === null) {
       return $metadata;

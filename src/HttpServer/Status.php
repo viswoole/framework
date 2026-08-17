@@ -28,7 +28,7 @@ final class Status
   /** 服务器已经理解了客户端的请求，并将通过Upgrade消息头通知客户端采用不同的协议来完成。 */
   public const int SWITCHING_PROTOCOLS = 101;
 
-  /** 服务器正在处理请求，并且有一个稍后地响应。 */
+  /** 服务器正在处理请求，并且有一个稍后的响应。 */
   public const int PROCESSING = 102;
 
   /** 请求成功，内容已被返回。 */
@@ -124,7 +124,7 @@ final class Status
   /** 缺少Content-Length头部。 */
   public const int LENGTH_REQUIRED = 411;
 
-  /** 请求头中指定的前提条件被服务器评估为false。 */
+  /** 请求头中指定的前提条件被服务器评估为 false。 */
   public const int PRECONDITION_FAILED = 412;
 
   /** 请求体过大。 */
@@ -193,16 +193,16 @@ final class Status
   /** 服务器有一个内部配置错误，导致处理请求时发生递归。 */
   public const int VARIANT_ALSO_NEGOTIATES = 506;
 
-  /** 存储空间不足 */
+  /** 存储空间不足。 */
   public const int INSUFFICIENT_STORAGE = 507;
 
-  /** 服务器进入死循环 */
+  /** 服务器进入死循环。 */
   public const int LOOP_DETECTED = 508;
 
   /** 未扩展。 */
   public const int NOT_EXTENDED = 510;
 
-  /** 需要网络身份认证 */
+  /** 需要网络身份认证。 */
   public const int NETWORK_AUTHENTICATION_REQUIRED = 511;
 
   public const array REASON_PHRASES = [

@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\HttpServer\Contract;
 
@@ -88,7 +88,6 @@ interface ResponseInterface
   /**
    * 设置响应头
    *
-   * @access public
    * @see header
    */
   public function setHeader(string $key, string $value, bool $format = true): ResponseInterface;
@@ -96,9 +95,8 @@ interface ResponseInterface
   /**
    * 将 Header 信息附加到 HTTP 响应的末尾，仅在 HTTP2 中可用，用于消息完整性检查，数字签名等。
    *
-   * 重复设置相同地标头只会取最后一次，需要在end方法调用之前，调用该方法才有效。
+   * 重复设置相同的标头只会取最后一次，需要在 end 方法调用之前，调用该方法才有效。
    *
-   * @access public
    * @param string $key HTTP 头的 Key 必须遵循HTTP约定
    * @param string $value HTTP 头的 value 必须遵循HTTP约定
    * @return bool
@@ -136,7 +134,6 @@ interface ResponseInterface
   /**
    * 发送响应
    *
-   * @access public
    * @see end
    */
   public function send(?string $content = null): bool;
@@ -161,9 +158,8 @@ interface ResponseInterface
   ): ResponseInterface;
 
   /**
-   * 任意格式的json响应
+   * 任意格式的 JSON 响应
    *
-   * @access public
    * @param mixed $data 任意可序列的数据
    * @return ResponseInterface
    */
@@ -212,7 +208,6 @@ interface ResponseInterface
   /**
    * rawCookie() 的参数和上文的 setCookie() 一致，只不过不进行编码处理
    *
-   * @access public
    * @param string $key
    * @param string $value
    * @param int $expire
@@ -242,7 +237,6 @@ interface ResponseInterface
    * 使用此方法后，$response 对象销毁时不会自动 end。
    * 与 Response::create 和 Server::send 配合使用。
    *
-   * @access public
    * @return ResponseInterface
    * @link https://wiki.swoole.com/zh-cn/#/http_server?id=detach
    */
@@ -259,7 +253,6 @@ interface ResponseInterface
   /**
    * 设置Cookie信息
    *
-   * @access public
    * @param string $key cookie名称
    * @param string $value cookie值
    * @param int $expire 过期时间

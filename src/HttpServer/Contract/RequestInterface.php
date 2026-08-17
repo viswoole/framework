@@ -164,7 +164,7 @@ interface RequestInterface
   ): array;
 
   /**
-   * 获取单个请求参数，自动合并 GET 与 POST，支持过滤器
+   * 获取单个请求参数，自动根据请求方法选择 GET 或 POST，支持过滤器
    *
    * @param string|null $key 参数名，null 时返回全部参数
    * @param mixed $default 参数不存在时的默认值
@@ -180,8 +180,7 @@ interface RequestInterface
   /**
    * 获取基本身份验证票据
    *
-   * @access public
-   * @return array|null AssociativeArray(username,password)
+   * @return array|null 关联数组（username、password）
    */
   public function getBasicAuthCredentials(): ?array;
 
@@ -195,7 +194,6 @@ interface RequestInterface
   /**
    * 当前请求的资源类型
    *
-   * @access public
    * @return string
    */
   public function getAcceptType(): string;
@@ -217,7 +215,6 @@ interface RequestInterface
   /**
    * 获取消息的请求目标。
    *
-   * @access public
    * @return string
    */
   public function getPath(): string;
@@ -232,7 +229,6 @@ interface RequestInterface
   /**
    * 判断是否https访问
    *
-   * @access public
    * @return bool
    */
   public function https(): bool;
@@ -240,7 +236,6 @@ interface RequestInterface
   /**
    * 通过给定的不区分大小写的名称检查标头是否存在。
    *
-   * @access public
    * @param string $key
    * @return bool 如果任何标头名称使用不区分大小写的字符串比较与给定的标头名称匹配，则返回true。如果消息中没有找到匹配的标头名称，则返回false。
    */
