@@ -75,10 +75,10 @@ class File extends Drive
       $nextMidnight = strtotime('tomorrow');
       $secondsUntilMidnight = $nextMidnight - $now;
       $tickId = null;
-      // 启动Swoole定时器，在距离午夜的秒数之后执行 deleteExpiredLogs 方法
+      // 启动 Swoole 定时器，在距离午夜的秒数之后执行 clearExpireLog 方法
       $afterId = Timer::after($secondsUntilMidnight * 1000, function () use (&$tickId) {
         $this->clearExpireLog();
-        // 之后每隔一天（86400 秒）再次执行 deleteExpiredLogs 方法
+        // 之后每隔一天（86400 秒）再次执行 clearExpireLog 方法
         $tickId = Timer::tick(86400 * 1000, function () {
           $this->clearExpireLog();
         });
@@ -113,7 +113,7 @@ class File extends Drive
       if (!preg_match('/^\d{8}$/', $dirName)) continue;
       // 目录名则是日期
       $date = (int)$dirName;
-      // 如果当前日期减去目录日期 大于最大存储的过期天数 则删除日志
+      // 如果当前日期减去目录日期大于最大存储的过期天数，则删除日志
       if ($currentDate - $date > $days) $this->rmdir($dateDir, $level);
     }
   }
@@ -161,7 +161,7 @@ class File extends Drive
       $level = $logRecord['level'];
       // 格式化日期
       $logRecord['timestamp'] = date($this->dateFormat, $logRecord['timestamp']);
-      // 如果以json格式存储则直接转为json字符串
+      // 如果以 JSON 格式存储则直接转为 JSON 字符串
       $logString = $this->json
         ? json_encode($logRecord, $this->json_flags)
         : LogManager::formatLogDataToString($this->logFormat, $logRecord);

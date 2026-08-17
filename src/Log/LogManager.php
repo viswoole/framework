@@ -39,11 +39,11 @@ use Viswoole\Log\Exception\LogException;
  * @method void warning(string|Stringable $message, array $context = []) 记录非错误的异常情况
  * @method void info(string|Stringable $message, array $context = []) 记录普通业务信息
  * @method void debug(string|Stringable $message, array $context = []) 记录详细调试信息
- * @method void sql(string|Stringable $message, array $context = []) 记录SQL执行日志
+ * @method void sql(string|Stringable $message, array $context = []) 记录 SQL 执行日志
  * @method void task(string|Stringable $message, array $context = []) 记录异步任务日志
- * @method void write(Stringable|string $message, array $context = [], string $level = 'info') 绕过缓存直接写入日志
- * @method bool save(array $logRecords) 批量保存日志（协程结束时自动调用，一般无需手动调用）
- * @method bool clearRecord() 清除当前协程缓存的日志
+ * @method void write(string $level, Stringable|string $message, array $context = []) 绕过缓存直接写入日志
+ * @method void save(array $logRecords) 批量保存日志（协程结束时自动调用，一般无需手动调用）
+ * @method void clearRecord() 清除当前协程缓存的日志
  * @method array getRecord() 获取当前协程缓存的日志
  */
 class LogManager
@@ -61,7 +61,7 @@ class LogManager
    */
   private string $defaultChannel;
   /**
-   * @var array<string,string> 日志级别到通道名的映射，用于按级别路由日志
+   * @var array<string,string|string[]> 日志级别到通道名的映射，用于按级别路由日志
    */
   private array $type_channel;
   /**
@@ -185,7 +185,7 @@ class LogManager
    * 支持两种格式：占位符格式（如 %timestamp、%level）和 sprintf 格式。
    * 占位符格式按规则中出现的字段顺序替换；无占位符时回退到 vsprintf。
    *
-   * @param string $formatRule 格式化规则，占位符格式示例: [%timestamp][%level] %message : %context -in %source
+   * @param string $formatRule 格式化规则，占位符格式示例: [%timestamp][%level]: %message %context in %source
    * @param array{timestamp:int,level:string,message:string,context:array,source:string} $logData 日志数据
    * @return string 格式化后的日志字符串
    */

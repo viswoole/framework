@@ -30,12 +30,12 @@ use Viswoole\Log\LogManager;
  * @method static void warning(string|Stringable $message, array $context = []) 记录非错误的异常情况
  * @method static void info(string|Stringable $message, array $context = []) 记录普通业务信息
  * @method static void debug(string|Stringable $message, array $context = []) 记录详细调试信息
- * @method static void sql(string|Stringable $message, array $context = []) 记录SQL执行日志
+ * @method static void sql(string|Stringable $message, array $context = []) 记录 SQL 执行日志
  * @method static void task(string|Stringable $message, array $context = []) 记录异步任务日志
  * @method static void write(string $level, Stringable|string $message, array $context = []) 绕过缓存直接写入日志
  * @method static void record(string $level, Stringable|string $message, array $context = []) 缓存日志，协程结束时批量写入
- * @method static bool save(array $logRecords) 批量保存日志（协程结束时自动调用）
- * @method static bool clearRecord() 清除当前协程缓存的日志
+ * @method static void save(array $logRecords) 批量保存日志（协程结束时自动调用）
+ * @method static void clearRecord() 清除当前协程缓存的日志
  * @method static array getRecord() 获取当前协程缓存的日志
  * @method static DriveInterface channel(string $name) 获取指定通道的驱动实例
  * @method static bool hasChannel(string $name) 判断指定通道是否已注册
