@@ -141,6 +141,8 @@ class PDOChannel extends Channel
       $config['host'] = $host;
     }
     $pdoConfig = new PDOConfig(...$config);
+    // 池容量无需另行传参：$config 已含 pool_max_size / pool_fill_size（见构造器 compact），
+    // PDOPool 构造时自行从 PDOConfig 取出传给父类连接池；此处多传参数会被静默忽略
     return new PDOPool($pdoConfig);
   }
 

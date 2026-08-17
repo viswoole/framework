@@ -37,13 +37,18 @@ use Viswoole\Core\Coroutine;
 class Redis extends Driver
 {
   /**
-   * @var array<string,array{scene:string,secretKey:string,autoUnlock:bool}> 当前持有锁的列表
+   * 协程上下文键：当前协程持有的连接实例
+   *
+   * 驱动为全局单例，连接必须按协程隔离：并发协程共用一条连接会导致
+   * Redis 协议读写错乱（请求串包/挂死），故存协程上下文而非实例属性
    */
-  private array $lockList = [];
+  private const string CONTEXT_CONNECTION_KEY = 'cache.redis.connection';
   /**
-   * @var \Redis 当前协程持有的 Redis 连接实例
+   * 协程上下文键：当前协程持有的锁列表
+   *
+   * 与连接同理，锁的持有记录必须按协程隔离，否则并发协程会误释放彼此的锁
    */
-  private \Redis $redis;
+  private const string CONTEXT_LOCK_LIST_KEY = 'cache.redis.lock_list';
   /**
    * @var RedisPool Redis 连接池，负责协程间连接的借出与归还
    */
@@ -119,17 +124,76 @@ class Redis extends Driver
   /**
    * 从连接池获取或复用当前协程的 Redis 连接实例
    *
-   * 首次调用时从连接池借出连接并缓存到当前实例，后续调用直接复用。
+   * 连接按协程隔离存储于协程上下文；首次借出时注册 defer 回调，
+   * 协程结束（含异常退出）自动归还连接，杜绝借出未还导致的连接滞留。
    *
    * @return \Redis Redis 连接实例
    * @throws RedisException 连接失败时抛出
    */
   #[Override] public function connect(): \Redis
   {
-    if (!isset($this->redis)) {
-      $this->redis = $this->pool->pop();
+    $context = Coroutine::getContext();
+    if (!isset($context[self::CONTEXT_CONNECTION_KEY])) {
+      $redis = $this->pool->pop();
+      $context[self::CONTEXT_CONNECTION_KEY] = $redis;
+      if (Coroutine::isCoroutine()) {
+        Coroutine::defer(function () use ($redis): void {
+          $this->releaseConnection($redis);
+        });
+      }
     }
-    return $this->redis;
+    return $context[self::CONTEXT_CONNECTION_KEY];
+  }
+
+  /**
+   * 幂等归还连接：仅当上下文中仍是该连接时才归还
+   *
+   * close() 手动归还与 defer 自动归还并发触发时，后到者因上下文键
+   * 已被清除而跳过，防止同一连接被重复 put 造成一连接多持有。
+   *
+   * @param \Redis $redis 待归还的连接实例
+   */
+  private function releaseConnection(\Redis $redis): void
+  {
+    $context = Coroutine::getContext();
+    if (($context[self::CONTEXT_CONNECTION_KEY] ?? null) === $redis) {
+      unset($context[self::CONTEXT_CONNECTION_KEY]);
+      $this->pool->put($redis);
+    }
+  }
+
+  /**
+   * 读取当前协程的锁持有列表
+   *
+   * @return array<string,array{scene:string,secretKey:string,autoUnlock:bool}>
+   */
+  private function getLockList(): array
+  {
+    return Coroutine::getContext()[self::CONTEXT_LOCK_LIST_KEY] ?? [];
+  }
+
+  /**
+   * 记录当前协程持有的锁
+   *
+   * @param string $lockId 锁ID
+   * @param array{scene:string,secretKey:string,autoUnlock:bool} $lockInfo 锁信息
+   */
+  private function addLock(string $lockId, array $lockInfo): void
+  {
+    Coroutine::getContext()[self::CONTEXT_LOCK_LIST_KEY][$lockId] = $lockInfo;
+  }
+
+  /**
+   * 移除当前协程已释放的锁记录
+   *
+   * @param string $lockId 锁ID
+   */
+  private function removeLock(string $lockId): void
+  {
+    $context = Coroutine::getContext();
+    if (isset($context[self::CONTEXT_LOCK_LIST_KEY][$lockId])) {
+      unset($context[self::CONTEXT_LOCK_LIST_KEY][$lockId]);
+    }
   }
 
   /**
@@ -241,12 +305,12 @@ class Redis extends Driver
       // 设置锁/取锁
       $result = $this->connect()->set($key, $lockId, ['NX', 'EX' => $expire]);
       if ($result) {
-        // 加入到锁列表中
-        $this->lockList[$lockId] = [
+        // 加入到当前协程的锁列表中
+        $this->addLock($lockId, [
           'scene' => $scene,
           'secretKey' => $lockId,
           'autoUnlock' => $autoUnlock
-        ];
+        ]);
         // 取锁成功跳出循环
         break;
       }
@@ -307,7 +371,8 @@ class Redis extends Driver
    */
   #[Override] public function close(): void
   {
-    foreach ($this->lockList as $lockId => $lockInfo) {
+    // 释放当前协程 autoUnlock 的锁（须在归还连接前执行，unlock 依赖连接）
+    foreach ($this->getLockList() as $lockId => $lockInfo) {
       if ($lockInfo['autoUnlock']) {
         try {
           $this->unlock($lockId);
@@ -315,9 +380,9 @@ class Redis extends Driver
         }
       }
     }
-    if (isset($this->redis)) {
-      $this->pool->put($this->redis);
-      unset($this->redis);
+    $redis = Coroutine::getContext()[self::CONTEXT_CONNECTION_KEY] ?? null;
+    if ($redis instanceof \Redis) {
+      $this->releaseConnection($redis);
     }
   }
 
@@ -327,9 +392,9 @@ class Redis extends Driver
    */
   #[Override] public function unlock(string $id): bool
   {
-    if (empty($this->lockList)) return false;
-    if (!isset($this->lockList[$id])) return false;
-    $lockInfo = $this->lockList[$id];
+    $lockList = $this->getLockList();
+    if (!isset($lockList[$id])) return false;
+    $lockInfo = $lockList[$id];
     $scene = $this->getLockKey($lockInfo['scene']);
     $script = <<<LUA
                 local key=KEYS[1]
@@ -341,7 +406,7 @@ class Redis extends Driver
                 LUA;
     $value = $lockInfo['secretKey'];
     $result = $this->connect()->eval($script, [$scene, $value], 1);
-    if ($result) unset($this->lockList[$id]);
+    if ($result) $this->removeLock($id);
     return (bool)$result;
   }
 
