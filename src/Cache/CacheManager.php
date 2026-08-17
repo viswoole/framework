@@ -44,13 +44,13 @@ use Viswoole\Core\Config;
  * @method bool clear() 清除所有缓存
  * @method string lock(string $scene, int $expire = 10, bool $autoUnlock = false, int $retry = 5, int|float $sleep = 0.2) 获取竞争锁
  * @method void close() 关闭连接句柄（如果不手动调用则会在实例销毁时自动调用）
- * @method File|mixed connect() 获取连接句柄
+ * @method mixed connect() 获取连接句柄
  * @method int|false sAddArray(string $key, array|string $values) 往数组集合中追加值
  * @method array|false getArray(string $key) 获取数组集合
  * @method int|false sRemoveArray(string $key, array|string $values) 删除数组集合中的值
  * @method CacheDriverInterface setSerialize(Closure|string $set = 'serialize', Closure|string $get = 'unserialize') 设置序列化方法
- * @method string getTagKey(string $tag) 获取标签key
- * @method CacheTagInterface tag(array|string $tag) 标签
+ * @method string getTagKey(string $tag) 获取标签键
+ * @method CacheTagInterface tag(array|string $tag) 创建缓存标签实例
  * @method array|false getTags() 获取所有缓存标签
  * @method string getTagStoreName() 获取标签仓库名称
  * @method string getCacheKey(string $key) 获取实际的缓存标识

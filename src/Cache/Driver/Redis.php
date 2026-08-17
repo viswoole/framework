@@ -314,7 +314,7 @@ class Redis extends Driver
         // 取锁成功跳出循环
         break;
       }
-      //未获得锁 休眠
+      // 未获得锁，休眠重试
       System::sleep($sleep);
     }
     if ($result === false) throw new CacheErrorException('数据系统繁忙，请稍后重试');
@@ -349,7 +349,7 @@ class Redis extends Driver
    */
   #[Override] protected function serialize(mixed $data): mixed
   {
-    // 如果是整数 直接返回
+    // 如果是整数则直接返回
     if (is_int($data)) return $data;
     return parent::serialize($data);
   }

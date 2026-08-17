@@ -73,7 +73,7 @@ class Tag implements CacheTagInterface
       if ($names !== false) $this->driver->delete($names);
       // 清除标签
       $this->driver->delete($tag);
-      // 从标签库库中删除标签
+      // 从标签库中删除标签
       $this->driver->sRemoveArray($this->driver->getTagStoreName(), $tag);
     }
   }
@@ -120,13 +120,13 @@ class Tag implements CacheTagInterface
   {
     if (is_string($keys)) $keys = [$keys];
     foreach ($this->tags as $tag) {
-      // 从标签数据集中移除缓存标记key
+      // 从标签数据集中移除缓存键
       $result = $this->driver->sRemoveArray($tag, $keys);
       if ($result === false) {
         $keys = implode(',', $keys);
         throw new CacheErrorException("从标签集合中剔除{$keys}缓存失败");
       }
-      // 判断标签数据集是否已为空，如果为空则把标签从标签总仓库数据集中移除
+      // 判断标签数据集是否已为空，为空则从标签仓库中移除该标签
       $arr = $this->driver->getArray($tag);
       if (empty($arr)) $this->driver->sRemoveArray($this->driver->getTagStoreName(), $tag);
     }
