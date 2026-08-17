@@ -27,7 +27,8 @@ use ReflectionException;
 use ReflectionFunction;
 use ReflectionFunctionAbstract;
 use ReflectionMethod;
-use ReflectionType;
+use ReflectionNamedType;
+use ReflectionParameter;
 use Traversable;
 use TypeError;
 use Viswoole\Core\Common\Arr;
@@ -53,6 +54,35 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    * @var string 协程上下文中单例键名的前缀，避免与用户数据冲突
    */
   protected string $CONTEXT_PREFIX = '__container_singleton_';
+  /**
+   * @var array<string,array{reflector:ReflectionClass,factory?:ReflectionMethod,constructor?:ReflectionMethod}> 类反射元数据缓存，键为类名
+   *
+   * 进程级只读元数据缓存：类定义在运行期不变，反射对象与 factory/constructor
+   * 判定结果可安全复用。每请求 invokeClass 省去重复的 ReflectionClass 解析。
+   */
+  protected array $classMetaCache = [];
+  /**
+   * @var array<string,ReflectionMethod> 方法反射对象缓存，键为 "类名::方法名"
+   *
+   * 方法元数据只读，缓存后并发协程共享安全。按 getDeclaringClass 定键：
+   * 方法签名由定义类与方法名唯一决定，子类继承调用命中同一条目。
+   */
+  protected array $methodReflectCache = [];
+  /**
+   * @var array<string,ReflectionFunction> 命名函数反射缓存，键为 "fn:" + 函数名
+   *
+   * 仅缓存命名函数；闭包不缓存（对象 id 会复用，且动态闭包常驻缓存会泄漏内存）。
+   */
+  protected array $functionReflectCache = [];
+  /**
+   * @var array<string,array<int,array<string,mixed>>> 参数元数据缓存，键为方法/函数标识
+   *
+   * 每个参数的名称、类型（预格式化）、可空性、可变参数标记、默认值标记、
+   * 前置注入实例与验证规则实例均预解析。注入与规则实例为无状态对象
+   * （构造参数即全部状态），跨请求复用安全。默认值不缓存：
+   * PHP 允许 new 表达式做默认值（每次求值新实例），保持实时读取语义。
+   */
+  protected array $paramMetaCache = [];
   /**
    * @var array<string,string|Closure> 接口标识映射
    */
@@ -221,7 +251,6 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     // 修复#13: 常量名NOT_ALLOW_NEW_INSTANCE语义相反，改为ALLOW_NEW_INSTANCE
     $class = get_class($instance) . '::ALLOW_NEW_INSTANCE';
     // 判断类是否设置了ALLOW_NEW_INSTANCE常量
-    /** @noinspection PhpUnhandledExceptionInspection */
     $allowNewInstance = defined($class) ? constant($class) : false;
     // 如果类没有设置ALLOW_NEW_INSTANCE属性，或设置为false则缓存单实例
     if ($allowNewInstance === false) $this->setSingleInstance($abstract, $instance);
@@ -242,34 +271,28 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 通过反射创建类实例，自动解析构造函数依赖
    *
-   * 优先使用类的 factory() 静态方法（若存在且为 public static），否则走 __construct
+   * 优先使用类的 factory() 静态方法（若存在且为 public static），否则走 __construct。
+   * 反射元数据经 $classMetaCache 缓存，重复实例化（如每请求创建控制器）省去反射解析开销。
    *
    * @param string $class 要实例化的类名
    * @param array $params 手动传入的构造参数，按名称或位置匹配
    * @return object 创建的类实例
    * @throws ClassNotFoundException 类不存在时抛出
+   * @throws NotFoundException 依赖不可达时抛出
    * @throws ValidateException 参数类型校验失败时抛出
    */
   public function invokeClass(string $class, array $params = []): object
   {
-    try {
-      $reflector = new ReflectionClass($class);
-    } catch (ReflectionException $e) {
-      throw new ClassNotFoundException($e->getMessage(), previous: $e);
-    }
+    $meta = $this->classMetaCache[$class] ??= $this->buildClassMeta($class);
+    $reflector = $meta['reflector'];
     $construct = '__construct()';
     try {
-      if ($reflector->hasMethod('factory')) {
-        $method = $reflector->getMethod('factory');
-        if ($method->isPublic() && $method->isStatic()) {
-          $construct = 'factory()';
-          $args = $this->injectParams($method, $params);
-          /** @noinspection PhpUnhandledExceptionInspection */
-          return $method->invokeArgs(null, $args);
-        }
+      if ($meta['factory'] !== null) {
+        $construct = 'factory()';
+        $args = $this->injectParams($meta['factory'], $params);
+        return $meta['factory']->invokeArgs(null, $args);
       }
-      $constructor = $reflector->getConstructor();
-      $args = $constructor ? $this->injectParams($constructor, $params) : [];
+      $args = $meta['constructor'] ? $this->injectParams($meta['constructor'], $params) : [];
     } catch (ValidateException $e) {
       $this->handleValidateError(
         $reflector->getName() . "::$construct: " . $e->getMessage(),
@@ -286,9 +309,39 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
+   * 构建类反射元数据（反射器、factory 方法、构造器），供 $classMetaCache 缓存
+   *
+   * factory 判定（public + static）与构造器获取只读不变，构建一次终身复用
+   *
+   * @param string $class 类名
+   * @return array{reflector:ReflectionClass,factory?:ReflectionMethod,constructor?:ReflectionMethod}
+   * @throws ClassNotFoundException 类不存在时抛出
+   */
+  private function buildClassMeta(string $class): array
+  {
+    try {
+      $reflector = new ReflectionClass($class);
+    } catch (ReflectionException $e) {
+      throw new ClassNotFoundException($e->getMessage(), previous: $e);
+    }
+    $factory = null;
+    if ($reflector->hasMethod('factory')) {
+      $method = $reflector->getMethod('factory');
+      if ($method->isPublic() && $method->isStatic()) $factory = $method;
+    }
+    return [
+      'reflector' => $reflector,
+      'factory' => $factory,
+      'constructor' => $reflector->getConstructor(),
+    ];
+  }
+
+  /**
    * 解析反射方法的参数列表，依次处理前置注入、依赖注入和类型校验
    *
-   * 支持命名参数、位置参数、可变参数、PreInjectInterface 属性注入和 ValidateRule 属性校验
+   * 支持命名参数、位置参数、可变参数、PreInjectInterface 属性注入和 ValidateRule 属性校验。
+   * 参数元数据（名称/类型/属性实例等）经 $paramMetaCache 预解析缓存，
+   * 每请求仅执行"取值 → 注入 → 校验"的动态部分，反射解析开销只付一次。
    *
    * @param ReflectionFunctionAbstract $reflect 反射方法
    * @param array $params 手动传入的参数，按名称或位置覆盖
@@ -297,7 +350,7 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
    */
   protected function injectParams(ReflectionFunctionAbstract $reflect, array $params = []): array
   {
-    $shapes = $reflect->getParameters();
+    $shapes = $this->resolveParamShapes($reflect);
     // 如果没有参数 则返回空待注入参数数组
     if (empty($shapes)) return [];
 
@@ -305,59 +358,38 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $args = [];
     foreach ($shapes as $index => $shape) {
       try {
-        // 参数类型
-        $paramType = $shape->getType();
         // 是否允许为null
-        $allowsNull = $shape->allowsNull();
+        $allowsNull = $shape['allowsNull'];
         // 参数名称
-        $name = $shape->getName();
+        $name = $shape['name'];
         // 先判断是否存在命名，不存在则使用位置
-        $key = array_key_exists($name, $params) ? $name : $index;
-        // 参数默认值
-        $default = $shape->isDefaultValueAvailable() ? $shape->getDefaultValue() : null;
+        $namedHit = array_key_exists($name, $params);
+        $key = $namedHit ? $name : $index;
+        // 参数是否被显式传入（命名或位置命中），变参收集时用于区分"无参调用"
+        $hit = $namedHit || array_key_exists($index, $params);
+        // 参数默认值（实时读取：new 表达式默认值每次求值应产生新实例，不可缓存）
+        $default = $shape['hasDefault'] ? $shape['param']->getDefaultValue() : null;
         // 获得值
         $value = Arr::arrayPopValue($params, $key, $default);
-        // 前置注入
-        $preInject = $shape->getAttributes(
-          PreInjectInterface::class,
-          ReflectionAttribute::IS_INSTANCEOF
-        );
-        // 扩展验证规则
-        $validateAttributes = $shape->getAttributes(
-          BaseValidateRule::class,
-          ReflectionAttribute::IS_INSTANCEOF
-        );
-        // 如果是可变参数则返回参数数组
-        if ($shape->isVariadic()) {
-          // 将剩下的参数列表丢给前置注入
-          foreach ($preInject as $inject) {
-            // 前置注入可变数量参数时 默认允许为空数组
-            $params = $inject->newInstance()->inject($name, $params, true);
-            // 可变数量参数在注入时必须是数组
-            if (!is_array($params)) $params = [];
-          }
-          foreach ($params as &$item) {
-            $item = $this->validateParam(
-              $name,
-              $paramType,
-              $item,
-              $allowsNull,
-              $validateAttributes
-            );
-          }
-          return array_merge($args, $params);
+        // 如果是可变参数则收集参数数组并收尾返回
+        if ($shape['variadic']) {
+          return array_merge(
+            $args,
+            $this->collectVariadic($shape, $name, $value, $hit, $params)
+          );
         }
         // 执行所有前置注入
-        foreach ($preInject as $inject) {
-          $value = $inject->newInstance()->inject($name, $value, $allowsNull);
+        foreach ($shape['preInjects'] as $inject) {
+          $value = $inject->inject($name, $value, $allowsNull);
         }
         // 验证参数类型
         $value = $this->validateParam(
           $name,
-          $paramType,
+          $shape['type'],
+          $shape['builtin'],
           $value,
           $allowsNull,
-          $validateAttributes
+          $shape['rules']
         );
         $args[$index] = $value;
       } catch (ValidateException $e) {
@@ -368,37 +400,156 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   }
 
   /**
+   * 获取参数元数据列表，方法与命名函数命中 $paramMetaCache，闭包直接构建不缓存
+   *
+   * @param ReflectionFunctionAbstract $reflect 反射方法/函数
+   * @return array<int,array<string,mixed>> 参数元数据列表
+   */
+  private function resolveParamShapes(ReflectionFunctionAbstract $reflect): array
+  {
+    $key = $this->paramCacheKey($reflect);
+    // 闭包无稳定键（返回 null），跳过缓存直接构建，防止对象 id 复用导致错配
+    if ($key === null) return $this->buildParamShapes($reflect->getParameters());
+    return $this->paramMetaCache[$key] ??= $this->buildParamShapes($reflect->getParameters());
+  }
+
+  /**
+   * 计算参数元数据缓存键：方法按"定义类::方法名"，命名函数按"fn:函数名"
+   *
+   * 方法签名由定义类与方法名唯一决定（PHP 不允许子类改写签名），
+   * 继承调用与父类命中同一条目属预期行为。
+   *
+   * @param ReflectionFunctionAbstract $reflect 反射对象
+   * @return string|null 闭包返回 null（不缓存），其余返回缓存键
+   */
+  private function paramCacheKey(ReflectionFunctionAbstract $reflect): ?string
+  {
+    if ($reflect instanceof ReflectionMethod) {
+      return $reflect->getDeclaringClass()->getName() . '::' . $reflect->getName();
+    }
+    $name = $reflect->getName();
+    // 匿名闭包名为 "{closure}"，无稳定键且动态闭包缓存会泄漏内存
+    return $name === '{closure}' ? null : 'fn:' . $name;
+  }
+
+  /**
+   * 将反射参数列表一次性解析为可复用的元数据数组
+   *
+   * 类型经 Validate::formatType 预格式化；PreInject 与验证规则属性
+   * 直接实例化（均为无状态对象，构造参数即全部状态，跨请求复用安全）。
+   * 默认值不预存（保持 new 表达式默认值实时求值语义），仅存可用标记。
+   *
+   * @param ReflectionParameter[] $parameters 反射参数列表
+   * @return array<int,array<string,mixed>> 参数元数据列表
+   */
+  private function buildParamShapes(array $parameters): array
+  {
+    $shapes = [];
+    foreach ($parameters as $index => $parameter) {
+      $type = $parameter->getType();
+      $shapes[$index] = [
+        'param' => $parameter,
+        'name' => $parameter->getName(),
+        // 预格式化类型，免去每请求重复的 ReflectionType → 字符串转换
+        'type' => $type === null ? null : Validate::formatType($type),
+        // isBuiltin 仅 ReflectionNamedType 存在，联合/交集类型视为非内置（null 值交由联合类型校验处理）
+        'builtin' => $type instanceof ReflectionNamedType && $type->isBuiltin(),
+        'allowsNull' => $parameter->allowsNull(),
+        'variadic' => $parameter->isVariadic(),
+        'hasDefault' => $parameter->isDefaultValueAvailable(),
+        // 属性实例预建：省去每请求 getAttributes() 与 newInstance() 开销
+        'preInjects' => array_map(
+          static fn(ReflectionAttribute $attr): object => $attr->newInstance(),
+          $parameter->getAttributes(PreInjectInterface::class, ReflectionAttribute::IS_INSTANCEOF)
+        ),
+        'rules' => array_map(
+          static fn(ReflectionAttribute $attr): object => $attr->newInstance(),
+          $parameter->getAttributes(BaseValidateRule::class, ReflectionAttribute::IS_INSTANCEOF)
+        ),
+      ];
+    }
+    return $shapes;
+  }
+
+  /**
+   * 收集可变参数集合并执行前置注入与逐项校验
+   *
+   * 修复：原实现弹出首个位置参数后未并入变参集合，导致变参调用丢失首值
+   * （如 sum(1,2,3) 实际仅收到 [2,3]）。现按"显式传入的首值 + 剩余位置参数"
+   * 收集；命名传入数组时展开合并。未显式传入时保持空数组（无参调用语义）。
+   *
+   * @param array<string,mixed> $shape 变参的参数元数据
+   * @param string $name 参数名
+   * @param mixed $value 已弹出的首值（命中时有效）
+   * @param bool $hit 是否被显式传入
+   * @param array<int,mixed> $rest 剩余的位置参数
+   * @return array<int,mixed> 校验后的变参集合
+   */
+  private function collectVariadic(
+    array  $shape,
+    string $name,
+    mixed  $value,
+    bool   $hit,
+    array  $rest
+  ): array
+  {
+    // 命中时首值并入集合头部（命名传入的数组值展开为多项）
+    $collected = $hit ? (is_array($value) ? $value : [$value]) : [];
+    $collected = array_merge($collected, array_values($rest));
+    // 将收集的参数列表交给前置注入（如请求参数注入），默认允许为空数组
+    foreach ($shape['preInjects'] as $inject) {
+      $collected = $inject->inject($name, $collected, true);
+      // 可变数量参数在注入时必须是数组
+      if (!is_array($collected)) $collected = [];
+    }
+    foreach ($collected as &$item) {
+      $item = $this->validateParam(
+        $name,
+        $shape['type'],
+        $shape['builtin'],
+        $item,
+        $shape['allowsNull'],
+        $shape['rules']
+      );
+    }
+    return $collected;
+  }
+
+  /**
    * 对单个参数执行类型校验和扩展规则校验
    *
-   * 内置类型通过 Validate::check 校验，扩展规则通过 Validate::checkRules 校验
+   * 内置类型通过 Validate::check 校验，扩展规则通过 Validate::checkRules 校验。
+   * 类型为预格式化字符串（缓存的参数元数据），规则为预建的规则实例列表。
    *
    * @param string $name 参数名称
-   * @param ReflectionType|null $paramType 参数声明的类型
+   * @param string|array|null $type 预格式化的参数类型（联合类型为数组）
+   * @param bool $isBuiltin 参数类型是否为内置类型
    * @param mixed $value 待校验的值
    * @param bool $allowsNull 参数是否允许 null
-   * @param ReflectionAttribute[] $validateAttributes 扩展验证属性列表
+   * @param BaseValidateRule[] $rules 预建的扩展验证规则实例列表
    * @return mixed 校验通过的值
    * @throws ValidateException 类型不匹配时抛出
    */
   protected function validateParam(
-    string              $name,
-    ReflectionType|null $paramType,
-    mixed               $value,
-    bool                $allowsNull,
-    array               $validateAttributes
+    string            $name,
+    string|array|null $type,
+    bool              $isBuiltin,
+    mixed             $value,
+    bool              $allowsNull,
+    array             $rules
   ): mixed
   {
-    if (!is_null($paramType)) {
+    if ($type !== null) {
       // 如果$value等于null 且设置的是内置类型 则判断是否允许为null，如果允许则返回null，否则抛出异常
-      if (is_null($value) && $paramType->isBuiltin()) {
+      if (is_null($value) && $isBuiltin) {
         if ($allowsNull) return null;
-        throw new ValidateException("$$name must be of type $paramType, null given");
+        throw new ValidateException("$$name must be of type $type, null given");
       }
       // 进行类型验证
-      $value = Validate::check($value, $paramType);
+      $value = Validate::check($value, $type);
     }
     // 验证扩展规则
-    return Validate::checkRules($validateAttributes, $value, $name);
+    return Validate::checkRules($rules, $value, $name);
   }
 
   /**
@@ -461,15 +612,20 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 通过反射调用函数或闭包，自动解析参数依赖
    *
+   * 命名函数的反射对象经 $functionReflectCache 缓存复用；闭包因实例
+   * 每次不同（id 会复用，缓存有错配风险）不缓存，保持每次新建反射。
+   *
    * @param string|Closure $concrete 函数名或闭包
    * @param array<string|int,mixed> $params 手动传入的参数
    * @return mixed 函数返回值
-   * @throws FuncNotFoundException 函数不存在时抛出
+   * @throws FuncNotFoundException|NotFoundException 函数不存在时抛出
    */
   public function invokeFunction(string|Closure $concrete, array $params = []): mixed
   {
     try {
-      $reflect = new ReflectionFunction($concrete);
+      $reflect = is_string($concrete)
+        ? ($this->functionReflectCache[$concrete] ??= new ReflectionFunction($concrete))
+        : new ReflectionFunction($concrete);
     } catch (ReflectionException $e) {
       throw new FuncNotFoundException($e->getMessage(), previous: $e);
     }
@@ -514,12 +670,17 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   /**
    * 通过反射调用类方法，自动解析参数依赖
    *
-   * 支持对象方法、静态方法、[类名, 方法名]（自动实例化类）和 '类名::方法名' 格式
+   * 支持对象方法、静态方法、[类名, 方法名]（自动实例化类）和 '类名::方法名' 格式。
+   * 方法反射对象按 "类名::方法名" 经 $methodReflectCache 缓存复用：
+   * 方法元数据只读，对象方法与静态方法可共享同一反射（实例经 invokeArgs 传入）。
    *
    * @param array|callable $method 方法描述，如 [object, 'method']、[ClassName::class, 'method']、'ClassName::method'
    * @param array $params 手动传入的参数
    * @return mixed 方法返回值
-   * @throws MethodNotFoundException 方法不存在时抛出
+   * @throws ClassNotFoundException
+   * @throws FuncNotFoundException
+   * @throws MethodNotFoundException
+   * @throws NotFoundException
    */
   public function invokeMethod(array|callable $method, array $params = []): mixed
   {
@@ -528,23 +689,29 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     try {
       $instance = null;
       if (is_array($method)) {
-        $class = $method[0];
         if (is_object($method[0])) {
-          // 调用对象方法
+          // 调用对象方法：反射基于类名缓存构建，实例经 invokeArgs 传入
+          $instance = $method[0];
           $class = get_class($method[0]);
-          $reflect = new ReflectionMethod($method[0], $method[1]);
-        } elseif (is_callable($method)) {
-          // 类静态方法调用
-          $reflect = new ReflectionMethod($method[0], $method[1]);
         } else {
-          // 兼容静态方式 调用类动态方法
-          $instance = $this->invokeClass($method[0]);
-          $reflect = new ReflectionMethod($instance, $method[1]);
+          $class = (string)$method[0];
+          // 类名 + 静态方法（is_callable 判定通过）无需实例；
+          // 类名 + 动态方法（静态方式调用）需先实例化再调用
+          if (!is_callable($method)) $instance = $this->invokeClass($class);
         }
         $namespaceName = $class . '::' . $method[1];
+        // 双参构造兼容匿名类（class@anonymous 名不支持 Class::method 字符串形式）
+        $reflect = $this->methodReflectCache[$namespaceName] ??= new ReflectionMethod(
+          $class,
+          $method[1]
+        );
       } else {
-        $reflect = ReflectionMethod::createFromMethodName($method);
-        $namespaceName = $method;
+        // 字符串形式（'类名::方法名'）：此分支运行时必为 string（与 createFromMethodName
+        // 入参约束一致），显式转换将 callable 收窄为 string，供静态分析与数组键类型校验通过
+        $namespaceName = (string)$method;
+        $reflect = $this->methodReflectCache[$namespaceName] ??= ReflectionMethod::createFromMethodName(
+          $namespaceName
+        );
       }
       try {
         // 绑定参数

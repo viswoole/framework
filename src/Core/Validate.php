@@ -85,11 +85,12 @@ class Validate
    * 将各种类型表示统一格式化为字符串或字符串数组
    *
    * 处理 Type 枚举、ReflectionUnionType/IntersectionType/NamedType 和管道符分隔的联合类型字符串
+   * 公开供容器在构建参数元数据缓存时预格式化，避免每请求重复转换
    *
    * @param Type|ReflectionType|string $type 原始类型表示
    * @return string|array 格式化后的类型字符串或联合类型数组
    */
-  private static function formatType(Type|ReflectionType|string $type): string|array
+  public static function formatType(Type|ReflectionType|string $type): string|array
   {
     if ($type instanceof Type) return $type->value;
     if ($type instanceof ReflectionUnionType) {
