@@ -159,6 +159,11 @@ abstract class BaseRoute
    *
    * 处理路径前缀补全、大小写转换、与父级路径合并，并从路径中提取动态变量约束。
    *
+   * 父子路径合并规则：
+   * - 不以 / 开头的子路径视为相对路径：与父级路径做笛卡尔积拼接
+   * - 以 / 开头的子路径视为绝对路径：忽略父级前缀，直接作为根路由
+   * - 单独的 / 仍表示父路由本身路径（组默认入口）
+   *
    * @param string|array $paths 原始路径
    * @return array{0:array,1:array} [0=>规范化后的路径列表, 1=>变量名到正则的映射]
    */
@@ -167,17 +172,28 @@ abstract class BaseRoute
     $default_pattern_regex = config('router.default_pattern_regex', '\w+');
     $case = config('router.case_sensitive', false);
     if (is_string($paths)) $paths = [$paths];
+    // 必须在补全 / 前记录原始路径是否以 / 开头，否则无法区分绝对/相对路径
+    $absoluteFlags = [];
+    foreach ($paths as $key => $path) {
+      $absoluteFlags[$key] = is_string($path) && str_starts_with($path, '/');
+    }
     foreach ($paths as &$path) {
       if (!str_starts_with($path, '/')) $path = "/$path";
       $path = $path === '/' ? '/' : rtrim(!$case ? strtolower($path) : $path, '/');
       // 去除所有空格
       $path = str_replace(' ', '', $path);
     }
+    unset($path);
     // 合并父级path
     if (!empty($this->paths)) {
-      $mergePaths = [];
-      foreach ($this->paths as $path1) {
-        foreach ($paths as $path2) {
+      $mergePaths = $absolutePaths = [];
+      foreach ($paths as $key => $path2) {
+        // 以 / 开头的子路径（单独的 / 除外）视为绝对路径，不继承父级前缀
+        if ($absoluteFlags[$key] && $path2 !== '/') {
+          $absolutePaths[] = $path2;
+          continue;
+        }
+        foreach ($this->paths as $path1) {
           if ($path2 === '/') {
             $mergePaths[] = $path1;
           } else {
@@ -186,9 +202,8 @@ abstract class BaseRoute
           }
         }
       }
-      $paths = $mergePaths;
+      $paths = array_merge($mergePaths, $absolutePaths);
     }
-    unset($path);
     $pattern = [];
     foreach ($paths as $path) {
       if (RouterTool::isVariable($path)) {
