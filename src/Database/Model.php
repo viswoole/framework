@@ -30,6 +30,7 @@ use Viswoole\Database\Query\RunInfo;
  * 提供ORM核心能力：自动推断表名、软删除、时间戳自动写入、关联查询、获取器、修改器等。
  * 修改器约定：定义 set{Field}Attr 方法（如 user_name 字段对应 setUserNameAttr），
  * 写入（insert/update/create）前自动对字段值做转换（密码哈希、JSON 序列化等）。
+ * 修改器/获取器必须声明为 public（框架在模型外部作用域调用，非公有方法会触发 __call 无限递归）。
  * 子类通过定义属性来声明表名、主键、软删除字段等元信息，框架自动处理查询与写入逻辑。
  * 静态方法通过 __callStatic 转发到 Query 实例，支持链式调用。
  *
@@ -296,12 +297,12 @@ abstract class Model
    * @return BelongsToMany 多对多关联查询实例
    */
   protected function belongsToMany(
-    Model|string $relationModel,
+    Model|string      $relationModel,
     Model|string|null $pivot = null,
-    ?string $foreignPivotKey = null,
-    ?string $relatedPivotKey = null,
-    ?string $localKey = null,
-    ?string $relatedKey = null
+    ?string           $foreignPivotKey = null,
+    ?string           $relatedPivotKey = null,
+    ?string           $localKey = null,
+    ?string           $relatedKey = null
   ): BelongsToMany
   {
     if (is_string($relationModel)) $relationModel = new $relationModel;
@@ -318,7 +319,12 @@ abstract class Model
       ),
     };
     return new BelongsToMany(
-      $relationModel, $pivotModel, $foreignPivotKey, $relatedPivotKey, $localKey, $relatedKey
+      $relationModel,
+      $pivotModel,
+      $foreignPivotKey,
+      $relatedPivotKey,
+      $localKey,
+      $relatedKey
     );
   }
 
