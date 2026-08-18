@@ -132,6 +132,9 @@ class RouterTool
   ): array
   {
     $phpFiles = [];
+    // 目录不存在时直接返回，避免 opendir 产生 PHP Warning
+    // （如项目尚未创建 app/Controller 目录的初始化场景）
+    if (!is_dir($dir)) return $phpFiles;
     // 打开目录
     if ($handle = opendir($dir)) {
       $dir = rtrim($dir, DIRECTORY_SEPARATOR);

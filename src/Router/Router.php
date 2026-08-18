@@ -612,13 +612,12 @@ class Router extends Collector
       $this->checkOption($route->getDomain(), $domain, "request domain '$domain' is not allowed");
       // 判断伪静态后缀
       $this->checkOption($route->getSuffix(), $ext, "request suffix '$ext' is not allowed");
-      // 合并参数
-      if (!empty($pattern)) {
-        if ($callback) $callback($pattern);
-        if ($params) $params = array_merge($params, $pattern);
-      }
-      // 修复#8: 当$params为null时默认初始化为空数组，避免动态路由参数丢失
-      $params = $params ?? [];
+      // 动态路由参数先交由回调处理（如 HTTP 场景并入 Request 的 GET 参数）
+      if (!empty($pattern) && $callback) $callback($pattern);
+      // 修复#8: $params 必须先初始化再合并，否则未显式传参时（如 HTTP 请求）动态路由
+      // 参数无法并入注入参数，方法参数就不能按名隐式获取路由参数（/user/1024 → $id = 1024）。
+      // 合并语义保持不变：路由匹配参数优先于手动传入的同名参数；GET/POST 请求参数仍需注解显式注入
+      $params = array_merge($params ?? [], $pattern);
       // 绑定到容器
       bind(Route::class, $route);
       return $this->middleware->process(function () use ($route, $params) {

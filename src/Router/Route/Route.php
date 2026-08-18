@@ -20,7 +20,6 @@ use Viswoole\Router\ApiDoc\Annotation\Returned;
 use Viswoole\Router\ApiDoc\ParamParseTool;
 use Viswoole\Router\ApiDoc\Status;
 use Viswoole\Router\ApiDoc\Structure\FieldStructure;
-use Viswoole\Router\Facade\Router;
 
 /**
  * 路由项
@@ -72,7 +71,10 @@ class Route extends BaseRoute
       throw new InvalidArgumentException('route item paths is empty');
     }
     parent::__construct($paths, $handler, $parentOption, $id);
-    if (Router::isEnableApiDoc()) {
+    // 直接读配置而非经门面调用 Router::isEnableApiDoc()：
+    // 门面解析会在容器缺少 Router 实例时触发完整路由装配（加载路由文件、
+    // 扫描 app/Controller），在路由装配上下文之外创建 Route 会产生递归装配副作用
+    if (config('router.api_doc.enable', false)) {
       $result = ParamParseTool::parse($this->handler);
       $this->params = $result['params'];
       $this->returned = $result['returned'];

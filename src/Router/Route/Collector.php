@@ -226,7 +226,13 @@ abstract class Collector
     $route = new Group($prefix, $closure, $this->currentGroup, id: $id);
     // 判断是否存在路由分组，如果存在则添加到当前分组
     if ($this->currentGroup === null) {
-      $this->routes[] = $route;
+      // 顶层分组必须以 id 为键存储：getRoute() 按引用链路（如 bench.api.xxx）首段
+      // 在 routes 中查找分组，数字键存储会导致分组内动态路由注册时回查路由失败
+      if (isset($this->routes[$id])) {
+        $path = implode('|', $route->getPaths());
+        throw new RuntimeException("Route id:$id already exists,path:$path");
+      }
+      $this->routes[$id] = $route;
     } else {
       $this->currentGroup->addItem($route);
     }
