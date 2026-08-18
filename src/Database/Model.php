@@ -140,7 +140,8 @@ abstract class Model
    */
   public static function __callStatic(string $name, array $arguments)
   {
-    return call_user_func_array([new static()->query, $name], $arguments);
+    // new 表达式加括号：无括号链式（new static()->query）为 PHP 8.4 语法，加括号以兼容 composer 声明的 >=8.3
+    return call_user_func_array([(new static())->query, $name], $arguments);
   }
 
   /**
