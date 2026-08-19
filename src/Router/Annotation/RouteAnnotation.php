@@ -56,8 +56,8 @@ abstract class RouteAnnotation
     public ?array            $middlewares = null,
     public ?array            $patterns = null,
     public ?array            $meta = null,
-    public ?array            $suffix = null,
-    public ?array            $domain = null,
+    public null|string|array $suffix = null,
+    public null|string|array $domain = null,
     public bool              $hidden = false,
     public ?string           $title = null,
     public ?string           $description = null,
@@ -84,13 +84,18 @@ abstract class RouteAnnotation
     ?Group                $routeGroup = null
   ): Route|Group
   {
+    // 规范化请求方式（注解属性支持 string|array|null 三种形式）
+    $methods = is_string($this->method) ? [$this->method] : $this->method;
     if ($this->type === 'group') {
       $route = new Group($this->prefix, $handler, $routeGroup, id: $this->id);
     } else {
-      $route = new Route($this->prefix, $handler, $routeGroup, id: $this->id);
+      // 请求方式随构造传入：路由id生成依赖方法维度（见 BaseRoute::generateId），
+      // 同路径不同方法的注解路由需在构造期确定方法，避免id与最终方法不一致
+      $route = new Route(
+        $this->prefix, $handler, $routeGroup, id: $this->id, methods: $methods ?: null
+      );
     }
     if (!empty($this->parentId)) $route->setParentId($this->parentId);
-    if (!empty($this->method)) $route->setMethod($this->method);
     if (!empty($this->middlewares)) $route->setMiddlewares($this->middlewares);
     if (!empty($this->patterns)) $route->setPatterns($this->patterns);
     if (!empty($this->meta)) $route->setMeta($this->meta);
