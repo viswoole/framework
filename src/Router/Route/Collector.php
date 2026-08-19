@@ -70,12 +70,14 @@ abstract class Collector
     string                ...$method,
   ): Route
   {
+    // 请求方式随构造传入：路由id生成依赖方法维度（见 BaseRoute::generateId），
+    // 同路径不同方法的路由（如 GET /profile 与 PUT /profile）才能生成不同id共存
     $route = new Route(
       $paths,
       $handler,
       $this->currentGroup,
+      methods: $method ?: null,
     );
-    if (!empty($method)) $route->setMethod(...$method);
     $this->recordRouteItem($route);
     return $route;
   }
@@ -252,7 +254,8 @@ abstract class Collector
   {
     if (!is_array($method)) $method = [$method];
     foreach ($method as $item) {
-      $this->missRoutes[$item] = new Miss($handler);
+      // 键统一大写：dispatch() 内部已将请求方法规范化为大写后再查 miss 表
+      $this->missRoutes[strtoupper(trim($item))] = new Miss($handler);
     }
   }
 

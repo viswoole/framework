@@ -80,12 +80,15 @@ abstract class BaseRoute
    * @param callable|string|array $handler 路由处理函数
    * @param BaseRoute|null $parentOption 父级路由配置
    * @param string|null $id
+   * @param string[]|null $methods 请求方式列表，显式传入时覆盖默认/继承配置
+   *        （必须在生成路由id前设置：同路径不同方法的配置路由依赖方法维度生成唯一id）
    */
   public function __construct(
     string|array          $paths,
     callable|string|array $handler,
     ?BaseRoute            $parentOption = null,
     ?string               $id = null,
+    ?array                $methods = null,
   )
   {
     if ($parentOption) {
@@ -107,6 +110,8 @@ abstract class BaseRoute
       $defaultDomain = config('router.domain', ['*']);
       $this->setDomain(...(is_string($defaultDomain) ? [$defaultDomain] : $defaultDomain));
     }
+    // 显式声明的请求方式优先于默认/继承配置
+    if (!empty($methods)) $this->setMethod(...$methods);
     [$paths, $pattern] = $this->handlePaths($paths);
     // 路由path
     $this->paths = $paths;
@@ -223,11 +228,14 @@ abstract class BaseRoute
   /**
    * 生成唯一id
    *
+   * id 由路径与请求方式共同决定：同一允许不同请求方式重复定义路径
+   * （如 GET /profile 与 PUT /profile），仅凭路径无法区分会产生 id 冲突
+   *
    * @return string
    */
   private function generateId(): string
   {
-    $id = implode('&', $this->paths);
+    $id = implode('&', $this->paths) . '@' . implode(',', $this->method);
     return RouterTool::generateHashId($id);
   }
 
@@ -292,15 +300,21 @@ abstract class BaseRoute
   /**
    * 设置请求方式
    *
-   * @param string ...$method 自动转换为大写
+   * 兼容两种传参形式：setMethod('GET', 'POST') 与 setMethod(['GET', 'POST'])
+   * （注解 method 属性为数组，经 RouteAnnotation::create() 以单参数传入）
+   *
+   * @param string|string[] ...$method 自动展平并转换为大写
    * @return $this
    */
-  public function setMethod(string ...$method): static
+  public function setMethod(string|array ...$method): static
   {
-    array_walk($method, function (&$value) {
-      $value = strtoupper(trim($value));
-    });
-    $this->method = $method;
+    $methods = [];
+    foreach ($method as $item) {
+      foreach ((array)$item as $value) {
+        $methods[] = strtoupper(trim($value));
+      }
+    }
+    $this->method = $methods;
     return $this;
   }
 

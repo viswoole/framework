@@ -60,17 +60,20 @@ class Route extends BaseRoute
    * @param callable|string|array $handler 路由处理函数
    * @param BaseRoute|null $parentOption 父级路由配置，非空时继承其属性
    * @param string|null $id 路由唯一标识，null 时自动生成
+   * @param string[]|null $methods 请求方式列表，显式传入时覆盖默认/继承配置
+   *        （需随构造传入：路由id生成依赖方法维度，见 BaseRoute::generateId）
    */
   public function __construct(
     array|string          $paths,
     callable|array|string $handler,
     ?BaseRoute            $parentOption = null,
-    ?string               $id = null
+    ?string               $id = null,
+    ?array                $methods = null,
   ) {
     if (empty($paths)) {
       throw new InvalidArgumentException('route item paths is empty');
     }
-    parent::__construct($paths, $handler, $parentOption, $id);
+    parent::__construct($paths, $handler, $parentOption, $id, $methods);
     // 直接读配置而非经门面调用 Router::isEnableApiDoc()：
     // 门面解析会在容器缺少 Router 实例时触发完整路由装配（加载路由文件、
     // 扫描 app/Controller），在路由装配上下文之外创建 Route 会产生递归装配副作用

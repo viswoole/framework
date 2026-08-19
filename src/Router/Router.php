@@ -44,11 +44,15 @@ use Viswoole\Router\Route\Route;
 class Router extends Collector
 {
   /**
-   * @var array<string,string> 完全静态路由映射，键为 URL 路径，值为路由引用链路
+   * @var array<string,array<string,string>> 完全静态路由映射
+   *      键为 URL 路径，值为 [请求方法 => 路由引用链路]，
+   *      同一路径允许按不同请求方法（GET/POST/...）注册多条路由
    */
   protected array $staticRoute = [];
   /**
-   * @var array<string,array<string,string>> 动态路由映射，按路径段数分组，键为正则，值为路由引用链路
+   * @var array<string,array<string,array<string,string>>> 动态路由映射
+   *      按路径段数分组（segment_N），第一层键为正则，值为 [请求方法 => 路由引用链路]，
+   *      同一正则允许按不同请求方法注册多条路由
    */
   protected array $dynamicRoute = [];
   /**
@@ -414,13 +418,11 @@ class Router extends Collector
       $urlSegments = array_filter($urlSegments, function ($value) {
         return $value !== '';
       });
-      $regex = $this->convertRegex(
-        $urlSegments,
-        $this->getRoute($routeIndex)->getPatterns()
-      );
-      $this->addDynamicRoute($urlSegments, $regex, $routeIndex);
+      $route = $this->getRoute($routeIndex);
+      $regex = $this->convertRegex($urlSegments, $route->getPatterns());
+      $this->addDynamicRoute($urlSegments, $regex, $routeIndex, $route->getMethod());
     } else {
-      $this->addStaticRoute($path, $routeIndex);
+      $this->addStaticRoute($path, $routeIndex, $this->getRoute($routeIndex)->getMethod());
     }
   }
 
@@ -462,12 +464,22 @@ class Router extends Collector
 
   /**
    * 添加动态路由
+   *
+   * 按 [正则 => [请求方法 => 路由引用链路]] 存储，同一正则允许不同请求方法共存，
+   * 仅当同一路径且同一请求方法重复定义时告警并覆盖。
+   *
    * @param string[] $urlSegments URL 路径段数组
-   * @param string $regex
-   * @param string $routeIndex
+   * @param string $regex 匹配正则
+   * @param string $routeIndex 路由引用链路
+   * @param string[] $methods 路由允许的请求方式列表
    * @return void
    */
-  private function addDynamicRoute(array $urlSegments, string $regex, string $routeIndex): void
+  private function addDynamicRoute(
+    array  $urlSegments,
+    string $regex,
+    string $routeIndex,
+    array  $methods,
+  ): void
   {
     $len = count($urlSegments);
     foreach ($urlSegments as $rule) {
@@ -475,34 +487,68 @@ class Router extends Collector
       if (RouterTool::isOptionalVariable($rule)) $len--;
     }
     $path = implode('/', $urlSegments);
-    if (isset($this->dynamicRoute["segment_$len"][$regex])) {
-      trigger_error("{$path}路由规则已存在，重复定义即覆盖路由", E_USER_WARNING);
+    // 初始化方法映射表，避免引用传参时未定义维度自动置为 null 触发类型错误
+    if (!isset($this->dynamicRoute["segment_$len"][$regex])) {
+      $this->dynamicRoute["segment_$len"][$regex] = [];
     }
-    $this->dynamicRoute["segment_$len"][$regex] = $routeIndex;
+    $this->registerMethodRoute($this->dynamicRoute["segment_$len"][$regex], $path, $methods, $routeIndex);
     $fullLen = count($urlSegments);
     // 适配去掉可选参数的长度
     if ($fullLen !== $len) {
-      if (isset($this->dynamicRoute['segment_' . $fullLen][$regex])) {
-        trigger_error("{$path}路由规则已存在，重复定义即覆盖路由", E_USER_WARNING);
+      if (!isset($this->dynamicRoute['segment_' . $fullLen][$regex])) {
+        $this->dynamicRoute['segment_' . $fullLen][$regex] = [];
       }
-      $this->dynamicRoute['segment_' . $fullLen][$regex] = $routeIndex;
+      $this->registerMethodRoute(
+        $this->dynamicRoute['segment_' . $fullLen][$regex], $path, $methods, $routeIndex
+      );
     }
   }
 
   /**
    * 注册静态路由到映射表
    *
+   * 按 [路径 => [请求方法 => 路由引用链路]] 存储，同一路径允许不同请求方法共存，
+   * 仅当同一路径且同一请求方法重复定义时告警并覆盖。
+   *
    * @param string $urlPath 完整 URL 路径
    * @param string $routeIndex 路由引用链路
+   * @param string[] $methods 路由允许的请求方式列表
    */
-  private function addStaticRoute(string $urlPath, string $routeIndex): void
+  private function addStaticRoute(string $urlPath, string $routeIndex, array $methods): void
   {
-    if (isset($this->staticRoute[$urlPath])) {
-      trigger_error(
-        "{$urlPath}路由规则已存在，重复定义即覆盖路由", E_USER_WARNING
-      );
+    // 初始化方法映射表，避免引用传参时未定义维度自动置为 null 触发类型错误
+    if (!isset($this->staticRoute[$urlPath])) $this->staticRoute[$urlPath] = [];
+    $this->registerMethodRoute($this->staticRoute[$urlPath], $urlPath, $methods, $routeIndex);
+  }
+
+  /**
+   * 将路由按请求方式写入方法映射表（引用方式写入，供静态/动态路由表复用）
+   *
+   * 包含 '*' 时视为不限制请求方式，仅记录 '*' 键（分发时作为通配回退），
+   * 避免 '*' 与具体方法同时注册导致的通配优先级歧义。
+   *
+   * @param array<string,string> $methodMap 方法映射表（按引用写入）
+   * @param string $path 用于告警提示的路径
+   * @param string[] $methods 路由允许的请求方式列表
+   * @param string $routeIndex 路由引用链路
+   * @return void
+   */
+  private function registerMethodRoute(
+    array &$methodMap,
+    string $path,
+    array  $methods,
+    string $routeIndex
+  ): void
+  {
+    if (in_array('*', $methods)) $methods = ['*'];
+    foreach ($methods as $method) {
+      if (isset($methodMap[$method])) {
+        trigger_error(
+          "{$path}路由规则已存在（请求方法：{$method}），重复定义即覆盖路由", E_USER_WARNING
+        );
+      }
+      $methodMap[$method] = $routeIndex;
     }
-    $this->staticRoute[$urlPath] = $routeIndex;
   }
 
   /**
@@ -551,6 +597,10 @@ class Router extends Collector
   /**
    * 匹配路由，返回路由实例
    *
+   * 支持同一路径按不同请求方法注册多条路由（如 GET /profile 与 PUT /profile），
+   * 匹配时先按路径定位再按请求方法选择路由；路径命中但方法均不匹配时
+   * 抛出方法不允许异常（与 404 同样会回退 miss 路由）。
+   *
    * @param string $path 路由路径
    * @param string $method 请求方式
    * @param string $domain 请求域名
@@ -571,12 +621,21 @@ class Router extends Collector
     $path = $path === '/' ? '/' : rtrim($path, '/');
     if (!$this->config->get('router.case_sensitive', false)) $path = strtolower($path);
     $ext = $PathAndExt[1] ?? '';
+    // 请求方法统一规范化为大写（方法映射表与 miss 路由表均以大写为键）
+    $method = strtoupper($method);
     $pattern = [];
     /** @var Route $route 路由 */
     $route = null;
+    // 路径已命中但请求方法均不匹配时为 true，用于区分 404 与方法不允许两种未命中语义
+    $pathMatched = false;
     // 判断是否存在静态路由
     if (isset($this->staticRoute[$path])) {
-      $route = $this->getRoute($this->staticRoute[$path]);
+      $routeIndex = $this->selectRouteIndex($this->staticRoute[$path], $method);
+      if ($routeIndex !== null) {
+        $route = $this->getRoute($routeIndex);
+      } else {
+        $pathMatched = true;
+      }
     } else {
       // 转换为 URL 路径数组
       $segments = substr_count($path, '/');
@@ -586,11 +645,18 @@ class Router extends Collector
       // 遍历正则匹配路由
       foreach ($regexArray as $regex) {
         if (preg_match($regex, $path, $matches)) {
+          $routeIndex = $this->selectRouteIndex($routes[$regex], $method);
+          if ($routeIndex === null) {
+            // 路径命中但该正则下无匹配请求方法的路由，
+            // 继续尝试后续正则（可能存在另一模式支持该方法的路由）
+            $pathMatched = true;
+            continue;
+          }
           if ($matches === null) $matches = [];
           // 如果匹配成功 则弹出默认的uri
           array_shift($matches);
           // 拿到路由
-          $route = $this->getRoute($routes[$regex]);
+          $route = $this->getRoute($routeIndex);
           // 去除匹配到的key
           $keys = array_slice(array_keys($route->getPatterns()), 0, count($matches));
           // 组合为关联数组
@@ -600,12 +666,19 @@ class Router extends Collector
       }
     }
     try {
-      if (is_null($route)) throw new RouteNotFoundException('routing resource not found');
-      // 判断请求方法（OPTIONS 预检请求跳过方法校验：预检不对应真实处理器，
+      if (is_null($route)) {
+        throw new RouteNotFoundException(
+          $pathMatched
+            ? "request method '$method' is not allowed"
+            : 'routing resource not found'
+        );
+      }
+      // 判断请求方法（路由已按方法维度选出，此处为防御性校验；
+      // OPTIONS 预检请求跳过方法校验：预检不对应真实处理器，
       // 需放行进入中间件管道，由跨域中间件短路响应，避免预检被 404 拦截）
-      if (strtoupper($method) !== 'OPTIONS') {
+      if ($method !== 'OPTIONS') {
         $this->checkOption(
-          $route->getMethod(), strtoupper($method), "request method '$method' is not allowed"
+          $route->getMethod(), $method, "request method '$method' is not allowed"
         );
       }
       // 判断域名
@@ -635,6 +708,28 @@ class Router extends Collector
       // 未匹配则抛出异常
       throw $e;
     }
+  }
+
+  /**
+   * 从方法映射表中选择匹配请求方法的路由引用链路
+   *
+   * 选择优先级：精确方法匹配 > '*' 通配 > （仅 OPTIONS）该路径下任意路由。
+   * OPTIONS 预检请求不对应真实处理器，回退到任意路由以放行进入中间件管道，
+   * 由跨域中间件短路响应。
+   *
+   * @param array<string,string> $methodMap [请求方法 => 路由引用链路] 映射表
+   * @param string $method 规范化后的请求方法（大写）
+   * @return string|null 路由引用链路，无匹配时返回 null
+   */
+  private function selectRouteIndex(array $methodMap, string $method): ?string
+  {
+    if (isset($methodMap[$method])) return $methodMap[$method];
+    if (isset($methodMap['*'])) return $methodMap['*'];
+    if ($method === 'OPTIONS') {
+      // reset() 在空数组上返回 false，需显式判空
+      return $methodMap === [] ? null : reset($methodMap);
+    }
+    return null;
   }
 
   /**
