@@ -16,11 +16,11 @@ declare (strict_types=1);
 namespace Viswoole\Database;
 
 use PDO;
-use RuntimeException;
 use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
 use Throwable;
 use Viswoole\Core\Coroutine\Context;
+use Viswoole\Database\Exception\DbException;
 
 /**
  * 连接管理器
@@ -93,11 +93,11 @@ class ConnectManager
   /**
    * 标记事务开始
    *
-   * @throws RuntimeException 已处于事务中时抛出
+   * @throws DbException 已处于事务中时抛出
    */
   public function start(): void
   {
-    if ($this->inTransaction) throw new RuntimeException('同一个进程中不允许开启多个事务');
+    if ($this->inTransaction) throw new DbException('同一个进程中不允许开启多个事务');
     $this->inTransaction = true;
   }
 
@@ -119,41 +119,6 @@ class ConnectManager
     } finally {
       $this->close();
     }
-  }
-
-  /**
-   * 归还连接到通道，事务中仅标记为空闲而非真正归还
-   *
-   * @param Channel $channel 数据库通道
-   * @param mixed $connect 数据库连接实例
-   */
-  public function put(Channel $channel, mixed $connect): void
-  {
-    if ($this->inTransaction) {
-      foreach ($this->connections as &$item) {
-        if ($item['connect'] === $connect && $item['channel'] === $channel) {
-          $item['active'] = false;
-          return;
-        }
-      }
-    }
-    $channel->put($connect);
-  }
-
-  /**
-   * 关闭事务，归还所有连接并重置事务状态
-   */
-  protected function close(): void
-  {
-    // 修复: 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
-    $array = $this->connections;
-    foreach ($array as $key => $item) {
-      unset($this->connections[$key]);
-      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
-      $this->forcePut($item['channel'], $item['connect']);
-    }
-    $this->inTransaction = false;
-    $this->connections = [];
   }
 
   /**
@@ -182,23 +147,6 @@ class ConnectManager
   }
 
   /**
-   * 析构时回滚未完成的事务，防止连接泄漏
-   *
-   * 析构阶段（协程结束、GC 或请求收尾）连接可能已失效，回滚抛出的
-   * 异常无法被调用方捕获，向外抛会引发 PHP 致命错误
-   * （"Exception thrown without a stack frame"），因此静默吞掉，
-   * 连接的回收交由 rollBack 内部 finally 与连接池的健康检查兜底。
-   */
-  public function __destruct()
-  {
-    try {
-      $this->rollBack();
-    } catch (Throwable) {
-      // 析构阶段无法向外传递异常，吞掉以避免致命错误
-    }
-  }
-
-  /**
    * 回滚事务，释放所有事务连接
    */
   public function rollBack(): void
@@ -214,6 +162,58 @@ class ConnectManager
       }
     } finally {
       $this->close();
+    }
+  }
+
+  /**
+   * 关闭事务，归还所有连接并重置事务状态
+   */
+  protected function close(): void
+  {
+    // 修复: 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
+    $array = $this->connections;
+    foreach ($array as $key => $item) {
+      unset($this->connections[$key]);
+      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
+      $this->forcePut($item['channel'], $item['connect']);
+    }
+    $this->inTransaction = false;
+    $this->connections = [];
+  }
+
+  /**
+   * 归还连接到通道，事务中仅标记为空闲而非真正归还
+   *
+   * @param Channel $channel 数据库通道
+   * @param mixed $connect 数据库连接实例
+   */
+  public function put(Channel $channel, mixed $connect): void
+  {
+    if ($this->inTransaction) {
+      foreach ($this->connections as &$item) {
+        if ($item['connect'] === $connect && $item['channel'] === $channel) {
+          $item['active'] = false;
+          return;
+        }
+      }
+    }
+    $channel->put($connect);
+  }
+
+  /**
+   * 析构时回滚未完成的事务，防止连接泄漏
+   *
+   * 析构阶段（协程结束、GC 或请求收尾）连接可能已失效，回滚抛出的
+   * 异常无法被调用方捕获，向外抛会引发 PHP 致命错误
+   * （"Exception thrown without a stack frame"），因此静默吞掉，
+   * 连接的回收交由 rollBack 内部 finally 与连接池的健康检查兜底。
+   */
+  public function __destruct()
+  {
+    try {
+      $this->rollBack();
+    } catch (Throwable) {
+      // 析构阶段无法向外传递异常，吞掉以避免致命错误
     }
   }
 }
