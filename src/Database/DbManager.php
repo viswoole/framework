@@ -199,9 +199,9 @@ class DbManager
   }
 
   /**
-   * 开启事务（startTransaction 的简写）
+   * 开启事务
    *
-   * @see startTransaction()
+   * @throws Throwable 闭包抛出的异常在回滚后原样重抛
    */
   public function start(): void
   {
@@ -209,10 +209,16 @@ class DbManager
   }
 
   /**
-   * 开启事务
+   * 开启事务（支持嵌套）
    *
    * 传入闭包时自动管理事务：闭包执行成功则提交并返回闭包返回值，异常则回滚并重抛。
    * 未传闭包时仅开启事务（等同 start()），返回 null。
+   *
+   * 嵌套事务：同一协程内可多次开启，内层基于数据库 SAVEPOINT 实现。
+   * commit/rollBack 始终作用于当前最内层事务，需按后开先关（LIFO）顺序收尾：
+   * - 内层 rollBack 仅回滚到该层保存点，外层已完成的操作不受影响，外层事务可继续；
+   * - 内层 commit 仅释放保存点，数据仍受最外层事务保护，最外层 commit 才真正落库；
+   * - 层级中途加入事务的连接会自动补齐各层保存点，跨通道嵌套同样适用。
    *
    * 限制：跨通道/跨库事务不保证原子性。commit 按连接加入顺序逐个提交（无两阶段提交），
    * 中途某通道提交失败时，先前提交通道的数据已落库（部分提交），失败通道会被兜底回滚。
@@ -240,7 +246,10 @@ class DbManager
   }
 
   /**
-   * 提交当前事务
+   * 提交当前最内层事务
+   *
+   * 嵌套层提交仅释放该层保存点（数据仍受外层保护）；
+   * 最外层提交真正落库并释放所有事务连接。
    */
   public function commit(): void
   {
@@ -248,11 +257,24 @@ class DbManager
   }
 
   /**
-   * 回滚当前事务
+   * 回滚当前最内层事务
+   *
+   * 嵌套层回滚仅回滚到该层保存点（外层操作不受影响，外层事务可继续）；
+   * 最外层回滚丢弃全部数据并释放所有事务连接。
    */
   public function rollBack(): void
   {
     ConnectManager::factory()->rollBack();
+  }
+
+  /**
+   * 获取当前事务嵌套层级
+   *
+   * @return int 0 表示当前协程未开启事务，N 表示存在 N 层嵌套事务
+   */
+  public function transactionLevel(): int
+  {
+    return ConnectManager::factory()->transactionLevel();
   }
 
   /**

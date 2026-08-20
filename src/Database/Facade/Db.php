@@ -31,10 +31,11 @@ use Viswoole\Database\Raw;
  *
  * @method static Channel channel(?string $name = null) 获取数据库通道
  * @method static bool hasChannel(string $channel_name) 判断通道是否存在
- * @method static void start() 开启事务
- * @method static mixed startTransaction(?Closure $query = null) 开启事务，传入闭包则自动管理事务并返回闭包返回值（跨通道/跨库事务不保证原子性，见 DbManager::startTransaction）
- * @method static void commit() 提交事务
- * @method static void rollBack() 回滚所有事务
+ * @method static void start() 开启事务（支持嵌套）
+ * @method static mixed startTransaction(?Closure $query = null) 开启事务，传入闭包则自动管理事务并返回闭包返回值（支持嵌套：内层基于保存点可独立回滚；跨通道/跨库事务不保证原子性，见 DbManager::startTransaction）
+ * @method static void commit() 提交当前最内层事务（嵌套层仅释放保存点）
+ * @method static void rollBack() 回滚当前最内层事务（嵌套层仅回滚到该层保存点，外层不受影响）
+ * @method static int transactionLevel() 获取当前事务嵌套层级（0 表示无事务）
  * @method static Raw raw(string $sql, array $bindings = []) 创建原生 SQL 表达式
  * @method static BaseQuery table(string $table, string $pk = 'id') 选择要查询的表
  * @method static array query(string|Raw $sql, array $bindings = [], bool $master = false) 原生查询（SELECT），返回关联数组结果集
