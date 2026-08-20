@@ -16,11 +16,11 @@ declare (strict_types=1);
 namespace Viswoole\Database;
 
 use PDO;
+use RuntimeException;
 use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
 use Throwable;
 use Viswoole\Core\Coroutine\Context;
-use Viswoole\Database\Exception\DbException;
 
 /**
  * 连接管理器
@@ -93,11 +93,11 @@ class ConnectManager
   /**
    * 标记事务开始
    *
-   * @throws DbException 已处于事务中时抛出
+   * @throws RuntimeException 已处于事务中时抛出
    */
   public function start(): void
   {
-    if ($this->inTransaction) throw new DbException('同一个进程中不允许开启多个事务');
+    if ($this->inTransaction) throw new RuntimeException('同一个进程中不允许开启多个事务');
     $this->inTransaction = true;
   }
 
