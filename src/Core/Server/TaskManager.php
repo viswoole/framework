@@ -260,12 +260,23 @@ class TaskManager
    * 同步阻塞投递任务并等待执行结果
    *
    * 任务处理器通过 finish() 或 return 回传的数据类型原样透传
-   * （数组、整型等任意类型），仅在超时或投递失败时返回 false。
+   * （数组、整型、null、'' 等任意非空值）。
+   *
+   * 注意以下实测语义（Swoole 6.2 taskwait）：
+   * - 处理器无任何返回值或 return null：Swoole 视为"未投递结果"，
+   *   本方法将一直阻塞到超时才返回 false（性能陷阱：任务可能早已完成，
+   *   但调用方仍需干等整个超时时长）。
+   * - return false / finish(false)：立即返回 false，与超时返回的 false
+   *   无法从值上区分。
+   * - finish(null)：null 作为真实结果立即送达（与 return null 不同）。
+   * - 超时或投递失败：返回 false。
+   * 因此处理器应显式回传结果；需表达"业务失败"时，建议回传结构化数据
+   * （如 ['ok' => false]）而不是裸 false/null。
    *
    * @param string $topic 已注册的任务主题名称
    * @param mixed $data 传递给任务处理器的业务数据
    * @param float $timeout 等待超时时间，单位秒，默认 0.5
-   * @return mixed|false 任务执行成功返回处理器回传的原始结果（类型原样保留），超时或失败返回 false
+   * @return mixed|false 处理器回传的原始结果（类型原样保留）；处理器无返回值/return null 时阻塞满超时后返回 false；return false 或超时/投递失败返回 false
    */
   public function emitWait(
     string $topic,
