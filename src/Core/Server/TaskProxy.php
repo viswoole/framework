@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Server;
 
@@ -22,12 +22,13 @@ use Swoole\Server\Task as SwooleTask;
  * 任务代理对象，封装 Swoole Task 提供任务数据访问与生命周期控制
  *
  * 作为任务处理器接收的参数，提供对原始任务数据的只读访问，
- * 并通过代理方式暴露 SwooleTask 的属性，同时管理队列任务的完成回调。
+ * 并通过代理方式暴露 SwooleTask 的属性与方法。
  *
  * @property float $dispatch_time 任务投递时间戳
  * @property int $id 任务ID
  * @property int $worker_id 任务所在的 Worker 进程ID
  * @property int $flags 任务标志位，默认为 SW_TASK_NONBLOCK
+ * @method bool finish(mixed $data) 向 Worker 进程发送处理结果；遵循 Swoole 语义，可在任务处理器中多次调用
  */
 class TaskProxy
 {
@@ -36,25 +37,20 @@ class TaskProxy
    */
   public readonly mixed $data;
   /**
-   * @var string|null 队列唯一标识，非队列任务为 null；任务完成后自动从缓存中清除
+   * @var string|null 队列唯一标识，非队列任务为 null；任务被 Task Worker 消费时即从缓存队列中移除
    */
   public readonly string|null $queue_id;
   /**
    * @var string 任务主题名称
    */
   public readonly string $topic;
-  /**
-   * @var bool 任务是否已调用 finish 标记完成
-   */
-  public bool $is_finish = false;
 
   /**
    * @param SwooleTask $swooleTask Swoole 原始任务对象
    */
   public function __construct(
     private readonly SwooleTask $swooleTask
-  )
-  {
+  ) {
     // 修复: 使用 null 合并运算符，避免数据访问无验证导致未定义键警告
     $this->data = $this->swooleTask->data['data'] ?? null;
     $this->queue_id = $this->swooleTask->data['queueId'] ?? null;
@@ -103,17 +99,22 @@ class TaskProxy
   }
 
   /**
-   * 标记任务完成，向 Worker 进程返回结果
+   * 代理调用 SwooleTask 的方法（如 finish），直接透传不做任何状态限制
    *
-   * @param mixed $data 返回给 Worker 进程的任务结果数据
-   * @return bool 完成成功返回 true，重复调用返回 false
+   * Swoole 官方语义允许在任务处理器中多次调用 finish，
+   * 向 Worker 进程发送多个处理结果，因此此处不拦截重复调用。
+   *
+   * @param string $name 方法名称
+   * @param array $arguments 参数列表
+   * @return mixed 方法返回值
+   * @throws Exception 方法不存在时抛出
    */
-  public function finish(mixed $data): bool
+  public function __call(string $name, array $arguments): mixed
   {
-    if (!$this->is_finish) {
-      $this->is_finish = true;
-      return $this->swooleTask->finish($data);
+    if (method_exists($this->swooleTask, $name)) {
+      return $this->swooleTask->{$name}(...$arguments);
+    } else {
+      throw new Exception('Undefined method: ' . __CLASS__ . '::' . $name . '()');
     }
-    return false;
   }
 }
