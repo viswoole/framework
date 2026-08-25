@@ -48,7 +48,9 @@ class RelationQuery
     protected string $foreignKey,
     protected string $localKey,
     protected bool   $many = false
-  ) {}
+  )
+  {
+  }
 
   /**
    * 查询关联数据并构建外键值到关联结果的映射
@@ -138,6 +140,7 @@ class RelationQuery
    * @param array $columns 仅允许写入的列名，为空时不限制
    * @return DataSet 含主键的写入结果
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function create(int|string|DataSet $parent, array $data, array $columns = []): DataSet
   {
@@ -190,6 +193,7 @@ class RelationQuery
    * @param bool $real 是否硬删除，仅关联模型启用软删除时有效
    * @return int|Raw 受影响的记录数
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   public function delete(int|string|DataSet $parent, bool $real = false): int|Raw
   {

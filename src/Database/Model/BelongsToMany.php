@@ -97,6 +97,7 @@ class BelongsToMany extends RelationQuery
    *
    * @param array $keys 主表键集合
    * @return array<mixed,array<mixed,array>> 主表键 => (关联键 => 中间表行)
+   * @throws DbException 数据库操作失败时抛出
    */
   private function fetchPivotMap(array $keys): array
   {

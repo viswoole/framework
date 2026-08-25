@@ -17,6 +17,7 @@ namespace Viswoole\Database\Model;
 
 use InvalidArgumentException;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model;
 use Viswoole\Database\Raw;
 
@@ -95,6 +96,7 @@ trait InteractsWithPivot
    * @param array $pivotData 附加的中间表字段，为空时不附加
    * @return int 实际新增的绑定数
    * @throws InvalidArgumentException 关联键为空或数据集中缺少主表键时抛出
+   * @throws DbException 数据库操作异常
    */
   public function attach(
     int|string|DataSet $parent,
@@ -152,6 +154,7 @@ trait InteractsWithPivot
    * @param array|int|string|null $related 关联键或关联键数组，为 null 时解除全部绑定
    * @return int 实际删除的绑定数
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   * @throws DbException 数据库操作异常
    */
   public function detach(
     int|string|DataSet    $parent,
@@ -188,6 +191,7 @@ trait InteractsWithPivot
    * @param array $pivotData 附加到新增绑定的中间表字段
    * @return array{attached:array<int,int|string>,detached:array<int,int|string>} 新增与移除的关联键列表
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
+   * @throws DbException 数据库操作异常
    */
   public function sync(
     int|string|DataSet $parent,
@@ -226,6 +230,7 @@ trait InteractsWithPivot
    *
    * @param int|string $parentKey 主表键值
    * @return array<int,int|string> 已绑定的关联键列表
+   * @throws DbException 数据库操作异常
    */
   private function fetchExistingPivotKeys(int|string $parentKey): array
   {

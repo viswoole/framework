@@ -24,6 +24,7 @@ use Throwable;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Common\Str;
 use Viswoole\Database\BaseQuery as BaseQuery;
+use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
@@ -122,6 +123,7 @@ class Query extends BaseQuery
    *
    * @param bool $real 是否硬删除，仅启用软删除时有效
    * @return int|Raw 受影响的记录数或 Raw 对象
+   * @throws DbException 数据库操作异常
    */
   #[Override]
   public function delete(bool $real = false): int|Raw
@@ -157,7 +159,8 @@ class Query extends BaseQuery
    *
    * @param int|string|array|null $id 要恢复记录的主键值，为空时需指定 where 条件
    * @return int|Raw 受影响的记录数或 Raw 对象，未启用软删除时返回 0
-   * @throws RuntimeException 未启用软删除或未指定条件时抛出
+   * @throws InvalidArgumentException 未启用软删除或未指定条件时抛出
+   * @throws DbException 数据库操作异常
    */
   public function restore(int|string|array|null $id = null): int|Raw
   {
@@ -167,7 +170,9 @@ class Query extends BaseQuery
     if (!empty($id)) $this->where($this->pk, $id);
     // 没有条件
     if (empty($this->options->where)) {
-      throw new RuntimeException('Model::restore() 必须指定要恢复记录的主键值或设置where条件');
+      throw new InvalidArgumentException(
+        'Model::restore() 必须指定要恢复记录的主键值或设置where条件'
+      );
     }
     return $this->update([
       $this->softDeleteFieldName => $this->softDeleteFieldDefaultValue
@@ -444,6 +449,7 @@ class Query extends BaseQuery
    * @param array $columns 仅允许写入的列名，为空时不限制
    * @return DataSet 包含写入数据（含主键）的 DataSet
    * @throws InvalidArgumentException 数据非关联数组时抛出
+   * @throws DbException 数据库操作异常
    */
   public function create(array $data, array $columns = []): DataSet
   {
@@ -511,7 +517,7 @@ class Query extends BaseQuery
         } else {
           // 未命中外键：一对多给空集合，一对一给空数据集
           $row[$name] = $isMany
-            ? new \Viswoole\Database\Collection($relationQuery->newQuery(), [])
+            ? new Collection($relationQuery->newQuery(), [])
             : new DataSet($relationQuery->newQuery(), []);
         }
       });
