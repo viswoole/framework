@@ -42,7 +42,7 @@ trait Crud
    *
    * @param array<string,mixed>|array<int,array<string,mixed>> $data 关联数组（单条）或索引数组（批量）
    * @return int|Raw 插入的记录数
-   * @throws InvalidArgumentException 数据为空时抛出
+   * @throws InvalidArgumentException|DbException 数据为空时抛出
    */
   public function insert(array $data): int|Raw
   {
@@ -56,6 +56,8 @@ trait Crud
    *
    * @param string $type 操作类型 insert|insertGetId|update|delete|select
    * @return Raw|string|array|int 查询结果
+   * @throws DbException 数据库操作失败时抛出
+   * @noinspection PhpDocRedundantThrowsInspection
    */
   protected function runCrud(string $type): Raw|string|array|int
   {
@@ -171,11 +173,11 @@ trait Crud
     if ($this->options->cache) {
       if ($this->options->cache['tag']) {
         Cache::store($this->options->cache['store'])
-          ->tag($this->options->cache['tag'])
-          ->remove($this->options->cache['key']);
+             ->tag($this->options->cache['tag'])
+             ->remove($this->options->cache['key']);
       } else {
         Cache::store($this->options->cache['store'])
-          ->delete($this->options->cache['key']);
+             ->delete($this->options->cache['key']);
       }
     }
     return $result;
@@ -185,6 +187,7 @@ trait Crud
    * 删除记录
    *
    * @return int|Raw 受影响的记录数
+   * @throws DbException
    */
   public function delete(): int|Raw
   {
@@ -221,6 +224,7 @@ trait Crud
    * 执行查询并以原始数组返回结果
    *
    * @return array|Raw 查询结果数组
+   * @throws DbException
    */
   public function getArray(): array|Raw
   {
@@ -232,7 +236,7 @@ trait Crud
    *
    * @param array $data 关联数组数据
    * @return string|int|Raw 自增主键值
-   * @throws InvalidArgumentException 数据非关联数组时抛出
+   * @throws InvalidArgumentException|DbException 数据非关联数组时抛出
    */
   public function insertGetId(array $data): string|int|Raw
   {
@@ -248,7 +252,7 @@ trait Crud
    *
    * @param array<string,mixed|Raw> $data 键值对，键为列名，值为新值（支持 Raw 表达式）
    * @return int|Raw 受影响的记录数
-   * @throws InvalidArgumentException 数据为空时抛出
+   * @throws InvalidArgumentException|DbException 数据为空时抛出
    */
   public function update(array $data): int|Raw
   {
@@ -276,6 +280,7 @@ trait Crud
    * @param string $type 聚合函数名
    * @param string $column 列名
    * @return mixed|Raw 聚合结果
+   * @throws DbException 数据库操作失败时抛出
    */
   private function aggregateQueries(string $type, string $column): mixed
   {
@@ -291,7 +296,7 @@ trait Crud
    *
    * @param string $column 列名
    * @return mixed|false 列值，查询为空或列不存在时返回 false
-   * @throws InvalidArgumentException 列不存在时抛出
+   * @throws InvalidArgumentException|DbException 列不存在时抛出
    */
   public function value(string $column): mixed
   {
