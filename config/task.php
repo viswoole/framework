@@ -10,5 +10,18 @@ return [
   // null 表示跟随 cache.default 指定的默认通道。
   // 任务队列读写频繁且要求高性能，默认通道为文件缓存时建议指定 redis 等高性能通道。
   // 注意：切换商店前残留在旧商店中的队列条目不会被新商店恢复，切换时需确保队列已清空。
-  'store' => env('task.store')
+  'store' => env('task.store'),
+
+  // 任务默认有效期（秒），从投递时刻起算，任务被消费时检测；
+  // 已过期的任务不再执行处理器，直接向 Worker 进程返回 false。
+  // 0 或 null 表示长期有效。
+  // 仅对 emit() 投递的任务生效；emitWait()/emitsWait() 为同步执行，不受此配置影响。
+  'expire' => env('task.expire'),
+
+  // 按主题覆盖任务有效期（秒），优先级高于 expire 全局默认，主题名不区分大小写。
+  // 值为 null 表示该主题长期有效，可用于全局设置了过期时间时为特定主题豁免。
+  'topics' => [
+    // 'sms.sendLoginCode' => 300,
+    // 'log.write' => null,
+  ]
 ];

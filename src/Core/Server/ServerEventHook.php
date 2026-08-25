@@ -68,7 +68,8 @@ class ServerEventHook
     $events = [];
     foreach (array_keys(self::$handles) as $event) {
       $events[$event] = function (mixed ...$args) use ($event) {
-        self::dispatch($event, $args);
+        // 透传处理器返回值：Swoole 事件中仅 onTask 的返回值有语义（任务结果回传 Worker 进程）
+        return self::dispatch($event, $args);
       };
     }
     return $events;
@@ -77,17 +78,25 @@ class ServerEventHook
   /**
    * 依次调用指定事件的所有已注册处理器
    *
+   * 返回最后一个处理器的返回值。Swoole 全部服务端事件中仅 onTask 的
+   * 返回值有语义（将任务结果回传给 Worker 进程并触发 onFinish），
+   * 其余事件回调的返回值 Swoole 一律忽略；因此调度链路必须透传返回值，
+   * 同一事件注册多个处理器时，仅最后一个处理器的返回值生效。
+   *
    * @param string $event 事件名称
    * @param array $args 传递给事件处理器的参数列表
+   * @return mixed 最后一个处理器的返回值，无处理器时返回 null
    */
-  private static function dispatch(string $event, array $args): void
+  private static function dispatch(string $event, array $args): mixed
   {
     $handlers = self::$handles[$event] ?? null;
+    $result = null;
     if (!is_null($handlers)) {
       foreach ($handlers as $handler) {
-        invoke($handler, $args);
+        $result = invoke($handler, $args);
       }
     }
+    return $result;
   }
 
   /**

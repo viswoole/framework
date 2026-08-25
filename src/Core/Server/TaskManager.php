@@ -60,8 +60,7 @@ class TaskManager
   public function __construct(
     protected CacheManager $cache,
     protected Config       $config
-  )
-  {
+  ) {
     // 监听启动事件，恢复未完成的任务
     ServerEventHook::addEvent('workerStart', function (SwooleServer $server, int $workerId) {
       if (!$server->taskworker) {
@@ -79,8 +78,20 @@ class TaskManager
       }
     });
     ServerEventHook::addEvent('task', function (SwooleServer $server, SwooleTask $task) {
-      $this->onTask($server, $task);
+      // 透传 onTask 返回值（Swoole 语义：onTask 返回值作为任务结果发送给 Worker 进程）
+      return $this->onTask($server, $task);
     });
+  }
+
+  /**
+   * 获取指定工作进程对应的队列缓存存储
+   *
+   * @param string $workId 工作进程ID
+   * @return CacheTagInterface 带标签的缓存存储实例
+   */
+  protected function getQueueCacheStore(string $workId): CacheTagInterface
+  {
+    return $this->queueStore()->tag(self::CACHE_TAG_PREFIX . $workId);
   }
 
   /**
@@ -103,23 +114,17 @@ class TaskManager
   }
 
   /**
-   * 获取指定工作进程对应的队列缓存存储
-   *
-   * @param string $workId 工作进程ID
-   * @return CacheTagInterface 带标签的缓存存储实例
-   */
-  protected function getQueueCacheStore(string $workId): CacheTagInterface
-  {
-    return $this->queueStore()->tag(self::CACHE_TAG_PREFIX . $workId);
-  }
-
-  /**
    * 处理 Swoole onTask 事件，将任务分发到对应主题的处理器
+   *
+   * 处理器返回值原样透传（Swoole onTask 官方语义：返回值作为任务结果
+   * 发送给 Worker 进程的 onFinish 回调 / taskwait 调用方）。
+   * 任务已过期或处理器抛出异常时返回 false。
    *
    * @param SwooleServer $server Swoole 服务实例
    * @param SwooleTask $task Swoole 任务对象
+   * @return mixed 处理器返回值；任务已过期或处理器抛出异常时返回 false
    */
-  protected function onTask(SwooleServer $server, SwooleTask $task): void
+  protected function onTask(SwooleServer $server, SwooleTask $task): mixed
   {
     $topic = $task->data['topic'] ?? null;
     if (empty($topic)) {
@@ -133,16 +138,76 @@ class TaskManager
       // 崩溃恢复只覆盖"已投递但未消费"的窗口。
       self::remove($taskProxy->queue_id, (string)$taskProxy->worker_id);
     }
+    // 过期检测：有效期在投递时按主题解析并随任务数据传递，
+    // 超过有效期的任务不再执行处理器，直接返回 false 通知 Worker 进程
+    if ($this->isExpired($task->data)) {
+      Log::task("任务已过期，跳过执行：{$taskProxy->topic}({$taskProxy->queue_id})", [
+        'expire' => $task->data['expire'] ?? null,
+        'dispatch_time' => $task->data['dispatch_time'] ?? null,
+        'data' => $taskProxy->data,
+      ]);
+      return false;
+    }
     $handle = $this->topics[strtolower($topic)];
     try {
-      call_user_func_array($handle, [$taskProxy, $server]);
+      // 处理器返回值原样透传给 Worker 进程（void 处理器返回 null，不会触发结果投递）
+      return call_user_func_array($handle, [$taskProxy, $server]);
     } catch (Throwable $e) {
-      // 任务异常仅记录到任务日志通道，队列条目已在消费时删除，不会重投
+      // 任务异常仅记录到任务日志通道，队列条目已在消费时删除，不会重投；
+      // 返回 false 让等待方（taskwait）立即收到失败信号，而不是干等超时
       Log::task("任务执行异常：$taskProxy->topic($taskProxy->queue_id)", [
         'exception' => (string)$e,
         'data' => $taskProxy->data,
       ]);
+      return false;
     }
+  }
+
+  /**
+   * 解析指定主题的任务有效期（秒）
+   *
+   * 优先级：task.topics 中按主题配置 > task.expire 全局默认。
+   * 主题名本身可包含点号（如 sms.sendLoginCode），无法使用点号分隔的
+   * 配置路径查询，因此对 topics 配置做整体扫描匹配（不区分大小写）。
+   * 0、负数等无效值统一归一化为 null（长期有效）。
+   *
+   * @param string $topic 任务主题名称
+   * @return int|null 有效期秒数，null 表示长期有效
+   */
+  protected function resolveExpire(string $topic): ?int
+  {
+    $expire = null;
+    $matched = false;
+    $topics = $this->config->get('task.topics');
+    if (is_array($topics)) {
+      foreach ($topics as $key => $value) {
+        // 主题名不区分大小写，与主题注册规则保持一致
+        if (strcasecmp((string)$key, $topic) === 0) {
+          $expire = $value;
+          $matched = true;
+          break;
+        }
+      }
+    }
+    // 未命中主题配置时回退到全局默认；命中且值为 null 表示该主题豁免（长期有效）
+    if (!$matched) $expire = $this->config->get('task.expire');
+    return is_numeric($expire) && (int)$expire > 0 ? (int)$expire : null;
+  }
+
+  /**
+   * 检测任务是否已超过有效期
+   *
+   * @param array $taskData 任务数据（含 expire 与 dispatch_time）
+   * @return bool 已过期返回 true；未配置有效期、未记录投递时间或未过期返回 false
+   */
+  protected function isExpired(array $taskData): bool
+  {
+    $expire = $taskData['expire'] ?? null;
+    $dispatchTime = $taskData['dispatch_time'] ?? null;
+    // 0、null 或负数均视为长期有效（与缓存过期时间约定一致）
+    if (!is_numeric($expire) || (int)$expire <= 0) return false;
+    if (!is_numeric($dispatchTime)) return false;
+    return microtime(true) > ((float)$dispatchTime + (int)$expire);
   }
 
   /**
@@ -171,6 +236,9 @@ class TaskManager
   /**
    * 投递异步任务到 Task Worker 进程
    *
+   * 投递时按 task.topics / task.expire 配置解析任务有效期（秒）并随任务
+   * 数据传递，任务被消费时检测，已过期的任务不会执行处理器。
+   *
    * @param string $topic 已注册的任务主题名称
    * @param mixed $data 传递给任务处理器的业务数据
    * @param bool $queue 是否持久化到队列，启用后服务重启可自动恢复未执行的任务
@@ -187,7 +255,9 @@ class TaskManager
       'data' => $data,
       'topic' => $topic,
       'queueId' => null,
-      'dispatch_time' => null,
+      'dispatch_time' => microtime(true),
+      // 任务有效期（秒），null 表示长期有效，消费时由 isExpired 检测
+      'expire' => $this->resolveExpire($topic),
     ];
     if ($queue) {
       // 获取当前workerId
@@ -197,7 +267,6 @@ class TaskManager
       // 生成一个唯一队列id
       $queueId = $workId . '_' . md5(uniqid("$workId:$cid:$topic"));
       $taskData['queueId'] = $queueId;
-      $taskData['dispatch_time'] = microtime(true);
       // 缓存商店
       $store = $this->getQueueCacheStore($workId);
       // 缓存结果
