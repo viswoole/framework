@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core\Server;
 
@@ -21,6 +21,7 @@ use ReflectionException;
 use RuntimeException;
 use Swoole\Server as SwooleServer;
 use Swoole\Server\Task as SwooleTask;
+use Throwable;
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Core\Coroutine;
@@ -96,14 +97,22 @@ class TaskManager
       throw new InvalidArgumentException('必须使用该类中的方法触发任务');
     }
     self::has($task->data['topic']);
-    $taskProxy = new TaskProxy($task, function (string $queueId, string $worker_id) {
-      self::remove($queueId, $worker_id);
-    });
-    $handle = $this->topics[strtolower($topic)];
-    call_user_func_array($handle, [$taskProxy, $server]);
-    if ($taskProxy->queue_id && !$taskProxy->is_finish) {
-      // 从队列中删除事务
+    $taskProxy = new TaskProxy($task);
+    if ($taskProxy->queue_id) {
+      // 队列语义为待消费队列（at-most-once）：任务被 Task Worker 消费即删除，
+      // 与执行结果无关（finish 仅向 Worker 进程回传结果，不代表任务成功）。
+      // 崩溃恢复只覆盖"已投递但未消费"的窗口。
       self::remove($taskProxy->queue_id, (string)$taskProxy->worker_id);
+    }
+    $handle = $this->topics[strtolower($topic)];
+    try {
+      call_user_func_array($handle, [$taskProxy, $server]);
+    } catch (Throwable $e) {
+      // 任务异常仅记录到任务日志通道，队列条目已在消费时删除，不会重投
+      Log::task("任务执行异常：$taskProxy->topic($taskProxy->queue_id)", [
+        'exception' => (string)$e,
+        'data' => $taskProxy->data,
+      ]);
     }
   }
 

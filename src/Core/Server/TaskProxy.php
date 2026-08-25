@@ -15,7 +15,6 @@ declare (strict_types=1);
 
 namespace Viswoole\Core\Server;
 
-use Closure;
 use Exception;
 use Swoole\Server\Task as SwooleTask;
 
@@ -51,11 +50,9 @@ class TaskProxy
 
   /**
    * @param SwooleTask $swooleTask Swoole 原始任务对象
-   * @param Closure $finish_callback 队列任务完成后的清理回调，接收 (queueId, workerId)
    */
   public function __construct(
-    private readonly SwooleTask $swooleTask,
-    private readonly Closure    $finish_callback
+    private readonly SwooleTask $swooleTask
   )
   {
     // 修复: 使用 null 合并运算符，避免数据访问无验证导致未定义键警告
@@ -106,7 +103,7 @@ class TaskProxy
   }
 
   /**
-   * 标记任务完成，向 Worker 进程返回结果并清理队列缓存
+   * 标记任务完成，向 Worker 进程返回结果
    *
    * @param mixed $data 返回给 Worker 进程的任务结果数据
    * @return bool 完成成功返回 true，重复调用返回 false
@@ -115,9 +112,6 @@ class TaskProxy
   {
     if (!$this->is_finish) {
       $this->is_finish = true;
-      if ($this->queue_id) {
-        call_user_func_array($this->finish_callback, [$this->queue_id, (string)$this->worker_id]);
-      }
       return $this->swooleTask->finish($data);
     }
     return false;
