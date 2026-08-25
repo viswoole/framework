@@ -23,7 +23,9 @@ use Swoole\Server as SwooleServer;
 use Swoole\Server\Task as SwooleTask;
 use Throwable;
 use Viswoole\Cache\CacheManager;
+use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
+use Viswoole\Core\Config;
 use Viswoole\Core\Coroutine;
 use Viswoole\Core\Facade\Server;
 use Viswoole\Log\Facade\Log;
@@ -46,11 +48,19 @@ class TaskManager
    * @var array<string,callable> 任务主题
    */
   protected array $topics = [];
+  /**
+   * @var CacheDriverInterface|null 任务队列专用缓存驱动（惰性解析）
+   */
+  protected ?CacheDriverInterface $queueDriver = null;
 
   /**
    * @param CacheManager $cache 缓存管理器，用于任务队列的持久化存储
+   * @param Config $config 框架配置实例，用于读取 task.store 队列缓存通道配置
    */
-  public function __construct(protected CacheManager $cache)
+  public function __construct(
+    protected CacheManager $cache,
+    protected Config       $config
+  )
   {
     // 监听启动事件，恢复未完成的任务
     ServerEventHook::addEvent('workerStart', function (SwooleServer $server, int $workerId) {
@@ -59,7 +69,7 @@ class TaskManager
         $taskQueue = $store->get();
         foreach ($taskQueue as $queueId) {
           go(function () use ($queueId, $store) {
-            $taskData = $this->cache->get($queueId);
+            $taskData = $this->queueStore()->get($queueId);
             if ($taskData) {
               $result = Server::getServer()->task($taskData);
               if (!$result) Log::task("队列任务恢复失败：$queueId", $taskData);
@@ -74,6 +84,25 @@ class TaskManager
   }
 
   /**
+   * 惰性解析任务队列专用缓存驱动
+   *
+   * 读取 task.store 配置指定缓存商店名称；未配置时使用默认通道。
+   * 采用惰性解析的原因：TaskManager 在服务启动阶段即被实例化，
+   * 急切解析会使未配置缓存商店的项目在启动时直接崩溃，
+   * 即使它从未使用任务队列功能。惰性将失败时机推迟到首次实际使用队列。
+   *
+   * @return CacheDriverInterface 任务队列专用缓存驱动实例
+   */
+  protected function queueStore(): CacheDriverInterface
+  {
+    if (!isset($this->queueDriver)) {
+      // 未配置时 store(null) 返回默认通道；指定不存在的名称会抛 CacheErrorException，快速失败
+      $this->queueDriver = $this->cache->store($this->config->get('task.store'));
+    }
+    return $this->queueDriver;
+  }
+
+  /**
    * 获取指定工作进程对应的队列缓存存储
    *
    * @param string $workId 工作进程ID
@@ -81,7 +110,7 @@ class TaskManager
    */
   protected function getQueueCacheStore(string $workId): CacheTagInterface
   {
-    return $this->cache->tag(self::CACHE_TAG_PREFIX . $workId);
+    return $this->queueStore()->tag(self::CACHE_TAG_PREFIX . $workId);
   }
 
   /**
