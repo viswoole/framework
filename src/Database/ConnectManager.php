@@ -98,7 +98,7 @@ class ConnectManager
       $connect = $channel->pop($type);
       if ($connect instanceof PDOProxy || $connect instanceof PDO) {
         $connect->beginTransaction();
-      } elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
+      } /** @noinspection PhpComposerExtensionStubsInspection */ elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
         $connect->autocommit(false);
       }
       for ($level = 2; $level <= $this->transactionDepth; $level++) {
