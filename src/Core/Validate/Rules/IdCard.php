@@ -48,7 +48,7 @@ class IdCard extends BaseValidateRule
   /**
    * @param string $message 校验失败信息
    */
-  public function __construct(string $message = '必须是有效的身份证号码')
+  public function __construct(string $message = '{:name} 必须是有效的身份证号码')
   {
     parent::__construct($message);
   }
@@ -58,7 +58,7 @@ class IdCard extends BaseValidateRule
    */
   #[Override] public function validate(mixed $value): mixed
   {
-    if (!is_string($value)) $this->error('必须为字符串类型');
+    if (!is_string($value)) $this->error('{:name} 必须为字符串类型');
 
     // 先用正则验证基本格式
     $is18 = preg_match(self::PATTERN_18, $value);

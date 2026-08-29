@@ -51,11 +51,11 @@ class DateAfter extends BaseValidateRule
    */
   #[Override] public function validate(mixed $value): mixed
   {
-    if (!is_string($value)) $this->error('必须为有效的日期字符串');
+    if (!is_string($value)) $this->error('{:name} 必须为有效的日期字符串');
     // 修复: $this->datetime 可能为 int(时间戳)，strtotime() 在 strict_types 下不接受 int
     $threshold = is_int($this->datetime) ? $this->datetime : strtotime($this->datetime);
     if (strtotime($value) <= $threshold) {
-      $this->error("必须在 $this->datetime 之后");
+      $this->error("{:name} 必须在 $this->datetime 之后");
     }
     return $value;
   }

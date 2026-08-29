@@ -37,6 +37,11 @@ class Validate
   /**
    * 执行扩展验证规则链，依次调用每个规则的 validate 方法
    *
+   * 规则抛出 ValidateException 时自动替换消息中的 {:name} 占位符为参数名
+   * （见 withContext），使错误信息能定位到具体参数。
+   * 注意：规则实例为容器预建的共享实例（协程间复用），禁止在实例上存储请求级状态；
+   * 自定义规则需要参数名时，可声明 validate(mixed $value, string $name = '') 接收
+   *
    * @param ReflectionAttribute[]|BaseValidateRule[] $rules 扩展验证规则列表
    * @param mixed $value 待验证的值
    * @param mixed ...$args 额外参数（如参数名称），传递给规则的 validate 方法
@@ -57,10 +62,42 @@ class Validate
       }
       // 判断是否为扩展规则
       if ($instance instanceof BaseValidateRule) {
-        $value = call_user_func_array([$instance, 'validate'], [$value, ...$args]);
+        try {
+          $value = call_user_func_array([$instance, 'validate'], [$value, ...$args]);
+        } catch (ValidateException $e) {
+          throw self::withContext($e, ...$args);
+        }
       }
     }
     return $value;
+  }
+
+  /**
+   * 为校验异常替换 {:name} 占位符为参数名，使错误信息能定位到具体参数
+   *
+   * 消息未使用占位符时原样返回，开发者的自定义文案不受影响；
+   * 占位符可出现多次，多条错误信息逐条替换；
+   * 参数名缺失时占位符替换为空串并去除行首残留空白
+   *
+   * @param ValidateException $e 原始校验异常
+   * @param mixed ...$args 校验上下文参数，第一个参数为参数名称，缺失时原样返回
+   * @return ValidateException 占位符替换后的异常，原异常挂载为 previous
+   */
+  public static function withContext(ValidateException $e, mixed ...$args): ValidateException
+  {
+    if (!str_contains($e->getMessage(), '{:name}')) return $e;
+    $name = $args[0] ?? null;
+    $replacement = is_string($name) && $name !== '' ? '$' . $name : '';
+    $replaced = str_replace('{:name}', $replacement, $e->getError());
+    if (is_array($replaced)) {
+      $replaced = array_map(
+        fn($item) => is_string($item) ? preg_replace('/^\s+/', '', $item) : $item,
+        $replaced
+      );
+    } else {
+      $replaced = preg_replace('/^\s+/', '', $replaced);
+    }
+    return new ValidateException($replaced, $e->getCode(), $e);
   }
 
   /**

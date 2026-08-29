@@ -45,7 +45,7 @@ class ArrayItem extends BaseValidateRule
    */
   #[Override] public function validate(mixed $value): array
   {
-    if (!is_array($value)) $this->error('必须为数组');
+    if (!is_array($value)) $this->error('{:name} 必须为数组');
     $array = [];
     foreach ($value as $item) {
       try {

@@ -51,12 +51,12 @@ class Length extends BaseValidateRule
     } elseif (is_array($value)) {
       $len = count($value);
     } else {
-      $this->error('长度不符合要求');
+      $this->error('{:name} 长度不符合要求');
     }
     if ($len < $this->min || ($this->max !== null && $len > $this->max)) {
       $message = is_null($this->max)
-        ? "长度必须为$this->min"
-        : "长度必须在 $this->min 到 $this->max 之间";
+        ? "{:name} 长度必须为$this->min"
+        : "{:name} 长度必须在 $this->min 到 $this->max 之间";
       $this->error($message);
     }
     return $value;

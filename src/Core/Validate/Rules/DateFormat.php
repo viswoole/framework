@@ -43,10 +43,10 @@ class DateFormat extends BaseValidateRule
    */
   #[Override] public function validate(mixed $value): mixed
   {
-    if (!is_string($value)) $this->error('必须为有效的日期字符串');
+    if (!is_string($value)) $this->error('{:name} 必须为有效的日期字符串');
     $date = DateTime::createFromFormat($this->format, $value);
     $valid = $date && $date->format($this->format) === $value;
-    if (!$valid) $this->error("必须为 $this->format 格式的日期");
+    if (!$valid) $this->error("{:name} 必须为 $this->format 格式的日期");
     return $value;
   }
 }

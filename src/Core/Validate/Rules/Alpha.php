@@ -26,7 +26,7 @@ class Alpha extends Regex
   /**
    * @param string $message 校验失败信息
    */
-  public function __construct(string $message = '必须由字母组成')
+  public function __construct(string $message = '{:name} 必须由字母组成')
   {
     parent::__construct('/^[A-Za-z]+$/', $message);
   }

@@ -545,8 +545,12 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
         if ($allowsNull) return null;
         throw new ValidateException("$$name must be of type $type, null given");
       }
-      // 进行类型验证
-      $value = Validate::check($value, $type);
+      // 进行类型验证，类型错误为框架生成的固定文案，直接附加参数名
+      try {
+        $value = Validate::check($value, $type);
+      } catch (ValidateException $e) {
+        throw new ValidateException("$$name {$e->getMessage()}", $e->getCode(), $e);
+      }
     }
     // 验证扩展规则
     return Validate::checkRules($rules, $value, $name);
@@ -565,12 +569,13 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
     $index++;
     if (!$this->isDebug()) {
       throw $e;
-    } else {
-      throw new ValidateException(
-        "Argument #$index ($$name) " . $e->getMessage(),
-        previous: $e
-      );
     }
+    $message = $e->getMessage();
+    // 消息已含参数名上下文（如 "$phone xxx"）时不再重复拼接
+    if (!str_contains($message, '$' . $name)) {
+      $message = "Argument #$index ($$name) " . $message;
+    }
+    throw new ValidateException($message, previous: $e);
   }
 
   /**

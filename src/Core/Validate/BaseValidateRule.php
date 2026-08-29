@@ -27,12 +27,12 @@ use Viswoole\Core\Exception\ValidateException;
 abstract class BaseValidateRule
 {
   /**
-   * @var string 自定义校验失败提示消息
+   * @var string 自定义校验失败提示消息，支持 {:name} 占位符引用参数名
    */
   protected string $message;
 
   /**
-   * @param string $message 校验失败时的自定义提示消息
+   * @param string $message 校验失败时的自定义提示消息，{:name} 会被替换为参数名
    */
   public function __construct(string $message = '')
   {
@@ -51,11 +51,16 @@ abstract class BaseValidateRule
   /**
    * 抛出校验失败异常，优先使用构造时传入的自定义消息
    *
+   * 默认文案通过 {:name} 占位符引用参数名，由 Validate::withContext 统一替换；
+   * 自定义消息同样支持 {:name} 占位符，未使用占位符时保持原样
+   *
    * @param string|null $message 临时错误消息，仅在 $this->message 为空时生效
    * @throws ValidateException 始终抛出
    */
   protected function error(?string $message = null): void
   {
-    throw new ValidateException(empty($this->message) ? ($message ?? '验证失败') : $this->message);
+    throw new ValidateException(
+      empty($this->message) ? ($message ?? '{:name} 验证失败') : $this->message
+    );
   }
 }

@@ -23,7 +23,7 @@ use Attribute;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class Mobile extends Regex
 {
-  public function __construct(string $message = '必须是有效的手机号')
+  public function __construct(string $message = '{:name} 必须是有效的手机号')
   {
     parent::__construct('/^1[3-9]\d{9}$/', $message);
   }

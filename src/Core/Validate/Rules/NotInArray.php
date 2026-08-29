@@ -45,7 +45,7 @@ class NotInArray extends BaseValidateRule
   #[Override] public function validate(mixed $value): mixed
   {
     $valid = in_array($value, $this->haystack, $this->strict);
-    if ($valid) $this->error('不能是' . implode('、', $this->haystack));
+    if ($valid) $this->error('{:name} 不能是' . implode('、', $this->haystack));
     return $value;
   }
 }

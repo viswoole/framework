@@ -44,11 +44,11 @@ class Between extends BaseValidateRule
    */
   #[Override] public function validate(mixed $value): int|float
   {
-    if (!is_numeric($value)) $this->error('必须为数值类型');
+    if (!is_numeric($value)) $this->error('{:name} 必须为数值类型');
     // 修复: 类型转换应同时参考 start 和 end 的类型，任一为 float 则按 float 处理
     $value = (is_float($this->start) || is_float($this->end)) ? floatval($value) : intval($value);
     if ($value >= $this->start && $value <= $this->end) return $value;
     // 修复: 错误信息包含实际值，便于调试定位
-    $this->error("值 $value 必须介于 $this->start - $this->end 之间");
+    $this->error("{:name} 值 $value 必须介于 $this->start - $this->end 之间");
   }
 }

@@ -48,7 +48,7 @@ class InArray extends BaseValidateRule
     $valid = in_array($value, $this->haystack, $this->strict);
     // 修复: implode 前将数组值转为字符串，避免 null/bool 导致 TypeError
     if (!$valid) $this->error(
-      '必须是' . implode('、', array_map('strval', $this->haystack)) . '之一'
+      '{:name} 必须是' . implode('、', array_map('strval', $this->haystack)) . '之一'
     );
     return $value;
   }
