@@ -141,9 +141,13 @@ class BuiltinTypeValidate
    */
   public static function int(mixed $value): int
   {
-    if (is_numeric($value) && !is_int($value)) {
-      // 修复: intval() 无法正确处理科学计数法(如 '1e5' 会被截断为 1)
-      // 统一通过 float 中转，确保科学计数法字符串能正确转换为整数
+    if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
+      // 修复: 纯整数字符串必须 (int) 直转——经 float 中转时超出 2^53 的
+      // 大整数（如雪花 ID）会发生精度丢失（末几位被舍入指向错误记录）
+      $value = (int)$value;
+    } elseif (is_numeric($value) && !is_int($value)) {
+      // 非整型数字串（如科学计数法 '1e5'）才经 float 中转，
+      // 确保 intval() 截断科学计数法的问题不复现
       $value = (int)(float)$value;
     }
     if (!is_int($value)) self::unifiedExceptionHandling('int', $value);
