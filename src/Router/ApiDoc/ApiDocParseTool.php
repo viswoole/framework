@@ -72,6 +72,7 @@ class ApiDocParseTool
    *    citeLink: string|null,
    *    title: string,
    *    description: string,
+   *    source: array{file:string, line:int}|null,
    *    count: int,
    *    children: array<array>
    *  } 分组文档结构
@@ -98,6 +99,7 @@ class ApiDocParseTool
       'citeLink' => $group->getCiteLink(),
       'title' => $group->getTitle(),
       'description' => $group->getDescription(),
+      'source' => $group->getSource(),
       'count' => $count,
       'children' => $children,
     ];
@@ -114,6 +116,7 @@ class ApiDocParseTool
    *   citeLink: string,
    *   title: string,
    *   description: string,
+   *   source: array{file:string, line:int}|null,
    *   paths: string[],
    *   methods: string[],
    *   domains: string[],
@@ -140,6 +143,7 @@ class ApiDocParseTool
       'citeLink' => $route->getCiteLink(),
       'title' => $route->getTitle(),
       'description' => $route->getDescription(),
+      'source' => $route->getSource(),
       'paths' => $route->getPaths(),
       'methods' => $route->getMethod(),
       'domains' => $route->getDomain(),

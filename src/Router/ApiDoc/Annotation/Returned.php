@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router\ApiDoc\Annotation;
 
 use Attribute;
+use BackedEnum;
 use Closure;
 use UnitEnum;
 use Viswoole\Core\Common\Arr;
@@ -128,6 +129,12 @@ class Returned
       case 'object':
         if ($value instanceof Closure) {
           return ['Closure', new TypeStructure(Types::Mixed)];
+        }
+        // 支持枚举：backed 枚举取实际 backing value（int/string），纯枚举取枚举项名
+        if ($value instanceof BackedEnum) {
+          $backing = $value->value;
+          $type = is_int($backing) ? Types::Int : Types::String;
+          return [$backing, new TypeStructure($type)];
         }
         if ($value instanceof UnitEnum) {
           return [$value->name, new TypeStructure(Types::String)];

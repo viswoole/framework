@@ -23,6 +23,22 @@ use Viswoole\Router\Route\Group;
 class RouterTool
 {
   /**
+   * 将文件绝对路径转换为相对项目根目录的路径
+   *
+   * 用于接口文档展示源码位置，相对路径可跨环境（如容器内外）定位
+   *
+   * @param string $file 文件绝对路径
+   * @return string 相对路径，不在根目录下时返回原路径
+   */
+  public static function relativeToRoot(string $file): string
+  {
+    $root = getRootPath();
+    return $root !== '' && str_starts_with($file, $root . '/')
+      ? substr($file, strlen($root) + 1)
+      : $file;
+  }
+
+  /**
    * 获取缓存
    *
    * @param string $server 服务名称

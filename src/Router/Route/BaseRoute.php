@@ -15,7 +15,11 @@ declare (strict_types=1);
 
 namespace Viswoole\Router\Route;
 
+use Closure;
 use InvalidArgumentException;
+use ReflectionFunction;
+use ReflectionMethod;
+use Throwable;
 use Viswoole\Core\App;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Middleware;
@@ -38,6 +42,10 @@ abstract class BaseRoute
    * @var mixed 处理函数
    */
   protected mixed $handler;
+  /**
+   * @var array{file:string, line:int}|null 源码位置，供接口文档定位
+   */
+  private ?array $source = null;
   /**
    * @var string 当前路由id
    */
@@ -121,6 +129,8 @@ abstract class BaseRoute
     $this->id = $id ?? $this->generateId();
     // 处理函数
     $this->handler = $this->verifyHandler($handler);
+    // 从处理函数自动推断源码位置，供接口文档定位
+    $this->source = $this->resolveSourceLocation($this->handler);
   }
 
   /**
@@ -265,6 +275,67 @@ abstract class BaseRoute
   public function getHandler(): callable|array
   {
     return $this->handler;
+  }
+
+  /**
+   * 获取源码位置
+   *
+   * @return array{file:string, line:int}|null 文件绝对路径与起始行号，无法确定时返回null
+   */
+  public function getSource(): ?array
+  {
+    return $this->source;
+  }
+
+  /**
+   * 设置源码位置
+   *
+   * 用于处理函数为占位符（如控制器路由组）时显式指定源码位置
+   *
+   * @param string $file 文件绝对路径
+   * @param int $line 起始行号
+   * @return $this
+   */
+  public function setSourceLocation(string $file, int $line): static
+  {
+    $this->source = ['file' => $file, 'line' => $line];
+    return $this;
+  }
+
+  /**
+   * 从处理函数反射推断源码位置
+   *
+   * 支持闭包、[类,方法]、['对象',方法]、'类::方法'、函数名、可调用对象
+   *
+   * @param callable|array $handler 处理函数
+   * @return array{file:string, line:int}|null 文件绝对路径与起始行号，无法确定时返回null
+   */
+  private function resolveSourceLocation(callable|array $handler): ?array
+  {
+    try {
+      if ($handler instanceof Closure) {
+        $ref = new ReflectionFunction($handler);
+      } elseif (is_array($handler) && isset($handler[0], $handler[1])) {
+        $class = is_object($handler[0]) ? get_class($handler[0]) : $handler[0];
+        $ref = new ReflectionMethod($class, $handler[1]);
+      } elseif (is_string($handler) && str_contains($handler, '::')) {
+        [$class, $method] = explode('::', $handler, 2);
+        $ref = new ReflectionMethod($class, $method);
+      } elseif (is_string($handler) && function_exists($handler)) {
+        $ref = new ReflectionFunction($handler);
+      } elseif (is_object($handler)) {
+        $ref = new ReflectionMethod($handler, '__invoke');
+      } else {
+        return null;
+      }
+      $file = $ref->getFileName();
+      if (empty($file)) return null;
+      // 转换为相对项目根目录的路径，便于文档跨环境（如容器内外）定位
+      return ['file' => RouterTool::relativeToRoot($file), 'line' => $ref->getStartLine()];
+    } catch (Throwable) {
+      // 反射失败（类未加载、方法不存在等）时忽略，不影响路由注册
+      return null;
+    }
   }
 
   /**

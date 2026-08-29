@@ -293,6 +293,11 @@ class Router extends Collector
      * @var Group $group 路由分组实例
      */
     $group = $controller->create([]);
+    // 记录控制器类源码位置（相对项目根目录），供接口文档定位
+    $group->setSourceLocation(
+      RouterTool::relativeToRoot($refClass->getFileName()),
+      $refClass->getStartLine()
+    );
     // 类的全部方法
     $methods = $refClass->getMethods();
     if (!empty($methods)) $this->parseMethod($methods, $isAutoRoute, $group);
@@ -337,13 +342,19 @@ class Router extends Collector
         $routeItem = new Route($method->getName(), $handler, $group, id: $methodId);
         // 设置标题
         $routeItem->setTitle(DocCommentTool::extractDocTitle($methodDocComment));
+        // 设置描述
+        $routeItem->setDescription(DocCommentTool::extractDocDescription($methodDocComment));
       } else {
         // 处理设置了路由注解的方法
         /** @var RouteMapping $methodAnnotationRoute 注解路由 */
         $methodAnnotationRoute = $methodAttributes[0]->newInstance();
-        // 设置描述
-        if (!isset($methodAnnotationRoute->title)) {
+        // 未声明标题时，从方法文档注释首行提取
+        if (empty($methodAnnotationRoute->title)) {
           $methodAnnotationRoute->title = DocCommentTool::extractDocTitle($methodDocComment);
+        }
+        // 未声明描述时，从方法文档注释正文提取
+        if (empty($methodAnnotationRoute->description)) {
+          $methodAnnotationRoute->description = DocCommentTool::extractDocDescription($methodDocComment);
         }
         // 如果没有设置路由路径则默认为方法名称
         if (empty($methodAnnotationRoute->prefix)) {

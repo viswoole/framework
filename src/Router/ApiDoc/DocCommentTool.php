@@ -131,11 +131,47 @@ class DocCommentTool
    */
   public static function extractDocTitle(string $docComment): string
   {
-    if (empty($docComment)) return '';
-    $title = '';
-    if (preg_match('/^\s+\*\s+([^@\n][^\n]*)$/m', $docComment, $matches)) {
-      $title = trim($matches[1]);
+    $lines = self::extractDocLines($docComment);
+    return $lines[0] ?? '';
+  }
+
+  /**
+   * 提取文档注释中的描述正文（标题行之后、首个标签之前的内容）
+   *
+   * @param string $docComment 文档注释
+   * @return string 描述文本，无正文时返回空字符串
+   */
+  public static function extractDocDescription(string $docComment): string
+  {
+    $lines = self::extractDocLines($docComment);
+    // 首行为标题，描述为其余正文
+    if (count($lines) <= 1) return '';
+    return trim(implode("\n", array_slice($lines, 1)));
+  }
+
+  /**
+   * 提取文档注释中首个标签之前的描述行列表
+   *
+   * @param string $docComment 文档注释
+   * @return string[] 描述行列表（已去除空行与注释标记，首行为标题）
+   */
+  private static function extractDocLines(string $docComment): array
+  {
+    if (empty($docComment)) return [];
+    $lines = [];
+    foreach (explode("\n", $docComment) as $line) {
+      // 去掉注释定界符（/** 与 */）及行首星号
+      $text = trim($line);
+      $text = preg_replace(['/^\/\*\*/', '/\*\/$/'], '', $text);
+      $text = preg_replace('/^\*\s?/', '', $text);
+      $text = trim($text);
+      // 遇到标签行结束提取
+      if ($text !== '' && $text[0] === '@') break;
+      $lines[] = $text;
     }
-    return $title;
+    // 去除首尾空行
+    while (!empty($lines) && reset($lines) === '') array_shift($lines);
+    while (!empty($lines) && end($lines) === '') array_pop($lines);
+    return $lines;
   }
 }
