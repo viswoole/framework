@@ -270,7 +270,7 @@ class Validate
    * @param string $class 类名或接口名
    * @param mixed $value 待校验的值，若为数组则作为构造参数传入容器
    * @return object 类实例
-   * @throws ValidateException 值不是实例且无法通过容器创建时抛出
+   * @throws ValidateException 验证失败时抛出
    */
   public static function class(string $class, mixed $value): object
   {
