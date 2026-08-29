@@ -37,11 +37,11 @@ class RouteMapping extends RouteAnnotation
    * @param string|null $id id
    * @param string|null $parentId 父id，必须是分组路由id
    * @param string[]|string|null $method 路由方法，默认继承全局设定的方法
-   * @param string[]|null $middlewares 中间件
+   * @param array|null $middlewares 中间件列表，支持类名、[类名, 构造参数数组] 格式（注解参数受常量表达式限制，不支持闭包），见 Middleware::checkMiddleware()
    * @param array<string,string>|null $patterns 动态路由正则约束
    * @param array|null $meta 路由元数据
-   * @param array|string|null $suffix 目标后缀
-   * @param array|string|null $domain 域名校验
+   * @param array|string|null $suffix 目标后缀，字符串或字符串数组
+   * @param array|string|null $domain 域名校验，字符串或字符串数组
    * @param bool $hidden 是否隐藏文档
    * @param string|null $title 路由标题
    * @param string|null $description 说明
@@ -60,8 +60,8 @@ class RouteMapping extends RouteAnnotation
     ?array            $middlewares = null,
     ?array            $patterns = null,
     ?array            $meta = null,
-    ?array            $suffix = null,
-    ?array            $domain = null,
+    null|string|array $suffix = null,
+    null|string|array $domain = null,
     bool              $hidden = false,
     ?string           $title = '',
     ?string           $description = '',
@@ -71,22 +71,21 @@ class RouteMapping extends RouteAnnotation
     public string     $updatedAt = '',
     public array      $tags = [],
     public Status     $status = Status::DEVELOPMENT,
-  )
-  {
+  ) {
     parent::__construct(
-      prefix     : $paths,
-      id         : $id,
-      parentId   : $parentId,
-      method     : $method,
+      prefix: $paths,
+      id: $id,
+      parentId: $parentId,
+      method: $method,
       middlewares: $middlewares,
-      patterns   : $patterns,
-      meta       : $meta,
-      suffix     : $suffix,
-      domain     : $domain,
-      hidden     : $hidden,
-      title      : $title,
+      patterns: $patterns,
+      meta: $meta,
+      suffix: $suffix,
+      domain: $domain,
+      hidden: $hidden,
+      title: $title,
       description: $description,
-      sort       : $sort
+      sort: $sort
     );
   }
 

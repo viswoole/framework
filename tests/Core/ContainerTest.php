@@ -166,6 +166,28 @@ class ContainerTest extends TestCase
   }
 
   /**
+   * 回归守卫：同命名空间的闭包不得共享参数元数据缓存
+   *
+   * 命名空间内闭包的 getName() 返回 "命名空间{closure}"（而非纯 "{closure}"），
+   * 若按名缓存会导致先解析的闭包（如 0 参闭包）污染后续闭包的参数注入。
+   *
+   * @return void
+   */
+  public function testClosureParamShapesNotSharedInNamespace(): void
+  {
+    // 先解析 0 参闭包（旧 bug 中会将空 shapes 缓存进同命名空间的共享键）
+    $zero = $this->app->invokeFunction(function (): string {
+      return 'zero';
+    });
+    self::assertSame('zero', $zero);
+    // 后解析不同签名的闭包，必须按自身签名注入而非命中前者的缓存
+    $result = $this->app->invokeFunction(function (string $name): string {
+      return 'Hello ' . $name;
+    }, ['name' => 'World']);
+    self::assertSame('Hello World', $result);
+  }
+
+  /**
    * 测试 invokeMethod 调用类方法
    *
    * @return void

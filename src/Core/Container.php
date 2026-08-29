@@ -428,8 +428,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       return $reflect->getDeclaringClass()->getName() . '::' . $reflect->getName();
     }
     $name = $reflect->getName();
-    // 匿名闭包名为 "{closure}"，无稳定键且动态闭包缓存会泄漏内存
-    return $name === '{closure}' ? null : 'fn:' . $name;
+    // 闭包名包含 '{closure}'：纯 '{closure}' 或带命名空间/作用域前缀的变体
+    // （如 'App\{closure}'，PHP 8.3+ 实测行为）。闭包签名各异且实例无稳定键，
+    // 一律跳过缓存，否则同命名空间的闭包会共用缓存键导致参数错配
+    return str_contains($name, '{closure}') ? null : 'fn:' . $name;
   }
 
   /**
