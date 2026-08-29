@@ -13,6 +13,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Router;
 
+use Viswoole\Core\App;
 use Viswoole\Router\Route\Group;
 
 /**
@@ -36,6 +37,20 @@ class RouterTool
     return $root !== '' && str_starts_with($file, $root . '/')
       ? substr($file, strlen($root) + 1)
       : $file;
+  }
+
+  /**
+   * 生成路由缓存哈希
+   *
+   * 由框架版本号与控制器文件哈希共同决定：控制器文件变更或框架升级
+   * 均会使缓存失效，避免框架升级后反序列化出缺字段的路由对象
+   *
+   * @param string $file 控制器文件绝对路径
+   * @return string 缓存哈希值
+   */
+  public static function getCacheHash(string $file): string
+  {
+    return md5(App::VERSION . ':' . hash_file('md5', $file));
   }
 
   /**

@@ -136,7 +136,8 @@ class Router extends Collector
    * @param int|string $index 配置键（极简格式下作为参数名）
    * @return FieldStructure
    */
-  private function toFieldStructure(mixed $field, string $configName, int|string $index): FieldStructure
+  private function toFieldStructure(mixed $field, string $configName, int|string $index
+  ): FieldStructure
   {
     if ($field instanceof FieldStructure) return $field;
     if (is_string($field) && is_string($index)) {
@@ -231,8 +232,8 @@ class Router extends Collector
       [$fullClass] = RouterTool::getNamespace($controller, $rootPath);
       // 获取路由缓存
       if ($this->cache) {
-        // 类文件哈希值
-        $hash = hash_file('md5', $controller);
+        // 缓存哈希：框架版本号 + 类文件哈希，框架升级后旧缓存自动失效
+        $hash = RouterTool::getCacheHash($controller);
         $cacheGroup = RouterTool::getCache(SERVER_NAME, $fullClass, $hash);
         if ($cacheGroup) {
           $this->recordRouteItem($cacheGroup);
@@ -354,7 +355,9 @@ class Router extends Collector
         }
         // 未声明描述时，从方法文档注释正文提取
         if (empty($methodAnnotationRoute->description)) {
-          $methodAnnotationRoute->description = DocCommentTool::extractDocDescription($methodDocComment);
+          $methodAnnotationRoute->description = DocCommentTool::extractDocDescription(
+            $methodDocComment
+          );
         }
         // 如果没有设置路由路径则默认为方法名称
         if (empty($methodAnnotationRoute->prefix)) {
@@ -502,7 +505,9 @@ class Router extends Collector
     if (!isset($this->dynamicRoute["segment_$len"][$regex])) {
       $this->dynamicRoute["segment_$len"][$regex] = [];
     }
-    $this->registerMethodRoute($this->dynamicRoute["segment_$len"][$regex], $path, $methods, $routeIndex);
+    $this->registerMethodRoute(
+      $this->dynamicRoute["segment_$len"][$regex], $path, $methods, $routeIndex
+    );
     $fullLen = count($urlSegments);
     // 适配去掉可选参数的长度
     if ($fullLen !== $len) {
@@ -512,6 +517,36 @@ class Router extends Collector
       $this->registerMethodRoute(
         $this->dynamicRoute['segment_' . $fullLen][$regex], $path, $methods, $routeIndex
       );
+    }
+  }
+
+  /**
+   * 将路由按请求方式写入方法映射表（引用方式写入，供静态/动态路由表复用）
+   *
+   * 包含 '*' 时视为不限制请求方式，仅记录 '*' 键（分发时作为通配回退），
+   * 避免 '*' 与具体方法同时注册导致的通配优先级歧义。
+   *
+   * @param array<string,string> $methodMap 方法映射表（按引用写入）
+   * @param string $path 用于告警提示的路径
+   * @param string[] $methods 路由允许的请求方式列表
+   * @param string $routeIndex 路由引用链路
+   * @return void
+   */
+  private function registerMethodRoute(
+    array  &$methodMap,
+    string $path,
+    array  $methods,
+    string $routeIndex
+  ): void
+  {
+    if (in_array('*', $methods)) $methods = ['*'];
+    foreach ($methods as $method) {
+      if (isset($methodMap[$method])) {
+        trigger_error(
+          "{$path}路由规则已存在（请求方法：{$method}），重复定义即覆盖路由", E_USER_WARNING
+        );
+      }
+      $methodMap[$method] = $routeIndex;
     }
   }
 
@@ -530,36 +565,6 @@ class Router extends Collector
     // 初始化方法映射表，避免引用传参时未定义维度自动置为 null 触发类型错误
     if (!isset($this->staticRoute[$urlPath])) $this->staticRoute[$urlPath] = [];
     $this->registerMethodRoute($this->staticRoute[$urlPath], $urlPath, $methods, $routeIndex);
-  }
-
-  /**
-   * 将路由按请求方式写入方法映射表（引用方式写入，供静态/动态路由表复用）
-   *
-   * 包含 '*' 时视为不限制请求方式，仅记录 '*' 键（分发时作为通配回退），
-   * 避免 '*' 与具体方法同时注册导致的通配优先级歧义。
-   *
-   * @param array<string,string> $methodMap 方法映射表（按引用写入）
-   * @param string $path 用于告警提示的路径
-   * @param string[] $methods 路由允许的请求方式列表
-   * @param string $routeIndex 路由引用链路
-   * @return void
-   */
-  private function registerMethodRoute(
-    array &$methodMap,
-    string $path,
-    array  $methods,
-    string $routeIndex
-  ): void
-  {
-    if (in_array('*', $methods)) $methods = ['*'];
-    foreach ($methods as $method) {
-      if (isset($methodMap[$method])) {
-        trigger_error(
-          "{$path}路由规则已存在（请求方法：{$method}），重复定义即覆盖路由", E_USER_WARNING
-        );
-      }
-      $methodMap[$method] = $routeIndex;
-    }
   }
 
   /**
