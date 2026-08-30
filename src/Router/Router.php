@@ -449,6 +449,10 @@ class Router extends Collector
    */
   private function convertRegex(array $segments, array $patternRule = []): string
   {
+    // 大小写不敏感路由（case_sensitive=false）下，静态段以内联 (?i:) 分组包裹：
+    // 匹配对请求路径的原始大小写生效，而动态参数约束正则保持自身大小写语义；
+    // dispatch 侧因此使用原始路径匹配，避免整体小写导致参数值丢失大小写
+    $caseSensitive = $this->config->get('router.case_sensitive', false);
     $regexPattern = '';
     foreach ($segments as $segment) {
       // 判断是否为变量字段
@@ -459,13 +463,16 @@ class Router extends Collector
         $segment = RouterTool::extractVariableName($segment);
         // 删除结尾斜杠
         if ($isRequire) $regexPattern = rtrim($regexPattern, '/');
-        // 设置规则
+        // 设置规则：使用命名捕获组，dispatch 直接按组名提取参数，
+        // 消除"patterns 键序与捕获组顺序对齐"的脆弱假设；
+        // 约束正则中的匿名捕获组也不会再混入参数表
         $regexPattern .= $isRequire
-          ? '(?:/(' . $patternRule[$segment] . '))?'
-          : '(' . $patternRule[$segment] . ')';
+          ? '(?:/(?P<' . $segment . '>' . $patternRule[$segment] . '))?'
+          : '(?P<' . $segment . '>' . $patternRule[$segment] . ')';
       } else {
-        // 否则，将段视为静态文本
-        $regexPattern .= preg_quote($segment, '/');
+        // 否则，将段视为静态文本（大小写不敏感路由时包裹内联忽略大小写分组）
+        $static = preg_quote($segment, '/');
+        $regexPattern .= $caseSensitive ? $static : "(?i:$static)";
       }
       //结尾添加斜杠
       $regexPattern .= '/';
@@ -473,7 +480,15 @@ class Router extends Collector
     // 删除最后一个斜杠
     $regexPattern = rtrim($regexPattern, '/');
     // 添加正则表达式的开始和结束标记
-    return '#^/' . $regexPattern . '$#';
+    $regex = '#^/' . $regexPattern . '$#';
+    // 编译期校验：重复变量名、非法组名等问题会让正则无法编译，
+    // 不在此处拦截将表现为路由静默永不匹配，极难排查
+    if (@preg_match($regex, '') === false) {
+      throw new InvalidArgumentException(
+        '路由正则编译失败（' . implode('/', $segments) . '）: ' . preg_last_error_msg()
+      );
+    }
+    return $regex;
   }
 
   /**
@@ -632,35 +647,51 @@ class Router extends Collector
     ?callable $callback = null,
   ): mixed
   {
-    $PathAndExt = explode('.', $path);
-    $path = $PathAndExt[0] ?? '/';
     $path = $path === '/' ? '/' : rtrim($path, '/');
-    if (!$this->config->get('router.case_sensitive', false)) $path = strtolower($path);
-    $ext = $PathAndExt[1] ?? '';
+    // 请求路径以百分号编码到达（如空格 %20、中文），逐段解码后才能与注册路径
+    // 及参数约束匹配；逐段处理避免 %2F 解码出新的路径分隔符破坏段结构
+    // （注册侧 handlePaths 对静态段同步解码，两侧对齐）
+    $decodedPath = $this->decodeRequestPath($path);
+    $caseSensitive = $this->config->get('router.case_sensitive', false);
     // 请求方法统一规范化为大写（方法映射表与 miss 路由表均以大写为键）
     $method = strtoupper($method);
+    // 候选路径：完整路径优先（点号属于动态参数值，如 /user/john.doe），
+    // 命中路由但伪静态后缀校验失败时再尝试剥离后缀的路径（仅按最后一个
+    // 不含 / 的点段剥离）。无点号时仅一个候选，保持原语义
+    $candidates = [[$decodedPath, '']];
+    $dotPos = strrpos($decodedPath, '.');
+    if ($dotPos !== false) {
+      $ext = substr($decodedPath, $dotPos + 1);
+      if ($ext !== '' && !str_contains($ext, '/')) {
+        $strippedPath = rtrim(substr($decodedPath, 0, $dotPos), '/');
+        if ($strippedPath !== '') $candidates[] = [$strippedPath, $ext];
+      }
+    }
     $pattern = [];
-    /** @var Route $route 路由 */
+    /** @var Route|null $route 路由 */
     $route = null;
     // 路径已命中但请求方法均不匹配时为 true，用于区分 404 与方法不允许两种未命中语义
     $pathMatched = false;
-    // 判断是否存在静态路由
-    if (isset($this->staticRoute[$path])) {
-      $routeIndex = $this->selectRouteIndex($this->staticRoute[$path], $method);
-      if ($routeIndex !== null) {
-        $route = $this->getRoute($routeIndex);
+    // 路由命中但伪静态后缀校验未通过时暂存的异常，所有候选穷尽后抛出（回退 miss 路由）
+    $suffixError = null;
+    foreach ($candidates as [$candPath, $ext]) {
+      // 静态路由查表用小写键（注册侧静态段已小写）；动态正则匹配用原始大小写路径，
+      // 正则静态段以内联 (?i:) 分组实现大小写不敏感，动态参数值保留原始大小写
+      $matchPath = $caseSensitive ? $candPath : strtolower($candPath);
+      // 判断是否存在静态路由
+      if (isset($this->staticRoute[$matchPath])) {
+        $routeIndex = $this->selectRouteIndex($this->staticRoute[$matchPath], $method);
+        if ($routeIndex !== null) {
+          $route = $this->getRoute($routeIndex);
+        } else {
+          $pathMatched = true;
+        }
       } else {
-        $pathMatched = true;
-      }
-    } else {
-      // 转换为 URL 路径数组
-      $segments = substr_count($path, '/');
-      // 判断是否存在动态路由
-      $routes = $this->dynamicRoute['segment_' . $segments] ?? [];
-      $regexArray = array_keys($routes);
-      // 遍历正则匹配路由
-      foreach ($regexArray as $regex) {
-        if (preg_match($regex, $path, $matches)) {
+        // 按段数定位动态路由分组
+        $routes = $this->dynamicRoute['segment_' . substr_count($candPath, '/')] ?? [];
+        // 遍历正则匹配路由（使用原始大小写路径，保留动态参数值大小写）
+        foreach (array_keys($routes) as $regex) {
+          if (!preg_match($regex, $candPath, $matches)) continue;
           $routeIndex = $this->selectRouteIndex($routes[$regex], $method);
           if ($routeIndex === null) {
             // 路径命中但该正则下无匹配请求方法的路由，
@@ -668,21 +699,32 @@ class Router extends Collector
             $pathMatched = true;
             continue;
           }
-          if ($matches === null) $matches = [];
-          // 如果匹配成功 则弹出默认的uri
-          array_shift($matches);
           // 拿到路由
           $route = $this->getRoute($routeIndex);
-          // 去除匹配到的key
-          $keys = array_slice(array_keys($route->getPatterns()), 0, count($matches));
-          // 组合为关联数组
-          $pattern = array_combine($keys, $matches);
+          // 命名捕获组直接给出 变量名 => 值：与路由 patterns 键求交集，
+          // 数字键（PCRE 自动编号）与约束正则内部自定义的命名组均被过滤，
+          // 仅保留路径声明的变量；未匹配的可选变量不出现在结果中，
+          // 由参数注入层用方法默认值兜底。不再依赖 patterns 键序与捕获组
+          // 顺序对齐（旧实现遇约束正则含捕获组时 array_combine 会崩溃）
+          $pattern = array_intersect_key($matches, $route->getPatterns());
           break;
         }
       }
+      // 未命中任何路由则尝试下一候选
+      if ($route === null) continue;
+      // 伪静态后缀校验不通过时不抛异常，回退下一候选：
+      // 完整路径候选可能把后缀误当作参数值的一部分（如 /article/5.html 与 {id}）
+      if (!in_array('*', $route->getSuffix()) && !in_array($ext, $route->getSuffix())) {
+        $suffixError = new RouteNotFoundException("request suffix '$ext' is not allowed");
+        $route = null;
+        $pattern = [];
+        continue;
+      }
+      break;
     }
     try {
       if (is_null($route)) {
+        if ($suffixError !== null) throw $suffixError;
         throw new RouteNotFoundException(
           $pathMatched
             ? "request method '$method' is not allowed"
@@ -699,8 +741,7 @@ class Router extends Collector
       }
       // 判断域名
       $this->checkOption($route->getDomain(), $domain, "request domain '$domain' is not allowed");
-      // 判断伪静态后缀
-      $this->checkOption($route->getSuffix(), $ext, "request suffix '$ext' is not allowed");
+      // 伪静态后缀已在候选循环中校验（不通过时回退下一候选），无需重复校验
       // 动态路由参数先交由回调处理（如 HTTP 场景并入 Request 的 GET 参数）
       if (!empty($pattern) && $callback) $callback($pattern);
       // 修复#8: $params 必须先初始化再合并，否则未显式传参时（如 HTTP 请求）动态路由
@@ -724,6 +765,33 @@ class Router extends Collector
       // 未匹配则抛出异常
       throw $e;
     }
+  }
+
+  /**
+   * 对请求路径逐段进行 URL 解码
+   *
+   * 请求路径以百分号编码形式到达（如空格 %20、中文），解码后才能与注册的
+   * 路由路径及参数约束匹配（注册侧 handlePaths 对静态段同步解码）。
+   * 按 / 分段后逐段解码；解码后包含 / 的段（如 %2F）保留编码原样，
+   * 防止编码斜杠被还原为真实路径分隔符导致路径结构被重写
+   * （如 /user/a%2Fb 被改写为 /user/a/b 而匹配到其他路由）。
+   *
+   * @param string $path 原始请求路径
+   * @return string 解码后的路径
+   */
+  private function decodeRequestPath(string $path): string
+  {
+    // 无编码字符时直接返回，免去拆分开销
+    if (!str_contains($path, '%')) return $path;
+    $segments = explode('/', $path);
+    foreach ($segments as &$segment) {
+      if ($segment === '') continue;
+      $decoded = rawurldecode($segment);
+      // 解码引入新分隔符的段保持编码原样（注册侧 handlePaths 同规则，两侧对齐）
+      if (!str_contains($decoded, '/')) $segment = $decoded;
+    }
+    unset($segment);
+    return implode('/', $segments);
   }
 
   /**

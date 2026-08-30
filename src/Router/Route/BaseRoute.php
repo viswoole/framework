@@ -45,7 +45,7 @@ abstract class BaseRoute
   /**
    * @var array{file:string, line:int}|null 源码位置，供接口文档定位
    */
-  private ?array $source = null;
+  private ?array $source;
   /**
    * @var string 当前路由id
    */
@@ -194,7 +194,24 @@ abstract class BaseRoute
     }
     foreach ($paths as &$path) {
       if (!str_starts_with($path, '/')) $path = "/$path";
-      $path = $path === '/' ? '/' : rtrim(!$case ? strtolower($path) : $path, '/');
+      // 静态段：URL 解码（与 dispatch 请求侧逐段解码对齐，支持中文/空格等编码静态段）
+      // + 小写化（case_sensitive=false 时）；变量段保留原始大小写：变量名需与控制器
+      // 方法参数名、setPatterns 约束键对齐，整体小写会导致 {userId} 退化为 {userid}，
+      // dispatch 提取的参数键与命名注入参数名不一致而注入失败
+      $segments = explode('/', $path);
+      foreach ($segments as &$segment) {
+        if ($segment === '' || RouterTool::isVariable($segment)) continue;
+        if (str_contains($segment, '%')) {
+          $decoded = rawurldecode($segment);
+          // 解码引入 / 的段（如 %2F）保留编码原样，防止注册路径段结构被重写
+          // （dispatch 请求侧 decodeRequestPath 同规则，两侧对齐）
+          if (!str_contains($decoded, '/')) $segment = $decoded;
+        }
+        if (!$case) $segment = strtolower($segment);
+      }
+      unset($segment);
+      $path = implode('/', $segments);
+      $path = $path === '/' ? '/' : rtrim($path, '/');
       // 去除所有空格
       $path = str_replace(' ', '', $path);
     }
@@ -223,10 +240,31 @@ abstract class BaseRoute
     foreach ($paths as $path) {
       if (RouterTool::isVariable($path)) {
         $segments = explode('/', trim($path, '/'));
+        // 记录当前路径内已出现的变量名，用于重复检测
+        $seenNames = [];
         foreach ($segments as $segment) {
           if (empty($segment)) continue;
           if (RouterTool::isVariable($segment)) {
             $name = RouterTool::extractVariableName($segment);
+            // 变量名将作为 PCRE 命名捕获组，必须以字母/下划线开头且仅含字母数字下划线，
+            // 且不超过 32 字符（PCRE 命名组名长度上限）；同一路径内重复的变量名
+            // 同样无法编译为命名组，与其让路由静默永不匹配，不如在注册期给出明确错误
+            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name)) {
+              throw new InvalidArgumentException(
+                "路由变量名 '$name' 非法（路径：{$path}），必须以字母或下划线开头，仅含字母、数字、下划线"
+              );
+            }
+            if (strlen($name) > 32) {
+              throw new InvalidArgumentException(
+                "路由变量名 '$name' 非法（路径：{$path}），长度超过 PCRE 命名组上限 32 字符"
+              );
+            }
+            if (isset($seenNames[$name])) {
+              throw new InvalidArgumentException(
+                "路径 '$path' 中变量名 '$name' 重复定义，请使用不同的变量名"
+              );
+            }
+            $seenNames[$name] = true;
             $pattern[$name] = $this->patterns[$name] ?? $default_pattern_regex;
           }
         }
@@ -268,41 +306,6 @@ abstract class BaseRoute
   }
 
   /**
-   * 获取路由处理函数
-   *
-   * @return callable|array 处理函数
-   */
-  public function getHandler(): callable|array
-  {
-    return $this->handler;
-  }
-
-  /**
-   * 获取源码位置
-   *
-   * @return array{file:string, line:int}|null 文件绝对路径与起始行号，无法确定时返回null
-   */
-  public function getSource(): ?array
-  {
-    return $this->source;
-  }
-
-  /**
-   * 设置源码位置
-   *
-   * 用于处理函数为占位符（如控制器路由组）时显式指定源码位置
-   *
-   * @param string $file 文件绝对路径
-   * @param int $line 起始行号
-   * @return $this
-   */
-  public function setSourceLocation(string $file, int $line): static
-  {
-    $this->source = ['file' => $file, 'line' => $line];
-    return $this;
-  }
-
-  /**
    * 从处理函数反射推断源码位置
    *
    * 支持闭包、[类,方法]、['对象',方法]、'类::方法'、函数名、可调用对象
@@ -336,6 +339,41 @@ abstract class BaseRoute
       // 反射失败（类未加载、方法不存在等）时忽略，不影响路由注册
       return null;
     }
+  }
+
+  /**
+   * 获取路由处理函数
+   *
+   * @return callable|array 处理函数
+   */
+  public function getHandler(): callable|array
+  {
+    return $this->handler;
+  }
+
+  /**
+   * 获取源码位置
+   *
+   * @return array{file:string, line:int}|null 文件绝对路径与起始行号，无法确定时返回null
+   */
+  public function getSource(): ?array
+  {
+    return $this->source;
+  }
+
+  /**
+   * 设置源码位置
+   *
+   * 用于处理函数为占位符（如控制器路由组）时显式指定源码位置
+   *
+   * @param string $file 文件绝对路径
+   * @param int $line 起始行号
+   * @return $this
+   */
+  public function setSourceLocation(string $file, int $line): static
+  {
+    $this->source = ['file' => $file, 'line' => $line];
+    return $this;
   }
 
   /**
@@ -374,7 +412,7 @@ abstract class BaseRoute
    * 兼容两种传参形式：setMethod('GET', 'POST') 与 setMethod(['GET', 'POST'])
    * （注解 method 属性为数组，经 RouteAnnotation::create() 以单参数传入）
    *
-   * @param string|string[] ...$method 自动展平并转换为大写
+   * @param string|array ...$method
    * @return $this
    */
   public function setMethod(string|array ...$method): static
@@ -444,8 +482,9 @@ abstract class BaseRoute
       if (!is_string($regex) || empty($regex)) {
         throw new InvalidArgumentException("路由参数正则 '$name' 必须是非空字符串");
       }
-      // 验证正则表达式是否有效
-      if (@preg_match('/' . $regex . '/', '') === false) {
+      // 验证正则表达式是否有效（使用 # 分隔符：路径约束常含 [/] 语法如 [^/]+，
+      // 若用 / 作分隔符会被误判为无效）
+      if (@preg_match('#' . $regex . '#', '') === false) {
         throw new InvalidArgumentException("路由参数正则 '$name' 无效: $regex");
       }
     }
