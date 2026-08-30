@@ -86,8 +86,12 @@ class ParamParseTool
         }
       }
     }
-    // 获取返回值注解属性
-    $returnedAttributes = $reflector->getAttributes(Returned::class);
+    // 获取返回值注解属性（IS_INSTANCEOF 允许项目级 Returned 子类注解——
+    // 如统一响应信封包装器，其构造完成后即为标准 Returned 实例，
+    // 下游 instanceof 判断与文档输出均天然兼容）
+    $returnedAttributes = $reflector->getAttributes(
+      Returned::class, ReflectionAttribute::IS_INSTANCEOF
+    );
     // 解析返回值
     foreach ($returnedAttributes as $item) {
       $globalReturned[] = $item->newInstance();
@@ -134,81 +138,6 @@ class ParamParseTool
   }
 
   /**
-   * 解析单个参数的来源与结构
-   *
-   * @param ReflectionParameter $parameter 反射参数
-   * @param string $docComment 方法文档注释
-   * @return array{body:FieldStructure[],query:FieldStructure[],header:FieldStructure[]}|null 无参数来源注解时返回 null
-   */
-  private static function parseParamField(
-    ReflectionParameter $parameter,
-    string              $docComment
-  ): ?array
-  {
-    $preInjects = $parameter->getAttributes(
-      BaseSourceInterface::class, ReflectionAttribute::IS_INSTANCEOF
-    );
-    // 如果没有注解 则直接返回
-    if (empty($preInjects)) return null;
-    // 参数名称
-    $name = $parameter->getName();
-    // 参数描述
-    $description = DocCommentTool::extractParamDoc($docComment, $name);
-    // 允许为null
-    $allowNull = $parameter->allowsNull();
-    // 默认值
-    $default = $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null;
-    // 参数类型
-    $type = $parameter->getType();
-    $params = [];
-    foreach ($preInjects as $inject) {
-      $instance = $inject->newInstance();
-      // 参数来源
-      $source = self::parseParamSource($instance);
-      if ($source === 'file') {
-        // 文件参数归入body来源展示
-        $source = 'body';
-        $fieldType = self::parseFileType($type);
-      } else {
-        // docblock @param 类型声明优先于反射类型，
-        // 用于补充反射无法表达的信息（如数组元素类型 array{id:int}、int[]）
-        $docType = DocCommentTool::extractParamType($docComment, $name);
-        $dependMap = [];
-        $parsedType = $docType === '' ? [] : DocTypeParser::parse($docType, $dependMap);
-        // 解析失败时回退到反射类型
-        $fieldType = $parsedType === [] ? $type : $parsedType;
-      }
-      $params[$source][$name] = new FieldStructure(
-        $name, $description, $allowNull, $default, $fieldType
-      );
-    }
-    return $params;
-  }
-
-  /**
-   * 解析文件上传参数的类型结构
-   *
-   * 参数类型包含 array 时视为多文件上传，包含 File 或未声明类型时视为单文件上传
-   *
-   * @param ReflectionType|null $type 反射参数类型
-   * @return TypeStructure[] 类型结构列表
-   */
-  private static function parseFileType(?ReflectionType $type): array
-  {
-    $typeString = (string)$type;
-    $types = [];
-    // 如果类型当中包含了数组，则视为要求上传多个文件
-    if (str_contains($typeString, 'array')) {
-      $types[] = new ArrayTypeStructure(new TypeStructure(Types::File));
-    }
-    if (empty($types) || str_contains($typeString, 'File')) {
-      // 否则视为上传单个文件
-      $types[] = new TypeStructure(Types::File);
-    }
-    return $types;
-  }
-
-  /**
    * 解析处理方法上的全局参数排除规则
    *
    * 类级规则作用于控制器内所有路由方法，方法/函数级规则仅作用于自身，两者叠加生效
@@ -252,6 +181,22 @@ class ParamParseTool
   }
 
   /**
+   * 判断指定来源与字段名是否命中任意一条排除规则
+   *
+   * @param IgnoreGlobal[] $rules 排除规则列表
+   * @param string $source 参数来源
+   * @param string|null $name 字段名或返回声明标题
+   * @return bool 命中返回 true
+   */
+  private static function hitIgnoreRules(array $rules, string $source, ?string $name): bool
+  {
+    foreach ($rules as $rule) {
+      if ($rule->matches($source, $name)) return true;
+    }
+    return false;
+  }
+
+  /**
    * 应用排除规则过滤全局返回声明
    *
    * @param Returned[] $returned 全局返回声明列表
@@ -272,19 +217,58 @@ class ParamParseTool
   }
 
   /**
-   * 判断指定来源与字段名是否命中任意一条排除规则
+   * 解析单个参数的来源与结构
    *
-   * @param IgnoreGlobal[] $rules 排除规则列表
-   * @param string $source 参数来源
-   * @param string|null $name 字段名或返回声明标题
-   * @return bool 命中返回 true
+   * @param ReflectionParameter $parameter 反射参数
+   * @param string $docComment 方法文档注释
+   * @return array{body:FieldStructure[],query:FieldStructure[],header:FieldStructure[]}|null 无参数来源注解时返回 null
    */
-  private static function hitIgnoreRules(array $rules, string $source, ?string $name): bool
+  private static function parseParamField(
+    ReflectionParameter $parameter,
+    string              $docComment
+  ): ?array
   {
-    foreach ($rules as $rule) {
-      if ($rule->matches($source, $name)) return true;
+    $preInjects = $parameter->getAttributes(
+      BaseSourceInterface::class, ReflectionAttribute::IS_INSTANCEOF
+    );
+    // 如果没有注解 则直接返回
+    if (empty($preInjects)) return null;
+    // 参数名称
+    $name = $parameter->getName();
+    // 参数描述
+    $description = DocCommentTool::extractParamDoc($docComment, $name);
+    // 允许为null
+    $allowNull = $parameter->allowsNull();
+    // 默认值
+    $default = $parameter->isDefaultValueAvailable() ? $parameter->getDefaultValue() : null;
+    // 参数类型
+    $type = $parameter->getType();
+    $params = [];
+    foreach ($preInjects as $inject) {
+      /**
+       * @var BaseSourceInterface $instance
+       */
+      $instance = $inject->newInstance();
+      // 参数来源
+      $source = self::parseParamSource($instance);
+      if ($source === 'file') {
+        // 文件参数归入body来源展示
+        $source = 'body';
+        $fieldType = self::parseFileType($type);
+      } else {
+        // docblock @param 类型声明优先于反射类型，
+        // 用于补充反射无法表达的信息（如数组元素类型 array{id:int}、int[]）
+        $docType = DocCommentTool::extractParamType($docComment, $name);
+        $dependMap = [];
+        $parsedType = $docType === '' ? [] : DocTypeParser::parse($docType, $dependMap);
+        // 解析失败时回退到反射类型
+        $fieldType = $parsedType === [] ? $type : $parsedType;
+      }
+      $params[$source][$name] = new FieldStructure(
+        $name, $description, $allowNull, $default, $fieldType
+      );
     }
-    return false;
+    return $params;
   }
 
   /**
@@ -306,5 +290,28 @@ class ParamParseTool
     }
     // 如果都没有匹配，则默认为 body
     return 'body';
+  }
+
+  /**
+   * 解析文件上传参数的类型结构
+   *
+   * 参数类型包含 array 时视为多文件上传，包含 File 或未声明类型时视为单文件上传
+   *
+   * @param ReflectionType|null $type 反射参数类型
+   * @return TypeStructure[] 类型结构列表
+   */
+  private static function parseFileType(?ReflectionType $type): array
+  {
+    $typeString = (string)$type;
+    $types = [];
+    // 如果类型当中包含了数组，则视为要求上传多个文件
+    if (str_contains($typeString, 'array')) {
+      $types[] = new ArrayTypeStructure(new TypeStructure(Types::File));
+    }
+    if (empty($types) || str_contains($typeString, 'File')) {
+      // 否则视为上传单个文件
+      $types[] = new TypeStructure(Types::File);
+    }
+    return $types;
   }
 }
