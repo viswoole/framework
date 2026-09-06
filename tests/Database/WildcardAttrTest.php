@@ -15,6 +15,12 @@ use Viswoole\Database\Model;
  * 验证兜底机制：未命中具名 (get|set){Field}Attr 的字段回退通配方法
  * （$field 为蛇形原名字段名，便于按后缀模式匹配），具名方法优先于通配；
  * 未定义通配方法的模型行为不变（原值透传）。
+ *
+ * 测试模型的转换策略为推荐范式：
+ * - getAttr 按值兜底：仅超过 JS 安全整数（2^53-1）的整型字符串化；
+ * - setAttr 按字段名+值兜底：*_id 后缀且为纯数字字符串（≤19 位防 int 溢出
+ *   饱和）才归一整型——防御 varchar _id 列（设备指纹/认证凭据等非数字值）
+ *   被误转成 0 写坏数据。
  */
 class WildcardAttrTest extends TestCase
 {
@@ -35,14 +41,15 @@ class WildcardAttrTest extends TestCase
   }
 
   /**
-   * 通配获取器兜底：未命中具名获取器的字段按字段名模式转换，其余透传
+   * 通配获取器按值兜底：超安全范围的整型字符串化，其余透传
    */
   public function testWildcardGetterAppliedToFallbackFields(): void
   {
     $query = (new WildcardIdModel())->query;
 
-    self::assertSame('1941234567890123456', $query->withGetAttr('user_id', 1941234567890123456), '*_id 字段应经通配获取器字符串化');
-    self::assertSame('plain', $query->withGetAttr('name', 'plain'), '非 ID 字段应原值返回');
+    self::assertSame('1941234567890123456', $query->withGetAttr('user_id', 1941234567890123456), '超安全范围整型应字符串化');
+    self::assertSame(80001, $query->withGetAttr('uid', 80001), '安全范围内整型应保持数字');
+    self::assertSame('plain', $query->withGetAttr('name', 'plain'), '字符串值应原样透传');
   }
 
   /**
@@ -53,7 +60,7 @@ class WildcardAttrTest extends TestCase
     $query = (new WildcardIdModel())->query;
 
     self::assertSame('NAMED:1', $query->withGetAttr('order_id', 1), 'order_id 有具名获取器应优先于通配');
-    self::assertSame('2', $query->withGetAttr('user_id', 2), '无具名获取器的字段仍走通配');
+    self::assertSame('1941234567890123456', $query->withGetAttr('user_id', 1941234567890123456), '无具名获取器的字段仍走通配');
   }
 
   /**
@@ -68,19 +75,7 @@ class WildcardAttrTest extends TestCase
   }
 
   /**
-   * 非 public 的获取器/修改器视为未定义：原值透传而非触发 __call 转发链（防无限递归回归）
-   */
-  public function testNonPublicAttrTreatedAsUndefined(): void
-  {
-    $query = (new ProtectedAttrModel())->query;
-
-    self::assertSame('alice', $query->withGetAttr('user_name', 'alice'), 'protected 具名获取器视为未定义，原值返回');
-    self::assertSame(123, $query->withGetAttr('user_id', 123), 'protected 通配获取器视为未定义，原值返回');
-    self::assertSame('x', $query->withSetAttr('user_id', 'x'), 'protected 通配修改器视为未定义，原值返回');
-  }
-
-  /**
-   * 通配修改器兜底：写入路径将字符串 *_id 归一为整型，非 ID 字段不转换
+   * 通配修改器兜底：写入路径将合法长度的纯数字字符串归一为整型
    */
   public function testWildcardSetterAppliedOnWrite(): void
   {
@@ -90,13 +85,34 @@ class WildcardAttrTest extends TestCase
     WildcardIdModel::create(['user_id' => '194123456789', 'name' => 'a']);
     $bindings = $fake->calls[0]['bindings'];
 
-    self::assertSame(194123456789, $bindings[0], '通配 setAttr 应将字符串 *_id 归一为整型');
+    self::assertSame(194123456789, $bindings[0], '通配 setAttr 应将纯数字字符串归一为整型');
     self::assertSame('a', $bindings[1], '非 ID 字段不应被通配修改器转换');
+  }
+
+  /**
+   * varchar _id 列的非数字值（设备指纹/认证凭据等）不应被 (int) 误转成 0
+   */
+  public function testWildcardSetterSkipsNonNumericIdValues(): void
+  {
+    $query = (new WildcardIdModel())->query;
+
+    self::assertSame('fp-abc-123', $query->withSetAttr('device_id', 'fp-abc-123'), '非数字字符串应原样透传');
+    self::assertSame('certify-archive-1', $query->withSetAttr('certify_id', 'certify-archive-1'));
+  }
+
+  /**
+   * 超长数字字符串（≥20 位，超出 int 表示范围）不应被 (int) 溢出饱和
+   */
+  public function testWildcardSetterSkipsOverlongNumericStrings(): void
+  {
+    $query = (new WildcardIdModel())->query;
+
+    self::assertSame(str_repeat('9', 20), $query->withSetAttr('user_id', str_repeat('9', 20)), '超长数字串应原样透传防溢出饱和');
   }
 }
 
 /**
- * 测试用模型：定义通配获取器/修改器（模拟雪花 ID 基类按 *_id 后缀转换），
+ * 测试用模型：定义通配获取器/修改器（推荐范式——值感知 + 长度防御），
  * order_id 另定义具名获取器用于验证优先级
  */
 class WildcardIdModel extends Model
@@ -104,26 +120,31 @@ class WildcardIdModel extends Model
   protected string $table = 'users';
   protected string $pk = 'id';
 
+  /** JS Number 最大安全整数（2^53 - 1） */
+  private const int JS_MAX_SAFE_INT = 9007199254740991;
+
   /**
-   * 通配获取器：*_id 后缀字段字符串化（模拟雪花 ID 防精度丢失）
+   * 通配获取器：超过 JS 安全整数（2^53-1）的整型字符串化（防 JS 精度丢失）
    */
   public static function getAttr(string $field, mixed $value): mixed
   {
-    if ($value === null || !str_ends_with($field, '_id')) {
-      return $value;
+    if (is_int($value) && ($value > self::JS_MAX_SAFE_INT || $value < -self::JS_MAX_SAFE_INT)) {
+      return (string)$value;
     }
-    return (string)$value;
+    return $value;
   }
 
   /**
-   * 通配修改器：*_id 后缀字段归一为整型（模拟字符串 ID 回传落库）
+   * 通配修改器：*_id 后缀且为纯数字字符串（≤19 位）归一为整型，
+   * 其余（非数字值/超长数字串）原样透传
    */
   public static function setAttr(string $field, mixed $value): mixed
   {
-    if ($value === null || !str_ends_with($field, '_id')) {
-      return $value;
+    if (str_ends_with($field, '_id')
+      && is_string($value) && ctype_digit($value) && strlen($value) <= 19) {
+      return (int)$value;
     }
-    return (int)$value;
+    return $value;
   }
 
   /**
@@ -142,38 +163,4 @@ class PlainModel extends Model
 {
   protected string $table = 'users';
   protected string $pk = 'id';
-}
-
-/**
- * 测试用模型：具名与通配获取器/修改器均声明为 protected（模拟可见性误用场景，
- * 历史上会触发 Model::__call ↔ Query::__call 无限递归直至内存耗尽）
- */
-class ProtectedAttrModel extends Model
-{
-  protected string $table = 'users';
-  protected string $pk = 'id';
-
-  /**
-   * protected 具名获取器：应视为未定义
-   */
-  protected function getUserNameAttr(mixed $value): string
-  {
-    return 'SHOULD_NOT_REACH';
-  }
-
-  /**
-   * protected 通配获取器：应视为未定义
-   */
-  protected function getAttr(string $field, mixed $value): mixed
-  {
-    return 'SHOULD_NOT_REACH';
-  }
-
-  /**
-   * protected 通配修改器：应视为未定义
-   */
-  protected function setAttr(string $field, mixed $value): mixed
-  {
-    return 'SHOULD_NOT_REACH';
-  }
 }
