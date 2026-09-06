@@ -30,7 +30,15 @@ use Viswoole\Database\Query\RunInfo;
  * 提供ORM核心能力：自动推断表名、软删除、时间戳自动写入、关联查询、获取器、修改器等。
  * 修改器约定：定义 set{Field}Attr 方法（如 user_name 字段对应 setUserNameAttr），
  * 写入（insert/update/create）前自动对字段值做转换（密码哈希、JSON 序列化等）。
- * 修改器/获取器必须声明为 public（框架在模型外部作用域调用，非公有方法会触发 __call 无限递归）。
+ *
+ * 通配获取器/修改器：模型定义 getAttr(string $field, mixed $value) / setAttr(...) 时，
+ * 对未命中具名（get|set){Field}Attr 的字段做兜底转换，$field 为蛇形原名字段名，
+ * 适合按字段名模式匹配统一转换（如基类统一处理 *_id 雪花 ID 字符串化）；
+ * 具名方法优先于通配方法；通配方法可定义为实例方法或静态方法（静态方法内无法访问 $this）。
+ *
+ * 修改器/获取器（含通配方法）必须声明为 public：框架从模型外部作用域校验可见性，
+ * 非 public 方法视为未定义（回退通配或原值），避免触发 __call 转发链无限递归。
+ *
  * 子类通过定义属性来声明表名、主键、软删除字段等元信息，框架自动处理查询与写入逻辑。
  * 静态方法通过 __callStatic 转发到 Query 实例，支持链式调用。
  *
@@ -141,8 +149,7 @@ abstract class Model
    */
   public static function __callStatic(string $name, array $arguments)
   {
-    // new 表达式加括号：无括号链式（new static()->query）为 PHP 8.4 语法，加括号以兼容 composer 声明的 >=8.3
-    return call_user_func_array([(new static())->query, $name], $arguments);
+    return call_user_func_array([new static()->query, $name], $arguments);
   }
 
   /**

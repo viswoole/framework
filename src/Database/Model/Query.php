@@ -46,6 +46,8 @@ class Query extends BaseQuery
   private bool $withTrashed = false;
   /** @var array<string,RelationQuery> 已注册的关联查询，键为关联名称 */
   private array $relations = [];
+  /** @var array<string,true> 模型 public 方法名缓存（小写键），避免批量水合时反复调用 get_class_methods */
+  private array $publicMethods = [];
 
   /**
    * 初始化模型查询实例，从模型属性读取表名、主键和通道配置
@@ -204,18 +206,49 @@ class Query extends BaseQuery
   /**
    * 应用模型获取器，将蛇形字段名转换为驼峰后查找对应的 get{Field}Attr 方法
    *
-   * @param string $key 字段名
+   * 查找顺序：具名获取器 get{Field}Attr 优先；未定义时回退通配获取器
+   * getAttr(string $field, mixed $value)——$field 为蛇形原名字段名，便于按
+   * 字段名模式匹配做兜底转换（如 *_id 雪花 ID 字符串化）；两者皆无返回原值。
+   * 方法必须声明为 public：框架从模型外部作用域校验可见性，非 public 方法
+   * 视为未定义直接回退，避免触发 __call 转发链无限递归。
+   *
+   * @param string $key 字段名（蛇形）
    * @param mixed $value 原始值
    * @return mixed 转换后的值，无获取器时返回原值
    */
   public function withGetAttr(string $key, mixed $value): mixed
   {
-    $key = Str::snakeCaseToCamelCase($key);
-    if (method_exists($this->model, "get{$key}Attr")) {
-      return call_user_func([$this->model, "get{$key}Attr"], $value);
-    } else {
-      return $value;
+    $camelKey = Str::snakeCaseToCamelCase($key);
+    if ($this->hasPublicAttrMethod("get{$camelKey}Attr")) {
+      return call_user_func([$this->model, "get{$camelKey}Attr"], $value);
     }
+    if ($this->hasPublicAttrMethod('getAttr')) {
+      return call_user_func([$this->model, 'getAttr'], $key, $value);
+    }
+    return $value;
+  }
+
+  /**
+   * 判断模型上是否存在可从框架作用域调用的 public 方法
+   *
+   * 为什么不用 method_exists：它不区分可见性，非 public 的获取器/修改器经
+   * call_user_func 从外部作用域调用会触发 __call 转发链（Model::__call ↔
+   * Query::__call）无限递归直至内存耗尽。get_class_methods 在模型外部调用
+   * 时仅返回 public 方法，恰好同时完成存在性与可见性校验（也不用 is_callable：
+   * 模型定义了 __call，它对任意方法名都会返回 true）。
+   *
+   * @param string $name 方法名
+   * @return bool 方法存在且为 public
+   */
+  private function hasPublicAttrMethod(string $name): bool
+  {
+    if ($this->publicMethods === []) {
+      // get_class_methods 从模型外部作用域调用时只返回 public 方法
+      $this->publicMethods = array_change_key_case(
+        array_flip(get_class_methods($this->model)), CASE_LOWER
+      );
+    }
+    return isset($this->publicMethods[strtolower($name)]);
   }
 
   /**
@@ -369,7 +402,11 @@ class Query extends BaseQuery
    *
    * 与获取器（get{Field}Attr）对称：如 user_name 字段对应 setUserNameAttr()，
    * 在写入（insert/insertGetId/update/create）前对字段值做转换（如密码哈希、
-   * JSON 序列化、金额单位换算等）。仅转换字段值，不改变字段名；无修改器时原值返回。
+   * JSON 序列化、金额单位换算等）。仅转换字段值，不改变字段名。
+   * 查找顺序：具名修改器 set{Field}Attr 优先；未定义时回退通配修改器
+   * setAttr(string $field, mixed $value)——$field 为蛇形原名字段名；两者皆无返回原值。
+   * 方法必须声明为 public：框架从模型外部作用域校验可见性，非 public 方法
+   * 视为未定义直接回退，避免触发 __call 转发链无限递归。
    *
    * @param string $key 字段名（蛇形）
    * @param mixed $value 原始值
@@ -378,8 +415,11 @@ class Query extends BaseQuery
   public function withSetAttr(string $key, mixed $value): mixed
   {
     $camelKey = Str::snakeCaseToCamelCase($key);
-    if (method_exists($this->model, "set{$camelKey}Attr")) {
+    if ($this->hasPublicAttrMethod("set{$camelKey}Attr")) {
       return call_user_func([$this->model, "set{$camelKey}Attr"], $value);
+    }
+    if ($this->hasPublicAttrMethod('setAttr')) {
+      return call_user_func([$this->model, 'setAttr'], $key, $value);
     }
     return $value;
   }
