@@ -15,14 +15,18 @@ declare(strict_types=1);
 
 namespace Viswoole\Core;
 
+use BackedEnum;
 use InvalidArgumentException;
 use ReflectionClass;
+use UnitEnum;
 
 /**
  * 事件管理器
  *
  * 提供事件的注册、触发和移除机制，支持闭包监听、类方法监听和 event.id 语法。
- * 事件名统一转为小写，确保 on/emit/off 大小写不敏感。
+ * 事件名统一转为小写，确保 on/emit/off 大小写不敏感；
+ * $event 支持任意枚举：字符串枚举使用枚举值作为事件名，数值枚举与纯枚举使用枚举名；
+ * 框架内置事件名统一由 {@see FrameworkEvent} 枚举定义。
  * 支持监听次数限制，达到限制后自动移除。
  */
 class Event
@@ -44,12 +48,12 @@ class Event
    * Event::emit('user.login', [['id'=>1,'login_at'=>'2024-01-01 01:21:32']]);
    * ```
    *
-   * @param string $event 事件名称，不区分大小写
+   * @param string|UnitEnum $event 事件名称或任意枚举，不区分大小写
    * @param array $arguments 传递给监听器的参数
    */
-  public function emit(string $event, array $arguments = []): void
+  public function emit(string|UnitEnum $event, array $arguments = []): void
   {
-    $event = strtolower(trim($event));
+    $event = self::normalizeEventName($event);
     if (str_contains($event, '.')) {
       // 修复: explode 参数顺序应为 (分隔符, 字符串, 限制)
       [$event, $id] = explode('.', $event, 2);
@@ -60,6 +64,30 @@ class Event
         $this->callHandle($event, $id, $arguments);
       }
     }
+  }
+
+  /**
+   * 归一化事件名：枚举转为字符串、去除首尾空白并统一转为小写，
+   * 确保 on/emit/off 使用任意形式传入的事件名指向同一监听组。
+   *
+   * 枚举归一化规则：
+   * - 字符串枚举(string-backed)：使用枚举值作为事件名
+   * - 数值枚举(int-backed)：使用枚举名作为事件名
+   * - 纯枚举(非backed)：使用枚举名作为事件名
+   *
+   * @param string|UnitEnum $event 事件名称或任意枚举
+   * @return string 归一化后的事件名（小写）
+   */
+  private static function normalizeEventName(string|UnitEnum $event): string
+  {
+    if ($event instanceof BackedEnum) {
+      // 字符串枚举使用枚举值，数值枚举使用枚举名
+      $event = is_string($event->value) ? $event->value : $event->name;
+    } elseif ($event instanceof UnitEnum) {
+      // 纯枚举没有 backing value，使用枚举名
+      $event = $event->name;
+    }
+    return strtolower(trim($event));
   }
 
   /**
@@ -75,6 +103,8 @@ class Event
       $listen = $this->listens[$event][$id];
       if ($listen['limit'] === 0 || $listen['count'] < $listen['limit']) {
         invoke($listen['handle'], $arguments);
+        // 监听器内部可能已通过 off() 移除自身，需重新检查存在性，避免在已移除的键上累加 count
+        if (!isset($this->listens[$event][$id])) return;
         $this->listens[$event][$id]['count'] += 1;
         if ($this->listens[$event][$id]['count'] >= $listen['limit'] && $listen['limit'] !== 0) {
           $this->off($event, $id);
@@ -86,13 +116,13 @@ class Event
   /**
    * 移除事件监听器，不传 ID 时移除该事件的全部监听器
    *
-   * @param string $event 事件名称，不区分大小写
+   * @param string|UnitEnum $event 事件名称或任意枚举，不区分大小写
    * @param string|null $id 监听器ID，为 null 时移除该事件的所有监听器
    */
-  public function off(string $event, ?string $id = null): void
+  public function off(string|UnitEnum $event, ?string $id = null): void
   {
     // 与 on/emit 保持一致，统一转换为小写
-    $event = strtolower(trim($event));
+    $event = self::normalizeEventName($event);
     if (isset($this->listens[$event])) {
       if (is_null($id)) {
         unset($this->listens[$event]);
@@ -136,19 +166,24 @@ class Event
    * Event::off('user.login');
    * ```
    *
-   * @param string $event 事件名称，不区分大小写，不能包含 '.'
-   * @param callable|string $handle 闭包回调或监听器类名
+   * @param string|UnitEnum $event 事件名称或任意枚举，不区分大小写，不能包含 '.'
+   * @param callable|string $handle 闭包回调或监听器类名（不支持枚举类）
    * @param int $limit 最大监听次数，0 为不限制，达到后自动移除
    * @return string|array 闭包注册返回监听器ID，类名注册返回方法名ID数组
-   * @throws InvalidArgumentException 事件名包含 '.' 或 $handle 不可调用时抛出
+   * @throws InvalidArgumentException 事件名包含 '.'、$limit 为负数、$handle 不可调用或为枚举类时抛出
    */
-  public function on(string $event, callable|string $handle, int $limit = 0): string|array
+  public function on(string|UnitEnum $event, callable|string $handle, int $limit = 0): string|array
   {
+    // 统一归一化事件名，后续分支无需重复转换
+    $event = self::normalizeEventName($event);
     if (str_contains($event, '.')) {
       throw new InvalidArgumentException('事件名称不能包含"."');
     }
+    // 负数限制会导致监听器永远不执行也无法移除，注册时直接拒绝
+    if ($limit < 0) {
+      throw new InvalidArgumentException('监听次数限制不能为负数');
+    }
     if (is_callable($handle)) {
-      $event = strtolower(trim($event));
       $id = md5(uniqid($event . '_' . microtime(true), true));
       $this->listens[$event][$id] = [
         'limit' => $limit,
@@ -158,9 +193,12 @@ class Event
       return $id;
     } elseif (class_exists($handle)) {
       // 修复: 应检查 $handle 而非 $event 是否为类名
-      $eventList = [];
       $refClass = new ReflectionClass($handle);
-      $event = strtolower(trim($event));
+      // 枚举只有 cases()/from()/tryFrom() 等内置静态方法，作为监听器类批量注册无意义，明确拒绝
+      if ($refClass->isEnum()) {
+        throw new InvalidArgumentException('$handle参数不能是枚举类，枚举仅支持作为事件名使用');
+      }
+      $eventList = [];
       $className = $refClass->getName();
       // 获取类的方法
       $methods = $refClass->getMethods();

@@ -16,6 +16,7 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use Override;
+use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Router\Commands\ClearCache;
 
@@ -29,8 +30,8 @@ class RouterService extends Provider
    */
   #[Override] public function boot(): void
   {
-    // 监听服务创建前事件
-    $this->app->event->on('CreateServerBefore', function () {
+    // 监听服务创建前事件，延迟初始化路由
+    $this->app->event->on(FrameworkEvent::ServerCreating, function () {
       $this->app->make('router');
     });
   }

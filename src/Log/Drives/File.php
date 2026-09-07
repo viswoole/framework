@@ -19,6 +19,7 @@ use Override;
 use Swoole\Server;
 use Swoole\Timer;
 use Viswoole\Core\Facade\Event;
+use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Log\Drive;
 use Viswoole\Log\LogManager;
@@ -84,7 +85,7 @@ class File extends Drive
         });
       });
       // 监听服务关闭之前的事件，清理定时器
-      Event::on('ServerShutdownBefore', function () use (&$afterId, &$tickId, $server) {
+      Event::on(FrameworkEvent::ServerShuttingDown, function () use (&$afterId, &$tickId, $server) {
         if (is_int($afterId)) Timer::clear($afterId);
         if (is_int($tickId)) Timer::clear($tickId);
       });

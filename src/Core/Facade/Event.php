@@ -21,9 +21,12 @@ use Viswoole\Core\Facade;
 /**
  * 事件管理门面，静态代理 Event 核心方法
  *
- * @method static array|string on(string $event, callable|string $handle, int $limit = 0) 监听事件
- * @method static void emit(string $event, array $arguments = []) 触发事件
- * @method static void off(string $event, ?string $id = null) 关闭某个事件的监听器，如果id为null，则关闭该事件的所有监听器
+ * $event 支持任意枚举：字符串枚举使用枚举值作为事件名，数值枚举与纯枚举使用枚举名；
+ * 框架内置事件名参见 {@see \Viswoole\Core\FrameworkEvent} 枚举
+ *
+ * @method static array|string on(string|\UnitEnum $event, callable|string $handle, int $limit = 0) 监听事件
+ * @method static void emit(string|\UnitEnum $event, array $arguments = []) 触发事件
+ * @method static void off(string|\UnitEnum $event, ?string $id = null) 关闭某个事件的监听器，如果id为null，则关闭该事件的所有监听器
  * @method static void offAll() 清除所有监听器
  * @method static array getEvents() 获取已监听的事件
  */
@@ -33,7 +36,8 @@ class Event extends Facade
   /**
    * 获取门面代理的目标类名
    */
-  #[Override] protected static function getMappingClass(): string
+  #[Override]
+  protected static function getMappingClass(): string
   {
     return \Viswoole\Core\Event::class;
   }

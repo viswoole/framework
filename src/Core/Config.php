@@ -53,7 +53,7 @@ class Config
     $this->ext = '*';
     $this->matchCase = true;
     $this->load($this->path);
-    $event->on('AppInitialized', function () {
+    $event->on(FrameworkEvent::AppInitialized, function () {
       // 监听AppInitialized事件，在App初始化完成后 加载懒加载文件
       $this->load($this->path . 'lazy' . DIRECTORY_SEPARATOR);
     }, 1);

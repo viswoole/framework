@@ -19,6 +19,7 @@ use Swoole\Process;
 use Swoole\Server;
 use Viswoole\Core\Console\Output;
 use Viswoole\Core\Facade\Event;
+use Viswoole\Core\FrameworkEvent;
 
 /**
  * Swoole 服务端事件钩子，统一管理服务生命周期事件的注册与分发
@@ -100,14 +101,14 @@ class ServerEventHook
   }
 
   /**
-   * 服务关闭前回调，触发 ServerShutdownBefore 事件以允许执行清理工作
+   * 服务关闭前回调，触发 ServerShuttingDown 事件以允许执行清理工作
    *
    * @param Server $server Swoole 服务实例
    */
   private static function onBeforeShutdown(Server $server): void
   {
     // 触发服务关闭前事件，允许用户在服务关闭前执行一些清理工作
-    Event::emit('ServerShutdownBefore', [$server]);
+    Event::emit(FrameworkEvent::ServerShuttingDown, [$server]);
   }
 
   /**
@@ -130,7 +131,7 @@ class ServerEventHook
   }
 
   /**
-   * 服务启动回调，输出启动信息、监听 SIGINT 信号以安全关闭服务，并触发 AfterStartServer 事件
+   * 服务启动回调，输出启动信息、监听 SIGINT 信号以安全关闭服务，并触发 ServerStarted 事件
    *
    * @param Server $server Swoole 服务实例
    */
@@ -164,6 +165,6 @@ class ServerEventHook
         );
       }
     });
-    Event::emit('AfterStartServer', [$server]);
+    Event::emit(FrameworkEvent::ServerStarted, [$server]);
   }
 }

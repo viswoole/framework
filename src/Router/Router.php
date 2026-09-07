@@ -23,6 +23,7 @@ use RuntimeException;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Event;
+use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Middleware;
 use Viswoole\Router\Annotation\AutoController;
 use Viswoole\Router\Annotation\Controller;
@@ -93,12 +94,12 @@ class Router extends Collector
       $this->verifyGlobalReturned();
     }
     // 触发路由初始化事件，其他模块可以监听该事件注册路由
-    $this->event->emit('RouterInit');
+    $this->event->emit(FrameworkEvent::RouterInitializing);
     $this->loadConfigRoute();
     $this->loadAnnotationRoute();
     $this->parseRoute();
     $this->init = true;
-    $this->event->emit('RouterInitialized');
+    $this->event->emit(FrameworkEvent::RouterInitialized);
   }
 
   /**

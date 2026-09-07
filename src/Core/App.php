@@ -102,7 +102,7 @@ class App extends Container
     self::$instance = $this;
     $this->bind(App::class, $this);
     $this->initialize();
-    $this->event->emit('AppInitialized');
+    $this->event->emit(FrameworkEvent::AppInitialized);
   }
 
   /**
@@ -276,10 +276,10 @@ class App extends Container
   }
 
   /**
-   * 析构时触发 AppDestroy 事件，供服务清理资源
+   * 析构时触发 AppDestroying 事件，供服务清理资源
    */
   public function __destruct()
   {
-    $this->event->emit('AppDestroy');
+    $this->event->emit(FrameworkEvent::AppDestroying);
   }
 }

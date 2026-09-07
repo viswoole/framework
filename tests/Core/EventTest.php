@@ -19,6 +19,23 @@ use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Viswoole\Core\App;
 use Viswoole\Core\Event;
+use Viswoole\Core\FrameworkEvent;
+
+/**
+ * 测试用字符串枚举，验证事件名取枚举值
+ */
+enum TestStringEvent: string
+{
+  case UserLogin = 'user_login_event';
+}
+
+/**
+ * 测试用数值枚举，验证事件名取枚举名
+ */
+enum TestIntEvent: int
+{
+  case UserLogin = 1;
+}
 
 /**
  * 事件系统测试
@@ -232,5 +249,145 @@ class EventTest extends TestCase
     $this->event->emit('multiArgs', ['value1', 'value2', 'value3']);
 
     static::assertEquals(['value1', 'value2', 'value3'], $receivedArgs);
+  }
+
+  /**
+   * 测试使用 FrameworkEvent 枚举注册和触发事件
+   *
+   * @return void
+   */
+  public function testOnAndEmitWithFrameworkEventEnum(): void
+  {
+    $received = false;
+    $this->event->on(FrameworkEvent::ServerStarted, function () use (&$received) {
+      $received = true;
+    });
+    // 使用枚举触发
+    $this->event->emit(FrameworkEvent::ServerStarted);
+
+    static::assertTrue($received);
+  }
+
+  /**
+   * 测试枚举与等价小写字符串指向同一监听组
+   *
+   * @return void
+   */
+  public function testEnumAndStringNormalizeToSameListener(): void
+  {
+    $received = false;
+    // 枚举注册
+    $this->event->on(FrameworkEvent::AppInitialized, function () use (&$received) {
+      $received = true;
+    });
+    // 等价的小写字符串触发，应命中同一监听器
+    $this->event->emit('appinitialized');
+
+    static::assertTrue($received);
+  }
+
+  /**
+   * 测试使用 FrameworkEvent 枚举关闭监听器
+   *
+   * @return void
+   */
+  public function testOffWithFrameworkEventEnum(): void
+  {
+    $received = false;
+    $id = $this->event->on(FrameworkEvent::RouterInitializing, function () use (&$received) {
+      $received = true;
+    });
+
+    $this->event->off(FrameworkEvent::RouterInitializing, $id);
+    $this->event->emit(FrameworkEvent::RouterInitializing);
+
+    static::assertFalse($received);
+  }
+
+  /**
+   * 测试自定义字符串枚举 - 事件名取枚举值
+   *
+   * @return void
+   */
+  public function testStringBackedEnumUsesEnumValue(): void
+  {
+    $received = false;
+    $this->event->on(TestStringEvent::UserLogin, function () use (&$received) {
+      $received = true;
+    });
+    // 字符串枚举以枚举值 'user_login_event' 作为事件名，字符串触发应命中同一监听组
+    $this->event->emit('user_login_event');
+
+    static::assertTrue($received);
+  }
+
+  /**
+   * 测试自定义数值枚举 - 事件名取枚举名
+   *
+   * @return void
+   */
+  public function testIntBackedEnumUsesEnumName(): void
+  {
+    $received = false;
+    $this->event->on(TestIntEvent::UserLogin, function () use (&$received) {
+      $received = true;
+    });
+    // 数值枚举以枚举名作为事件名（归一化为小写 userlogin）
+    $this->event->emit('userlogin');
+
+    static::assertTrue($received);
+  }
+
+  /**
+   * 测试监听器在触发过程中移除自身 - 不应产生警告或数据污染
+   *
+   * @return void
+   */
+  public function testListenerCanRemoveSelfDuringEmit(): void
+  {
+    $warnings = [];
+    // 捕获 PHP 警告，验证 off 自身后 callHandle 不再访问已移除的键
+    set_error_handler(function (int $errno, string $errstr) use (&$warnings) {
+      $warnings[] = $errstr;
+      return true;
+    });
+    $calls = 0;
+    $selfId = null;
+    $selfId = $this->event->on('selfRemove', function () use (&$calls, &$selfId) {
+      $calls++;
+      $this->event->off('selfRemove', $selfId);
+    });
+    try {
+      $this->event->emit('selfRemove');
+      // 第二次触发时被污染的监听器结构不应存在，也不应产生警告
+      $this->event->emit('selfRemove');
+    } finally {
+      restore_error_handler();
+    }
+
+    static::assertSame(1, $calls);
+    static::assertSame([], $warnings, '不应产生任何 PHP 警告: ' . json_encode($warnings));
+  }
+
+  /**
+   * 测试注册负数监听次数限制 - 应抛出异常
+   *
+   * @return void
+   */
+  public function testNegativeLimitThrows(): void
+  {
+    $this->expectException(InvalidArgumentException::class);
+    $this->event->on('negLimit', fn() => null, -1);
+  }
+
+  /**
+   * 测试枚举类作为监听器类 - 应抛出异常
+   *
+   * @return void
+   */
+  public function testEnumClassAsListenerHandleThrows(): void
+  {
+    $this->expectException(InvalidArgumentException::class);
+    $this->event->on('enumHandle', TestStringEvent::class);
   }
 }

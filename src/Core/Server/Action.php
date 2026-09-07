@@ -143,7 +143,7 @@ class Action
   }
 
   /**
-   * 安全停止服务，发送 SIGINT 信号以触发 ServerShutdownBefore 事件清理资源
+   * 安全停止服务，发送 SIGINT 信号以触发 ServerShuttingDown 事件清理资源
    *
    * 不指定服务名时尝试关闭所有服务
    *
@@ -178,7 +178,7 @@ class Action
       $pid = self::getServerPid($server_name);
       if (self::checkPidStatus($pid)) {
         // 发送SIGINT信号替代掉SIGTERM，
-        // 因为无法在内部Process::signal捕获SIGTERM信号触发ServerShutdownBefore事件，清理掉资源，如定时器，
+        // 因为无法在内部Process::signal捕获SIGTERM信号触发ServerShuttingDown事件，清理掉资源，如定时器，
         // 所以采用SIGINT信号替代SIGTERM信号，已在服务启动事件中监听了SIGINT，并调用Server::shutdown。
         $status = Process::kill($pid, SIGINT);
         if (!$status) {

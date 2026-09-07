@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Core;
 
@@ -135,11 +135,11 @@ class Server
       define('SERVER_NAME', $server_name);
     }
     $this->serverName = $server_name;
-    $this->event->emit('CreateServerBefore', [$this]);
+    $this->event->emit(FrameworkEvent::ServerCreating, [$this]);
     $this->getConfig();
     $this->server = $this->createSwooleServer();
     bind(SwooleServer::class, $this->server);
-    $this->event->emit('CreatedServerAfter', [$this]);
+    $this->event->emit(FrameworkEvent::ServerCreated, [$this]);
   }
 
   /**
@@ -170,7 +170,8 @@ class Server
 
     // 服务构造参数
     $config['construct'] = array_merge(
-      self::DEFAULT_CONSTRUCT_ARGUMENTS, $config['construct'] ?? []
+      self::DEFAULT_CONSTRUCT_ARGUMENTS,
+      $config['construct'] ?? []
     );
     // 全局配置
     $globalOptions = config('server.options', self::getDefaultGlobalOption());
@@ -293,8 +294,8 @@ class Server
     $serverName = $this->serverName;
     if ($this->isStart) throw new ServerException("{$serverName}服务已在运行中，请勿重复启动服务。");
     $this->isStart = true;
-    // 触发ServerStart事件
-    $this->event->emit('StartServerBefore', [$this]);
+    // 触发ServerStarting事件
+    $this->event->emit(FrameworkEvent::ServerStarting, [$this]);
     // 进程守护
     if ($daemonize) $this->server->set([Constant::OPTION_DAEMONIZE => $daemonize]);
     $result = $this->server->start();
