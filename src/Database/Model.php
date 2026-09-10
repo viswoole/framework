@@ -83,10 +83,10 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Query whereExists(string $sql, array $bindings = []) 查询条件（EXISTS）
  * @method static Query whereRaw(string $sql, array $bindings = []) 原生 where 查询sql
  * @method static Query whereNotExists(string $sql, array $bindings = []) 查询条件（NOT EXISTS）
- * @method static Query LeftJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（LEFT）
- * @method static Query join(string $table, string $localKey, string $operator, string $foreignKey, string $type = 'INNER') 关联查询
- * @method static Query rightJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（RIGHT）
- * @method static Query fullJoin(string $table, string $localKey, string $operator, string $foreignKey) 关联查询（FULL）
+ * @method static Query leftJoin(string $table, string $localKey, string $foreignKey, string $operator = '=') 关联查询（LEFT）
+ * @method static Query join(string $table, string $localKey, string $foreignKey, string $operator = '=', string $type = 'INNER') 关联查询
+ * @method static Query rightJoin(string $table, string $localKey, string $foreignKey, string $operator = '=') 关联查询（RIGHT）
+ * @method static Query fullJoin(string $table, string $localKey, string $foreignKey, string $operator = '=') 关联查询（FULL）
  * @method static Raw|int insert(array $data) 插入数据
  * @method static Raw|string|int insertGetId(array $data) 插入数据，返回主键值
  * @method static Raw|int update(array $data) 更新记录
