@@ -191,8 +191,10 @@ class PDOChannel extends Channel
     /**
      * @var PDOProxy $connect
      */
-    // $master 为 true 时强制从写库（主库）获取连接，与 think-orm 保持一致
-    $connect = $manager->pop($this, $master ? 'write' : $this->getType($sql));
+    // $master 为 true 或锁定读（FOR UPDATE / FOR SHARE 等各驱动锁定语法，
+    // 见 Channel::isLockingQuery）时强制从写库（主库）获取连接：
+    // 锁定读落从库将失去与主库写入者的互斥语义（与 think-orm 主库策略一致）
+    $connect = $manager->pop($this, $master || self::isLockingQuery($sql) ? 'write' : $this->getType($sql));
     try {
       $stmt = $connect->prepare($sql);
       $stmt->execute($bindings);

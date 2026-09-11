@@ -25,7 +25,8 @@ use Viswoole\Core\Coroutine\Context;
  * 连接管理器
  *
  * 基于协程上下文的单例，管理当前协程内的数据库连接和事务状态。
- * 事务期间复用同一连接，避免占用过多连接池资源。
+ * 事务期间复用同一连接，避免占用过多连接资源；事务连接一律取自写库（主库），
+ * 读写分离场景下事务整体（含首条普通读）在主库执行。
  * 支持事务嵌套：内层事务基于 SAVEPOINT 实现，可独立回滚而不影响外层。
  * 析构时自动回滚未完成的事务，防止连接泄漏。
  *
@@ -80,7 +81,8 @@ class ConnectManager
    * 任意外层回滚都必须能撤销这些写入，故需要所有层的回滚锚点。
    *
    * @param Channel $channel 数据库通道
-   * @param string $type 连接类型 read|write
+   * @param string $type 连接类型 read|write；仅非事务路径生效，
+   *                     事务内新取连接一律强制 write（见下）
    * @return mixed 数据库连接实例
    */
   public function pop(Channel $channel, string $type): mixed
@@ -95,7 +97,11 @@ class ConnectManager
           return $item['connect'];
         }
       }
-      $connect = $channel->pop($type);
+      // 事务连接一律取写库（主库）：事务连接池由首条语句的 pop 触发建立，
+      // 若按语句读写类型定池，首条为普通读的事务将从读池取连接并复用至事务
+      // 结束——后续写入落在从库（只读库报错、可写库失去主库互斥语义），
+      // 且读自身未提交写入必须与写在同一连接。读写分离下事务整体走主库。
+      $connect = $channel->pop('write');
       if ($connect instanceof PDOProxy || $connect instanceof PDO) {
         $connect->beginTransaction();
       } /** @noinspection PhpComposerExtensionStubsInspection */ elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {

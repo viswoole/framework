@@ -94,6 +94,8 @@ abstract class Channel
    *
    * 仅依据语句的首个关键字判断，用于 query() 执行前的语义校验与读写路由。
    * 注意：这是尽力而为的守卫，不处理注释、括号前缀等边界情况，也不构成安全边界。
+   * SELECT ... FOR UPDATE 等锁定读同样被判定为查询语句（query() 守卫语义不变），
+   * 但连接路由层由 isLockingQuery 强制走写库（主库）。
    *
    * @param string $sql 待判断的 SQL 语句
    * @return bool 是查询语句返回 true，否则返回 false
@@ -102,6 +104,30 @@ abstract class Channel
   {
     $first = strtoupper(preg_split('/\s+/', trim($sql))[0] ?? '');
     return in_array($first, self::QUERY_STATEMENTS, true);
+  }
+
+  /**
+   * 判断 SQL 语句是否为锁定读
+   *
+   * 锁定读必须路由到写库（主库）执行：从库上的行锁无法与主库写入者互斥，
+   * 锁语义在读写分离下只在主库成立。判定同样属于尽力而为的守卫
+   * （不解析字符串字面量，字面量恰好包含关键字会被保守判为锁定读，
+   * 仅影响路由不影响正确性）。
+   *
+   * 按驱动覆盖的锁定读语法：
+   * - MySQL / Oracle：FOR UPDATE、FOR SHARE（MySQL 8.0.1+，LOCK IN SHARE MODE 的等价别名）、LOCK IN SHARE MODE
+   * - PostgreSQL：FOR UPDATE、FOR UPDATE NOWAIT/SKIP LOCKED、FOR SHARE、FOR NO KEY UPDATE、FOR KEY SHARE
+   * - SQL Server：WITH (UPDLOCK ...) 表提示（MySQL CTE 语法不允许 WITH 后紧跟 "("，无误报冲突）
+   *
+   * @param string $sql 待判断的 SQL 语句
+   * @return bool 是锁定读语句返回 true
+   */
+  public static function isLockingQuery(string $sql): bool
+  {
+    return preg_match(
+      '/\b(?:FOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)|LOCK\s+IN\s+SHARE\s+MODE|WITH\s*\(\s*UPDLOCK)\b/i',
+      $sql
+    ) === 1;
   }
 
   /**
