@@ -125,29 +125,57 @@ class DocCommentTool
   }
 
   /**
-   * 提取文档注释中的首行描述文本作为标题
+   * 提取文档注释中的标题
+   *
+   * 标题为首个空行之前的所有内容（支持跨行书写，以空格拼接）；
+   * 无空行时标题延伸至首个标签行，此时描述为空
    *
    * @param string $docComment 文档注释
    * @return string 标题文本
    */
   public static function extractDocTitle(string $docComment): string
   {
-    $lines = self::extractDocLines($docComment);
-    return $lines[0] ?? '';
+    [$title] = self::extractTitleAndDescription($docComment);
+    return $title;
   }
 
   /**
-   * 提取文档注释中的描述正文（标题行之后、首个标签之前的内容）
+   * 提取文档注释中的描述正文
+   *
+   * 描述为首个空行之后、首个标签之前的内容；标题与描述之间必须以空行分隔，
+   * 无空行时视为仅有标题，返回空字符串
    *
    * @param string $docComment 文档注释
    * @return string 描述文本，无正文时返回空字符串
    */
   public static function extractDocDescription(string $docComment): string
   {
+    [, $description] = self::extractTitleAndDescription($docComment);
+    return $description;
+  }
+
+  /**
+   * 拆分文档注释中的标题与描述
+   *
+   * 以首个空行作为分界：空行之前的所有行为标题（空格拼接为一段），
+   * 空行之后到首个标签之间的正文为描述（保留换行以维持多段落结构）
+   *
+   * @param string $docComment 文档注释
+   * @return array{0:string,1:string} [标题, 描述]
+   */
+  private static function extractTitleAndDescription(string $docComment): array
+  {
     $lines = self::extractDocLines($docComment);
-    // 首行为标题，描述为其余正文
-    if (count($lines) <= 1) return '';
-    return trim(implode("\n", array_slice($lines, 1)));
+    // 定位首个空行：空行之前为标题段，之后为描述段
+    $blankIndex = array_search('', $lines, true);
+    if ($blankIndex === false) {
+      // 无空行分隔，整体视为标题，描述为空
+      return [implode(' ', $lines), ''];
+    }
+    return [
+      implode(' ', array_slice($lines, 0, $blankIndex)),
+      trim(implode("\n", array_slice($lines, $blankIndex + 1))),
+    ];
   }
 
   /**
@@ -173,10 +201,10 @@ class DocCommentTool
   }
 
   /**
-   * 提取文档注释中首个标签之前的描述行列表
+   * 提取文档注释中首个标签之前的行列表
    *
    * @param string $docComment 文档注释
-   * @return string[] 描述行列表（已去除空行与注释标记，首行为标题）
+   * @return string[] 行列表（已去除注释标记与首尾空行，中间空行保留，作为标题/描述分界）
    */
   private static function extractDocLines(string $docComment): array
   {

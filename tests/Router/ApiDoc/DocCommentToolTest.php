@@ -156,4 +156,111 @@ DOC;
       DocCommentTool::extract($doc, 'date')
     );
   }
+
+  /**
+   * 标题跨行：空行之前的所有行均为标题（空格拼接），空行之后为描述
+   *
+   * @return void
+   */
+  public function testExtractDocTitleMultiLine(): void
+  {
+    $doc = <<<'DOC'
+/**
+ * 审核通过（单事务：乐观流转 → 锁读重读申请行 → 创建俱乐部 → 所有者写管理员
+ * 成员 → club_id 回填）
+ *
+ * 资料自申请迁入（logo/name/intro/license_image/credit_code/等级/计费周期）；
+ * expire_time 按计费周期自通过时刻起算；license_name 无申请来源，空待补录。
+ *
+ * @param int $applyId 申请雪花 ID
+ */
+DOC;
+    $this->assertSame(
+      '审核通过（单事务：乐观流转 → 锁读重读申请行 → 创建俱乐部 → 所有者写管理员 成员 → club_id 回填）',
+      DocCommentTool::extractDocTitle($doc)
+    );
+    $this->assertSame(
+      "资料自申请迁入（logo/name/intro/license_image/credit_code/等级/计费周期）；\n"
+      . 'expire_time 按计费周期自通过时刻起算；license_name 无申请来源，空待补录。',
+      DocCommentTool::extractDocDescription($doc)
+    );
+  }
+
+  /**
+   * 标题与描述以空行分隔的常规场景回归
+   *
+   * @return void
+   */
+  public function testExtractDocTitleWithBlankLineSeparatedDescription(): void
+  {
+    $doc = <<<'DOC'
+/**
+ * 用户登录
+ *
+ * 支持手机号与邮箱登录
+ */
+DOC;
+    $this->assertSame('用户登录', DocCommentTool::extractDocTitle($doc));
+    $this->assertSame('支持手机号与邮箱登录', DocCommentTool::extractDocDescription($doc));
+  }
+
+  /**
+   * 无空行分隔时标题延伸至首个标签行，描述为空
+   *
+   * @return void
+   */
+  public function testExtractDocTitleWithoutBlankLine(): void
+  {
+    $doc = <<<'DOC'
+/**
+ * 用户登录
+ * 支持手机号与邮箱登录
+ * @param string $account 账号
+ */
+DOC;
+    $this->assertSame(
+      '用户登录 支持手机号与邮箱登录',
+      DocCommentTool::extractDocTitle($doc)
+    );
+    $this->assertSame('', DocCommentTool::extractDocDescription($doc));
+  }
+
+  /**
+   * 描述内含多个空行时保留多段落结构
+   *
+   * @return void
+   */
+  public function testExtractDocDescriptionKeepsParagraphs(): void
+  {
+    $doc = <<<'DOC'
+/**
+ * 用户登录
+ *
+ * 第一段描述
+ *
+ * 第二段描述
+ */
+DOC;
+    $this->assertSame(
+      "第一段描述\n\n第二段描述",
+      DocCommentTool::extractDocDescription($doc)
+    );
+  }
+
+  /**
+   * 仅有标题无空行、无描述时返回空描述
+   *
+   * @return void
+   */
+  public function testExtractDocTitleOnly(): void
+  {
+    $doc = <<<'DOC'
+/**
+ * 用户登录
+ */
+DOC;
+    $this->assertSame('用户登录', DocCommentTool::extractDocTitle($doc));
+    $this->assertSame('', DocCommentTool::extractDocDescription($doc));
+    $this->assertSame('', DocCommentTool::extractDocTitle(''));
+  }
 }
