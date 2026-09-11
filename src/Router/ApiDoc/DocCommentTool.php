@@ -23,6 +23,8 @@ class DocCommentTool
   /**
    * 从属性文档注释中提取描述文本
    *
+   * 描述支持跨行书写，续行会去除注释前缀后以空格拼接为一段文本
+   *
    * @param string $doc 属性文档注释
    * @return string 描述文本
    */
@@ -30,11 +32,9 @@ class DocCommentTool
   {
     if (empty($doc)) return $doc;
     if (preg_match(
-      '/@var\s+.*?\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/', $doc,
-      $matches
+      '/@var\s+.*?\s+([\s\S]*?)(?=\s*(?:\*\/|\* @))/', $doc, $matches
     )) {
-      $doc = $matches[1] ?? '';
-      return trim($doc);
+      return self::normalizeDocText($matches[1] ?? '');
     }
     return '';
   }
@@ -63,6 +63,7 @@ class DocCommentTool
    * 从方法文档注释中提取指定参数的描述文本
    *
    * 类型部分使用非贪婪匹配，兼容含空格的 PHPstan 复杂类型（如 array{id: int}）
+   * 描述支持跨行书写，续行会去除注释前缀后以空格拼接为一段文本
    *
    * @param string $docComment 完整的文档注释
    * @param string $param_name 参数名称
@@ -74,11 +75,10 @@ class DocCommentTool
     if (preg_match(
       '/@param\s+[^\n]*?\s+\$' . preg_quote(
         $param_name, '/'
-      ) . '\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/', $docComment,
+      ) . '\s+([\s\S]*?)(?=\s*(?:\*\/|\* @))/', $docComment,
       $matches
     )) {
-      $doc = $matches[1] ?? '';
-      return trim($doc);
+      return self::normalizeDocText($matches[1] ?? '');
     }
     return '';
   }
@@ -97,6 +97,8 @@ class DocCommentTool
   /**
    * 提取任意标签描述部分
    *
+   * 描述支持跨行书写，续行会去除注释前缀后以空格拼接为一段文本
+   *
    * @param string $docComment
    * @param string $tag
    * @return string
@@ -104,10 +106,9 @@ class DocCommentTool
   public static function extract(string $docComment, string $tag): string
   {
     if (empty($docComment)) return '';
-    $pattern = "/@$tag\s+([\s\S]*?)(?=\s*(?:\r\n|\r|\n|\* @))/";
+    $pattern = "/@$tag\s+([\s\S]*?)(?=\s*(?:\*\/|\* @))/";
     if (preg_match($pattern, $docComment, $matches)) {
-      $doc = $matches[1] ?? '';
-      return trim($doc);
+      return self::normalizeDocText($matches[1] ?? '');
     }
     return '';
   }
@@ -147,6 +148,28 @@ class DocCommentTool
     // 首行为标题，描述为其余正文
     if (count($lines) <= 1) return '';
     return trim(implode("\n", array_slice($lines, 1)));
+  }
+
+  /**
+   * 规范化捕获到的标签描述文本
+   *
+   * 去除续行的 "*" 注释前缀与对齐空白，过滤空行后以空格拼接，
+   * 使跨行书写的描述合并为一段完整文本
+   *
+   * @param string $text 正则捕获的原始描述文本
+   * @return string 规范化后的描述文本
+   */
+  private static function normalizeDocText(string $text): string
+  {
+    $lines = [];
+    foreach (explode("\n", $text) as $line) {
+      // 去掉续行行首的注释星号及其后至多一个空格（首个捕获行本身无前缀，此替换不影响其内容）
+      $line = preg_replace('/^\s*\*\s?/', '', $line) ?? $line;
+      $line = trim($line);
+      if ($line === '') continue;
+      $lines[] = $line;
+    }
+    return implode(' ', $lines);
   }
 
   /**
