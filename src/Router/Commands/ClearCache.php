@@ -54,6 +54,12 @@ class ClearCache extends Command
   {
     $server = $input->getArgument('server');
     $io = new SymfonyStyle($input, $output);
+    // server 名会拼接为缓存目录路径，必须限制为安全字符，
+    // 防止误输入相对路径段或绝对路径导致递归删除非缓存目录
+    if ($server !== null && !preg_match('/^[A-Za-z0-9_-]+$/', $server)) {
+      $io->error('服务名称仅允许字母、数字、下划线和中划线');
+      return Command::FAILURE;
+    }
     try {
       $count = RouterTool::clear($server);
       $io->success("共计清除 $count 个路由缓存文件");

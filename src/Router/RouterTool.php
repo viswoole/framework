@@ -14,7 +14,17 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use Viswoole\Core\App;
+use Viswoole\Router\ApiDoc\Annotation\Returned;
+use Viswoole\Router\ApiDoc\Status;
+use Viswoole\Router\ApiDoc\Structure\ArrayTypeStructure;
+use Viswoole\Router\ApiDoc\Structure\ClassTypeStructure;
+use Viswoole\Router\ApiDoc\Structure\EnumStructure;
+use Viswoole\Router\ApiDoc\Structure\FieldStructure;
+use Viswoole\Router\ApiDoc\Structure\ObjectStructure;
+use Viswoole\Router\ApiDoc\Structure\TypeStructure;
+use Viswoole\Router\ApiDoc\Structure\Types;
 use Viswoole\Router\Route\Group;
+use Viswoole\Router\Route\Route;
 
 /**
  * 路由器工具类
@@ -23,6 +33,26 @@ use Viswoole\Router\Route\Group;
  */
 class RouterTool
 {
+  /**
+   * 路由缓存反序列化类白名单
+   *
+   * 缓存文件（runtime/route/*.cache）由 Web 进程写入，同权限进程可篡改；
+   * 无白名单的 unserialize 会实例化任意类并触发 __wakeup/__destruct，
+   * 构成 PHP 对象注入攻击面（CWE-502），仅允许恢复路由结构相关类
+   */
+  private const CACHE_ALLOWED_CLASSES = [
+    Group::class,
+    Route::class,
+    Status::class,
+    Types::class,
+    Returned::class,
+    FieldStructure::class,
+    TypeStructure::class,
+    ArrayTypeStructure::class,
+    ClassTypeStructure::class,
+    ObjectStructure::class,
+    EnumStructure::class,
+  ];
   /**
    * 将文件绝对路径转换为相对项目根目录的路径
    *
@@ -66,14 +96,18 @@ class RouterTool
     $file = self::generateCacheFileName($server, $controller);
     if (!file_exists($file)) return null;
     $content = file_get_contents($file);
-    if (!$content) return null;
-    $cacheData = unserialize(file_get_contents($file));
+    if ($content === false || $content === '') return null;
+    // 反序列化施加类白名单：缓存文件可被同权限进程篡改，任意类恢复会触发
+    // POP 链（CWE-502）；白名单外的对象退化为 __PHP_Incomplete_Class，
+    // 由下方 instanceof 校验统一判为无效缓存
+    $cacheData = unserialize($content, ['allowed_classes' => self::CACHE_ALLOWED_CLASSES]);
     if (!is_array($cacheData)) return null;
     if (($cacheData['hash'] ?? null) !== $hash) {
       unlink($file);
       return null;
     }
-    return $cacheData['route'] ?? null;
+    $route = $cacheData['route'] ?? null;
+    return $route instanceof Group ? $route : null;
   }
 
   /**

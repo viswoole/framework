@@ -82,6 +82,11 @@ class Action
    */
   public static function getServerPid(string $server_name): false|int
   {
+    // 服务名会拼接为 PID 文件路径，必须限制为安全字符，
+    // 防止穿越名把任意文件内容当作 PID 读取后向任意进程发送信号
+    if (!preg_match('/^[A-Za-z0-9_-]+$/', $server_name)) {
+      throw new ServerException("非法的服务名称：{$server_name}，仅允许字母、数字、下划线和中划线");
+    }
     $pid_dir = self::getPidStore($server_name);
     $pid_file = $pid_dir . "/$server_name.pid";
     //读取服务进程id 判断服务是否正在运行

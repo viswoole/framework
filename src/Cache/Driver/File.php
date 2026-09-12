@@ -17,6 +17,7 @@ namespace Viswoole\Cache\Driver;
 
 use DateTime;
 use FilesystemIterator;
+use InvalidArgumentException;
 use Override;
 use Swoole\Coroutine\System;
 use Throwable;
@@ -117,12 +118,27 @@ class File extends Driver
   /**
    * 根据缓存键生成完整的文件路径
    *
+   * 缓存键常由业务拼接用户输入，键中的穿越序列（.. 段、反斜杠）会把
+   * 读写删操作引向缓存目录之外的任意路径，构建期直接拒绝：
+   * 仅放行不含 ".." 段与反斜杠的键，保留 key 内以 / 分隔的多级目录用法
+   *
    * @param string $key 缓存标识
    * @return string 缓存文件完整路径
+   * @throws InvalidArgumentException 缓存键包含路径穿越序列时抛出
    */
   protected function filename(string $key): string
   {
     $key = $this->getCacheKey($key);
+    // 先整体归一化校验： ".. /" 或 "/.." 等 mix 形式在此即被拦截；
+    // 反斜杠在 Windows 下是路径分隔符，统一拒绝防止绕过正斜杠分段检查
+    if (str_contains($key, '\\')) {
+      throw new InvalidArgumentException("非法的缓存键（禁止反斜杠）：{$key}");
+    }
+    foreach (explode('/', $key) as $segment) {
+      if ($segment === '..') {
+        throw new InvalidArgumentException("非法的缓存键（禁止路径穿越）：{$key}");
+      }
+    }
     return $this->dir() . $key;
   }
 

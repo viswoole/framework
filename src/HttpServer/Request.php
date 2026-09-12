@@ -108,12 +108,11 @@ class Request implements RequestInterface
     $uploadedFiles = [];
     foreach ($files as $name => $file) {
       // 修复: 兼容 Swoole 多文件上传格式
-      // Swoole 多文件格式为 [name => [0=>'a', 1=>'b'], tmp_name => [...], ...]
-      // 通过检查第一个值是否为数组来判断是否为多文件上传
-      $firstValue = reset($file);
-      if (is_array($firstValue)) {
+      // Swoole 多文件格式为 [name => [0=>'a', 1=>'b'], tmp_name => [...], ...]，
+      // 以 name 键是否为数组作为多文件判定依据，不依赖键遍历顺序假设
+      if (is_array($file['name'] ?? null)) {
         // Swoole 多文件格式，需要转置
-        foreach ($firstValue as $index => $v) {
+        foreach (array_keys($file['name']) as $index) {
           $uploadedFiles[$name][$index] = new UploadedFile(
             $file['type'][$index] ?? '',
             $file['name'][$index] ?? '',

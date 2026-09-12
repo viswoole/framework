@@ -91,31 +91,31 @@ class JoinTest extends TestCase
         ['join', ['orders', 'users.id', 'orders.user_id']],
         'INNER',
         '=',
-        'INNER JOIN `orders` ON users.id=orders.user_id',
+        'INNER JOIN `orders` ON `users`.`id`=`orders`.`user_id`',
       ],
       'leftJoin 存 LEFT 且槽位正确（修复回归点）' => [
         ['leftJoin', ['orders', 'users.id', 'orders.user_id']],
         'LEFT',
         '=',
-        'LEFT JOIN `orders` ON users.id=orders.user_id',
+        'LEFT JOIN `orders` ON `users`.`id`=`orders`.`user_id`',
       ],
       'leftJoin 自定义运算符不串槽' => [
         ['leftJoin', ['orders', 'users.id', 'orders.user_id', '<>']],
         'LEFT',
         '<>',
-        'LEFT JOIN `orders` ON users.id<>orders.user_id',
+        'LEFT JOIN `orders` ON `users`.`id`<>`orders`.`user_id`',
       ],
       'rightJoin 存 RIGHT' => [
         ['rightJoin', ['orders', 'users.id', 'orders.user_id']],
         'RIGHT',
         '=',
-        'RIGHT JOIN `orders` ON users.id=orders.user_id',
+        'RIGHT JOIN `orders` ON `users`.`id`=`orders`.`user_id`',
       ],
       'fullJoin 存 FULL' => [
         ['fullJoin', ['orders', 'users.id', 'orders.user_id']],
         'FULL',
         '=',
-        'FULL JOIN `orders` ON users.id=orders.user_id',
+        'FULL JOIN `orders` ON `users`.`id`=`orders`.`user_id`',
       ],
     ];
   }

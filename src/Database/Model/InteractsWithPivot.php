@@ -18,6 +18,7 @@ namespace Viswoole\Database\Model;
 use InvalidArgumentException;
 use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Model;
 use Viswoole\Database\Raw;
 
@@ -97,6 +98,8 @@ trait InteractsWithPivot
    * @return int 实际新增的绑定数
    * @throws InvalidArgumentException 关联键为空或数据集中缺少主表键时抛出
    * @throws DbException 数据库操作异常
+   * 并发注意：幂等检查与写入非原子（TOCTOU），并发 attach 同一绑定时
+   * 需依赖中间表 (foreign,related) 唯一索引兜底，否则可能产生重复绑定
    */
   public function attach(
     int|string|DataSet $parent,
@@ -206,21 +209,27 @@ trait InteractsWithPivot
     $detachedKeys = array_values(array_diff($existingKeys, $targetKeys));
     // 少补：目标集合中尚未绑定的关联键将被新增
     $attachedKeys = array_values(array_diff($targetKeys, $existingKeys));
-    if ($attachedKeys !== []) {
-      $rows = [];
-      foreach ($attachedKeys as $relatedKey) {
-        $rows[] = array_merge(
-          [$this->foreignPivotKey => $parentKey, $this->relatedPivotKey => $relatedKey],
-          $pivotData
-        );
-      }
-      $this->pivotModel->query->insert($rows);
-    }
-    if ($detachedKeys !== []) {
-      $this->pivotModel->query
-        ->where($this->foreignPivotKey, '=', $parentKey)
-        ->whereIn($this->relatedPivotKey, $detachedKeys)
-        ->delete();
+    // 新增与移除必须同事务执行：任一步骤失败整体回滚，
+    // 避免"新增已落库、移除残留"的绑定错乱中间态
+    if ($attachedKeys !== [] || $detachedKeys !== []) {
+      Db::startTransaction(function () use ($parentKey, $attachedKeys, $detachedKeys, $pivotData): void {
+        if ($attachedKeys !== []) {
+          $rows = [];
+          foreach ($attachedKeys as $relatedKey) {
+            $rows[] = array_merge(
+              [$this->foreignPivotKey => $parentKey, $this->relatedPivotKey => $relatedKey],
+              $pivotData
+            );
+          }
+          $this->pivotModel->query->insert($rows);
+        }
+        if ($detachedKeys !== []) {
+          $this->pivotModel->query
+            ->where($this->foreignPivotKey, '=', $parentKey)
+            ->whereIn($this->relatedPivotKey, $detachedKeys)
+            ->delete();
+        }
+      });
     }
     return ['attached' => $attachedKeys, 'detached' => $detachedKeys];
   }

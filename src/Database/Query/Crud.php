@@ -280,15 +280,26 @@ trait Crud
   /**
    * 执行聚合查询（COUNT/MIN/MAX/AVG/SUM）
    *
+   * 聚合列先做字符集校验再经 Raw 显式构建：聚合参数若被注入用户输入，
+   * 无校验会直接拼入 SQL 构成注入；合法标识符（含 table.column 与 *）才放行
+   *
    * @param string $type 聚合函数名
    * @param string $column 列名
    * @return mixed|Raw 聚合结果
+   * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   private function aggregateQueries(string $type, string $column): mixed
   {
     $fn = strtoupper($type);
-    $this->columns("$fn($column) AS $type");
+    $column = trim($column);
+    if ($column !== '*' && !preg_match('/^[A-Za-z0-9_.]+$/', $column)) {
+      throw new InvalidArgumentException(
+        "无效的聚合字段：{$column}（仅允许字母、数字、下划线与点号）"
+      );
+    }
+    // 聚合表达式含函数语法，无法作为普通标识符 quote，经 Raw 显式构建
+    $this->options->columns[] = Db::raw("{$fn}({$column}) AS {$type}");
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     return $result[0][$type];

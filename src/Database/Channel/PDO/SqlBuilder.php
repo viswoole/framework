@@ -164,19 +164,54 @@ class SqlBuilder
   }
 
   /**
-   * 用数据库标识符包裹字段名，已包含特殊字符或空格的字符串不做处理
+   * 用数据库标识符包裹字段名/表名（按点号分段包裹，支持 table.column 语法）
+   *
+   * 仅放行合法标识符字符（字母、数字、下划线、$）与点号分段，其余一律抛异常。
+   * 此前"遇特殊字符原样放行"的策略会让恶意列名（如排序/分组/列名参数被注入
+   * 用户输入时）直接拼入 SQL 构成注入；聚合函数等原生片段请使用 Db::raw() 显式声明
    *
    * @param string $str 待包裹的标识符
-   * @return string 包裹后的标识符
+   * @return string 包裹后的标识符（table.column 形式逐段包裹）
+   * @throws InvalidArgumentException 标识符包含非法字符时抛出
    */
   protected function quote(string $str): string
   {
     $str = trim($str);
-    if (preg_match('/[.`"[\]()]| /', $str)) {
-      return $str;
+    if ($str === '') {
+      throw new InvalidArgumentException('数据库标识符不能为空');
     }
     $type = $this->channel->type->name;
-    return self::TAG[$type]['left'] . $str . self::TAG[$type]['right'];
+    $quoted = [];
+    foreach (explode('.', $str) as $segment) {
+      // 星号通配：支持 columns('*') 与 table.* 场景
+      if ($segment === '*') {
+        $quoted[] = '*';
+        continue;
+      }
+      if (!preg_match('/^[A-Za-z0-9_$]+$/', $segment)) {
+        throw new InvalidArgumentException(
+          "非法的数据库标识符：{$str}（仅允许字母、数字、下划线，"
+          . '原生片段请使用 Db::raw() 声明）'
+        );
+      }
+      $quoted[] = self::TAG[$type]['left'] . $segment . self::TAG[$type]['right'];
+    }
+    return implode('.', $quoted);
+  }
+
+  /**
+   * 包裹带别名的表名（table AS alias）
+   *
+   * @param string $table 表名，支持 table AS alias 语法
+   * @return string 包裹后的表名片段
+   * @throws InvalidArgumentException 标识符包含非法字符时抛出
+   */
+  protected function quoteTableWithAlias(string $table): string
+  {
+    if (preg_match('/^(.+?)\s+AS\s+(.+)$/i', $table, $matches)) {
+      return $this->quote($matches[1]) . ' AS ' . $this->quote($matches[2]);
+    }
+    return $this->quote($table);
   }
 
   /**
@@ -320,8 +355,9 @@ class SqlBuilder
     }
     if (empty($this->options->where)) {
       if (isset($data[$this->options->pk])) {
+        // column 保存原始列名，由 parseWhereItem 统一 quote，避免二次包裹
         $this->options->where[] = [
-          'column' => $this->quote($this->options->pk),
+          'column' => $this->options->pk,
           'operator' => '=',
           'value' => $data[$this->options->pk],
           'connector' => 'AND'
@@ -387,6 +423,13 @@ class SqlBuilder
         return $where;
       }
       if (is_array($value)) {
+        // 数组值仅支持集合/区间类运算符：显式三参调用传非法组合（如 '=' + 数组）
+        // 会生成 "col = (?, ?)" 坏 SQL，构建期拦截给出明确错误
+        if (!in_array($operator, ['IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN'], true)) {
+          throw new InvalidArgumentException(
+            "运算符 {$operator} 不支持数组值，仅支持 IN/NOT IN/BETWEEN/NOT BETWEEN"
+          );
+        }
         // BETWEEN 语法为 "col BETWEEN ? AND ?"，不能复用 IN 的 (?, ?) 形式
         if (in_array($operator, ['BETWEEN', 'NOT BETWEEN'], true)) {
           if (count($value) !== 2) {
@@ -542,6 +585,12 @@ class SqlBuilder
     }
     $parsedFields = [];
     foreach ($fields as $key => $value) {
+      // 聚合查询等原生片段经 Raw 显式传入（int 键 + Raw 值），直接拼接
+      if ($value instanceof Raw) {
+        $this->params = array_merge($this->params, $value->bindings);
+        $parsedFields[] = $value->sql;
+        continue;
+      }
       if (is_int($key)) {
         $parsedFields[] = $this->quote($value);
         continue;
@@ -584,8 +633,9 @@ class SqlBuilder
     if (!empty($this->options->join)) {
       foreach ($this->options->join as $joinItem) {
         $type = $joinItem['type'];
-        // 修复#3: 对join中的表名和字段名使用反引号包裹，防止SQL注入风险
-        $table = $this->quote($joinItem['table']);
+        // 修复#3: 对join中的表名和字段名使用反引号包裹，防止SQL注入风险；
+        // 表名支持 table AS alias 语法，经 quoteTableWithAlias 逐段包裹
+        $table = $this->quoteTableWithAlias($joinItem['table']);
         $localKey = $this->quote($joinItem['localKey']);
         $operator = $joinItem['operator'];
         $foreignKey = $this->quote($joinItem['foreignKey']);

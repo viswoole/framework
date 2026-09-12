@@ -29,7 +29,8 @@ class Header
    * 校验标头名称和值的合法性
    *
    * 名称不得为空或包含换行符、回车符、冒号（防止 CRLF 注入）；
-   * 值不得为空字符串或空数组。
+   * 值不得为空字符串或空数组，且不得包含换行符、回车符（与名称校验对称，
+   * 不依赖底层实现对 CRLF 的拦截）
    *
    * @param string $name 标头名称
    * @param string|string[] $value 标头值，支持单个字符串或字符串数组
@@ -51,7 +52,12 @@ class Header
         if (!is_string($v) || empty($v)) {
           throw new InvalidArgumentException("无效的头部字段值:[$k=>$v]");
         }
+        if (str_contains($v, "\n") || str_contains($v, "\r")) {
+          throw new InvalidArgumentException("无效的头部字段值:[$k=>$v]");
+        }
       }
+    } elseif (str_contains($value, "\n") || str_contains($value, "\r")) {
+      throw new InvalidArgumentException("无效的头部字段值:$value");
     }
   }
 

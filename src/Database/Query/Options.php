@@ -45,7 +45,8 @@ class Options implements ArrayAccess
    */
   public false|array $cache = false;
   /**
-   * @var array<string,string|null> 查询列，键为列名、值为列别名；为空时等同于 SELECT *
+   * @var array<string,string|null>|array<int,Raw> 查询列，键为列名、值为列别名；
+   *   为空时等同于 SELECT *；int 键 + Raw 值为聚合等原生片段（经 Db::raw 声明）
    */
   public array $columns = [];
   /**

@@ -77,11 +77,14 @@ class UploadedFile
    * 获取文件流（延迟初始化）
    *
    * 首次调用时以二进制只读模式打开临时文件。
+   * 上传存在错误或文件已被移动时禁止获取流：
+   * 临时文件可能不存在或残留，避免异常消息泄露服务器临时路径
    *
    * @return FileStream 文件流实例
    */
   public function getStream(): FileStream
   {
+    $this->validateActive();
     if (!isset($this->stream)) {
       $this->stream = new FileStream($this->tmp_path); // 以二进制只读模式打开文件流
     }
@@ -182,6 +185,24 @@ class UploadedFile
   public function getSize(): ?int
   {
     return $this->size;
+  }
+
+  /**
+   * 通过 finfo 检测文件内容的真实 MIME 类型
+   *
+   * 客户端声明的 Content-Type（getClientMediaType）可被任意伪造，
+   * 安全校验场景（如上传白名单）应以内容检测结果为准
+   *
+   * @return string|null 真实 MIME 类型，临时文件不存在或检测失败时返回 null
+   */
+  public function getRealMimeType(): ?string
+  {
+    if (!is_file($this->tmp_path)) return null;
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    if ($finfo === false) return null;
+    // finfo 为对象实例，由 GC 自动释放（finfo_close 在 PHP 8.5 已弃用）
+    $mime = finfo_file($finfo, $this->tmp_path);
+    return $mime === false ? null : $mime;
   }
 
   /**

@@ -80,19 +80,21 @@ class FileRule extends BaseValidateRule
   /**
    * 校验单个文件的 MIME 类型和大小
    *
+   * MIME 白名单以服务端内容检测（finfo）为准：客户端声明的 Content-Type
+   * 可被任意伪造，仅校验声明值会使上传白名单形同虚设
+   *
    * @param UploadedFile $file 上传文件实例
    */
   private function checkFile(UploadedFile $file): void
   {
     if ($this->fileMime !== '*') {
-      $type = $file->getClientMediaType();
       $types = explode('|', $this->fileMime);
       array_walk($types, function (&$item) {
         $item = strtolower(trim($item));
       });
       // 修复: 原逻辑完全反转, 原代码"不在允许列表中就 return(通过), 在列表中就 error(拒绝)"
       // 正确逻辑应为"在允许列表中才通过(return), 不在列表中则拒绝(error)"
-      if (in_array(strtolower($type), $types)) return;
+      if (in_array(strtolower((string)$file->getRealMimeType()), $types, true)) return;
       $this->error("文件类型必须为 $this->fileMime");
     }
     if ($this->maxSize > 0 && $file->getSize() > $this->maxSize) {
