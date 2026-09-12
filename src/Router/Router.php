@@ -16,23 +16,13 @@ declare (strict_types=1);
 namespace Viswoole\Router;
 
 use InvalidArgumentException;
-use ReflectionAttribute;
-use ReflectionClass;
-use ReflectionMethod;
 use RuntimeException;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Event;
 use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Middleware;
-use Viswoole\Router\Annotation\AutoController;
-use Viswoole\Router\Annotation\Controller;
-use Viswoole\Router\Annotation\RouteMapping;
-use Viswoole\Router\ApiDoc\Annotation\Returned;
 use Viswoole\Router\ApiDoc\ApiDocParseTool;
-use Viswoole\Router\ApiDoc\DocCommentTool;
-use Viswoole\Router\ApiDoc\Structure\FieldStructure;
-use Viswoole\Router\ApiDoc\Structure\Types;
 use Viswoole\Router\Exception\RouteNotFoundException;
 use Viswoole\Router\Route\BaseRoute;
 use Viswoole\Router\Route\Collector;
@@ -45,17 +35,9 @@ use Viswoole\Router\Route\Route;
 class Router extends Collector
 {
   /**
-   * @var array<string,array<string,string>> 完全静态路由映射
-   *      键为 URL 路径，值为 [请求方法 => 路由引用链路]，
-   *      同一路径允许按不同请求方法（GET/POST/...）注册多条路由
+   * @var RouteTable 路由表（静态/动态映射与正则编译，职责见 RouteTable）
    */
-  protected array $staticRoute = [];
-  /**
-   * @var array<string,array<string,array<string,string>>> 动态路由映射
-   *      按路径段数分组（segment_N），第一层键为正则，值为 [请求方法 => 路由引用链路]，
-   *      同一正则允许按不同请求方法注册多条路由
-   */
-  protected array $dynamicRoute = [];
+  private readonly RouteTable $routeTable;
   /**
    * @var bool 是否启用路由缓存
    */
@@ -83,295 +65,22 @@ class Router extends Collector
   )
   {
     App::factory()->bind(self::class, $this);
+    $this->routeTable = new RouteTable($config);
     // 是否缓存路由
     $this->cache = $config->get('router.cache.enable', false);
     // 是否生成api文档
     $this->enableApiDoc = $config->get('router.api_doc.enable', false);
     if ($this->enableApiDoc) {
-      $this->verifyGlobalParams('router.api_doc.body');
-      $this->verifyGlobalParams('router.api_doc.header');
-      $this->verifyGlobalParams('router.api_doc.query');
-      $this->verifyGlobalReturned();
+      // 校验并归一化 api_doc 全局参数配置（职责见 ApiDocGlobalConfig）
+      ApiDocGlobalConfig::verify($config);
     }
     // 触发路由初始化事件，其他模块可以监听该事件注册路由
     $this->event->emit(FrameworkEvent::RouterInitializing);
-    $this->loadConfigRoute();
-    $this->loadAnnotationRoute();
+    // 装载配置路由与注解路由（职责见 RouteLoader）
+    RouteLoader::load($this, $config, $this->cache);
     $this->parseRoute();
     $this->init = true;
     $this->event->emit(FrameworkEvent::RouterInitialized);
-  }
-
-  /**
-   * 验证全局参数，并返回新的参数列表
-   *
-   * @param string $name
-   * @return void
-   */
-  private function verifyGlobalParams(string $name): void
-  {
-    $params = $this->config->get($name, []);
-    if (empty($params)) return;
-    if (!is_array($params)) {
-      throw new InvalidArgumentException("$name 配置错误，必须是数组类型");
-    }
-    $newParams = [];
-    foreach ($params as $index => $field) {
-      $fieldStructure = $this->toFieldStructure($field, $name, $index);
-      $newParams[$fieldStructure->name] = $fieldStructure;
-    }
-    $this->config->set($name, $newParams);
-  }
-
-  /**
-   * 将全局参数配置项转换为字段结构实例
-   *
-   * 支持三种配置格式：
-   * 1. FieldStructure 实例
-   * 2. 极简格式：'参数名' => '参数描述'（类型默认 string）
-   * 3. 关联数组：['name'=>..., 'description'=>..., 'allowNull'=>..., 'default'=>..., 'type'=>...]
-   *    type 支持 Types 枚举或类型字符串（string/int/float/bool/array/object）
-   *
-   * @param mixed $field 配置项
-   * @param string $configName 配置名称（用于异常提示）
-   * @param int|string $index 配置键（极简格式下作为参数名）
-   * @return FieldStructure
-   */
-  private function toFieldStructure(mixed $field, string $configName, int|string $index
-  ): FieldStructure
-  {
-    if ($field instanceof FieldStructure) return $field;
-    if (is_string($field) && is_string($index)) {
-      // 极简格式：参数名 => 描述
-      return new FieldStructure($index, $field, type: Types::String);
-    }
-    if (is_array($field)) {
-      $fieldName = $field['name'] ?? (is_string($index) ? $index : null);
-      if (empty($fieldName)) {
-        throw new InvalidArgumentException("$configName($index) 配置错误，缺少name字段");
-      }
-      return new FieldStructure(
-        (string)$fieldName,
-        (string)($field['description'] ?? ''),
-        (bool)($field['allowNull'] ?? false),
-        $field['default'] ?? null,
-        self::parseType($field['type'] ?? Types::Mixed)
-      );
-    }
-    throw new InvalidArgumentException(
-      "$configName($index) 配置错误，必须是FieldStructure实例、字符串或数组"
-    );
-  }
-
-  /**
-   * 解析类型配置为内置类型枚举
-   *
-   * @param mixed $type Types枚举或类型字符串（string/int/float/bool/array/object）
-   * @return Types
-   */
-  private static function parseType(mixed $type): Types
-  {
-    if ($type instanceof Types) return $type;
-    if (is_string($type)) {
-      return match (strtolower($type)) {
-        'string', 'str' => Types::String,
-        'int', 'integer' => Types::Int,
-        'float', 'double' => Types::Float,
-        'bool', 'boolean' => Types::Bool,
-        'array' => Types::Array,
-        'object' => Types::Object,
-        'null' => Types::Null,
-        default => Types::Mixed,
-      };
-    }
-    return Types::Mixed;
-  }
-
-  /**
-   * 校验全局返回值配置
-   *
-   * @return void
-   */
-  private function verifyGlobalReturned(): void
-  {
-    $globalReturned = config('router.api_doc.returned', []);
-    if (!is_array($globalReturned)) {
-      throw new InvalidArgumentException('router.api_doc.returned 配置错误，必须是数组类型');
-    }
-    $class = Returned::class;
-    foreach ($globalReturned as $item) {
-      if (!$item instanceof Returned) {
-        throw new InvalidArgumentException("router.api_doc.returned 配置错误，必须是{$class}实例");
-      }
-    }
-  }
-
-  /**
-   * 加载路由配置文件（通过 router.route_config_files 配置项指定）
-   */
-  private function loadConfigRoute(): void
-  {
-    $loadPaths = $this->config->get('router.route_config_files', []);
-    foreach ($loadPaths as $file) {
-      require_once $file;
-    }
-  }
-
-  /**
-   * 加载注解路由
-   *
-   * @return void
-   */
-  private function loadAnnotationRoute(): void
-  {
-    $rootPath = getRootPath() . DIRECTORY_SEPARATOR;
-    $directory = $rootPath . 'app/Controller';
-    // 列出指定路径中的文件和目录
-    $controllers = RouterTool::getAllFiles($directory);
-    $hash = null;
-    foreach ($controllers as $controller) {
-      [$fullClass] = RouterTool::getNamespace($controller, $rootPath);
-      // 获取路由缓存
-      if ($this->cache) {
-        // 缓存哈希：框架版本号 + 类文件哈希，框架升级后旧缓存自动失效
-        $hash = RouterTool::getCacheHash($controller);
-        $cacheGroup = RouterTool::getCache(SERVER_NAME, $fullClass, $hash);
-        if ($cacheGroup) {
-          $this->recordRouteItem($cacheGroup);
-          continue;
-        }
-      }
-      // 没有缓存，则解析路由
-      $routeGroup = $this->parseController($controller, $rootPath);
-      // 如果没有解析到路由则跳过
-      if (empty($routeGroup)) continue;
-      // 记录路由
-      $this->recordRouteItem($routeGroup);
-      // 如果hash不为null则缓存路由
-      if (!$hash) continue;
-      RouterTool::setCache(SERVER_NAME, $fullClass, $hash, $routeGroup);
-    }
-  }
-
-  /**
-   * 解析控制器
-   *
-   * @param string $file 控制器文件
-   * @param string $rootPath 根目录
-   * @return Group|null
-   */
-  private function parseController(string $file, string $rootPath): ?Group
-  {
-    [$fullClass] = RouterTool::getNamespace($file, $rootPath);
-    if (class_exists($fullClass)) {
-      $refClass = new ReflectionClass($fullClass);
-      $className = $refClass->getShortName();
-    } else {
-      return null;
-    }
-    // 获取路由注解属性
-    $classAttributes = $refClass->getAttributes(
-      Controller::class, ReflectionAttribute::IS_INSTANCEOF
-    );
-    // 没有路由控制器注解属性则不解析
-    if (empty($classAttributes)) return null;
-    /** @var Controller|AutoController $controller 控制器路由注解实例 */
-    $controller = $classAttributes[0]->newInstance();
-    // 服务名称
-    $serverName = $controller->server ?? SERVER_NAME;
-    // 判断服务名称是否匹配当前服务
-    if (strtolower($serverName) !== strtolower(SERVER_NAME)) return null;
-    // 判断是否设置了描述
-    if (!isset($controller->title)) {
-      $controller->title = DocCommentTool::extractDocTitle($refClass->getDocComment() ?: '');
-    }
-    /** 是否为自动路由 */
-    $isAutoRoute = $controller instanceof AutoController;
-    // 如果类路由注解的paths设置为null则默认为类名称
-    if ($controller->prefix === null) $controller->prefix = $className;
-    // 类完全名称md5值作为路由分组名称
-    if (!$controller->id) $controller->id = RouterTool::generateHashId($fullClass);
-    /**
-     * @var Group $group 路由分组实例
-     */
-    $group = $controller->create([]);
-    // 记录控制器类源码位置（相对项目根目录），供接口文档定位
-    $group->setSourceLocation(
-      RouterTool::relativeToRoot($refClass->getFileName()),
-      $refClass->getStartLine()
-    );
-    // 类的全部方法
-    $methods = $refClass->getMethods();
-    if (!empty($methods)) $this->parseMethod($methods, $isAutoRoute, $group);
-    return $group;
-  }
-
-  /**
-   * 解析方法
-   *
-   * @param ReflectionMethod[] $methods 方法列表
-   * @param bool $isAutoRoute 是否自动路由
-   * @param Group $group
-   * @return void
-   */
-  private function parseMethod(array $methods, bool $isAutoRoute, Group $group): void
-  {
-    if (empty($methods)) return;
-    $class = $methods[0]->getDeclaringClass()->getName();
-    foreach ($methods as $method) {
-      // 判断是否需要创建路由
-      $isCreate = $method->isPublic()
-        && !$method->isConstructor()
-        && !$method->isAbstract()
-        && !$method->isDestructor();
-      // 不需要创建路由则跳过
-      if (!$isCreate) continue;
-      $methodName = $method->getName();
-      // 路由id
-      $methodId = RouterTool::generateHashId($class . '::' . $methodName);
-      // 获取方法注解
-      $methodAttributes = $method->getAttributes(RouteMapping::class);
-      // 方法文档注释
-      $methodDocComment = $method->getDocComment() ?: '';
-      // 构建处理方法
-      $handler = $method->isStatic()
-        ? $class . '::' . $method->getName()
-        : [$class, $method->getName()];
-      // 如果没有设置路由注解，且该类为自动路由则创建路由
-      if (empty($methodAttributes)) {  // 自动路由
-        if (!$isAutoRoute) continue;
-        // 创建新的路由项
-        $routeItem = new Route($method->getName(), $handler, $group, id: $methodId);
-        // 设置标题
-        $routeItem->setTitle(DocCommentTool::extractDocTitle($methodDocComment));
-        // 设置描述
-        $routeItem->setDescription(DocCommentTool::extractDocDescription($methodDocComment));
-      } else {
-        // 处理设置了路由注解的方法
-        /** @var RouteMapping $methodAnnotationRoute 注解路由 */
-        $methodAnnotationRoute = $methodAttributes[0]->newInstance();
-        // 未声明标题时，从方法文档注释首行提取
-        if (empty($methodAnnotationRoute->title)) {
-          $methodAnnotationRoute->title = DocCommentTool::extractDocTitle($methodDocComment);
-        }
-        // 未声明描述时，从方法文档注释正文提取
-        if (empty($methodAnnotationRoute->description)) {
-          $methodAnnotationRoute->description = DocCommentTool::extractDocDescription(
-            $methodDocComment
-          );
-        }
-        // 如果没有设置路由路径则默认为方法名称
-        if (empty($methodAnnotationRoute->prefix)) {
-          $methodAnnotationRoute->prefix = $methodName;
-        }
-        // 设置路由id
-        if (!$methodAnnotationRoute->id) $methodAnnotationRoute->id = $methodId;
-        // 创建路由项
-        $routeItem = $methodAnnotationRoute->create($handler, $group);
-      }
-      // 添加到组的子路由中
-      $group->addItem($routeItem);
-    }
   }
 
   /**
@@ -387,13 +96,17 @@ class Router extends Collector
     });
     foreach ($this->routes as $key => $item) {
       if ($parent = $item->getParentId()) {
-        // 处理自定义父级路由依赖
+        // 处理自定义父级路由依赖：父级必须是分组路由，指向路由项时若静默降级
+        // 会让路由脱离预期分组且难以排查，注册期直接给出明确错误
         $routeGroup = $this->getRoute($parent);
-        if ($routeGroup instanceof Group) {
-          $routeGroup->addItem($item);
-          unset($this->routes[$key]);
-          continue;
+        if (!$routeGroup instanceof Group) {
+          throw new InvalidArgumentException(
+            "路由 parentId 引用错误（{$parent}）：父级必须是分组路由或控制器注解路由"
+          );
         }
+        $routeGroup->addItem($item);
+        unset($this->routes[$key]);
+        continue;
       }
       $this->register($item);
     }
@@ -415,172 +128,9 @@ class Router extends Collector
       $this->currentGroup = null;
     } else {
       foreach ($route->getPaths() as $path) {
-        $this->insertRoute($path, $route->getCiteLink());
+        $this->routeTable->insert($path, $route->getCiteLink(), $route);
       }
     }
-  }
-
-  /**
-   * 将路由插入静态路由表或动态路由树
-   *
-   * @param string $path 路由路径
-   * @param string $routeIndex 路由引用链路
-   */
-  private function insertRoute(string $path, string $routeIndex): void
-  {
-    if (RouterTool::isVariable($path)) {
-      $urlSegments = explode('/', $path);
-      $urlSegments = array_filter($urlSegments, function ($value) {
-        return $value !== '';
-      });
-      $route = $this->getRoute($routeIndex);
-      $regex = $this->convertRegex($urlSegments, $route->getPatterns());
-      $this->addDynamicRoute($urlSegments, $regex, $routeIndex, $route->getMethod());
-    } else {
-      $this->addStaticRoute($path, $routeIndex, $this->getRoute($routeIndex)->getMethod());
-    }
-  }
-
-  /**
-   * 将 URL 路径段和参数正则约束转换为完整匹配正则
-   *
-   * @param string[] $segments URL 路径段数组
-   * @param array $patternRule 参数名到正则约束的映射
-   * @return string 完整的匹配正则表达式
-   */
-  private function convertRegex(array $segments, array $patternRule = []): string
-  {
-    // 大小写不敏感路由（case_sensitive=false）下，静态段以内联 (?i:) 分组包裹：
-    // 匹配对请求路径的原始大小写生效，而动态参数约束正则保持自身大小写语义；
-    // dispatch 侧因此使用原始路径匹配，避免整体小写导致参数值丢失大小写
-    $caseSensitive = $this->config->get('router.case_sensitive', false);
-    $regexPattern = '';
-    foreach ($segments as $segment) {
-      // 判断是否为变量字段
-      if (RouterTool::isVariable($segment)) {
-        // 判断是否为可选变量
-        $isRequire = RouterTool::isOptionalVariable($segment);
-        // 提取变量名称
-        $segment = RouterTool::extractVariableName($segment);
-        // 删除结尾斜杠
-        if ($isRequire) $regexPattern = rtrim($regexPattern, '/');
-        // 设置规则：使用命名捕获组，dispatch 直接按组名提取参数，
-        // 消除"patterns 键序与捕获组顺序对齐"的脆弱假设；
-        // 约束正则中的匿名捕获组也不会再混入参数表
-        $regexPattern .= $isRequire
-          ? '(?:/(?P<' . $segment . '>' . $patternRule[$segment] . '))?'
-          : '(?P<' . $segment . '>' . $patternRule[$segment] . ')';
-      } else {
-        // 否则，将段视为静态文本（大小写不敏感路由时包裹内联忽略大小写分组）
-        $static = preg_quote($segment, '/');
-        $regexPattern .= $caseSensitive ? $static : "(?i:$static)";
-      }
-      //结尾添加斜杠
-      $regexPattern .= '/';
-    }
-    // 删除最后一个斜杠
-    $regexPattern = rtrim($regexPattern, '/');
-    // 添加正则表达式的开始和结束标记
-    $regex = '#^/' . $regexPattern . '$#';
-    // 编译期校验：重复变量名、非法组名等问题会让正则无法编译，
-    // 不在此处拦截将表现为路由静默永不匹配，极难排查
-    if (@preg_match($regex, '') === false) {
-      throw new InvalidArgumentException(
-        '路由正则编译失败（' . implode('/', $segments) . '）: ' . preg_last_error_msg()
-      );
-    }
-    return $regex;
-  }
-
-  /**
-   * 添加动态路由
-   *
-   * 按 [正则 => [请求方法 => 路由引用链路]] 存储，同一正则允许不同请求方法共存，
-   * 仅当同一路径且同一请求方法重复定义时告警并覆盖。
-   *
-   * @param string[] $urlSegments URL 路径段数组
-   * @param string $regex 匹配正则
-   * @param string $routeIndex 路由引用链路
-   * @param string[] $methods 路由允许的请求方式列表
-   * @return void
-   */
-  private function addDynamicRoute(
-    array  $urlSegments,
-    string $regex,
-    string $routeIndex,
-    array  $methods,
-  ): void
-  {
-    $len = count($urlSegments);
-    foreach ($urlSegments as $rule) {
-      if (empty($rule)) continue;
-      if (RouterTool::isOptionalVariable($rule)) $len--;
-    }
-    $path = implode('/', $urlSegments);
-    // 初始化方法映射表，避免引用传参时未定义维度自动置为 null 触发类型错误
-    if (!isset($this->dynamicRoute["segment_$len"][$regex])) {
-      $this->dynamicRoute["segment_$len"][$regex] = [];
-    }
-    $this->registerMethodRoute(
-      $this->dynamicRoute["segment_$len"][$regex], $path, $methods, $routeIndex
-    );
-    $fullLen = count($urlSegments);
-    // 适配去掉可选参数的长度
-    if ($fullLen !== $len) {
-      if (!isset($this->dynamicRoute['segment_' . $fullLen][$regex])) {
-        $this->dynamicRoute['segment_' . $fullLen][$regex] = [];
-      }
-      $this->registerMethodRoute(
-        $this->dynamicRoute['segment_' . $fullLen][$regex], $path, $methods, $routeIndex
-      );
-    }
-  }
-
-  /**
-   * 将路由按请求方式写入方法映射表（引用方式写入，供静态/动态路由表复用）
-   *
-   * 包含 '*' 时视为不限制请求方式，仅记录 '*' 键（分发时作为通配回退），
-   * 避免 '*' 与具体方法同时注册导致的通配优先级歧义。
-   *
-   * @param array<string,string> $methodMap 方法映射表（按引用写入）
-   * @param string $path 用于告警提示的路径
-   * @param string[] $methods 路由允许的请求方式列表
-   * @param string $routeIndex 路由引用链路
-   * @return void
-   */
-  private function registerMethodRoute(
-    array  &$methodMap,
-    string $path,
-    array  $methods,
-    string $routeIndex
-  ): void
-  {
-    if (in_array('*', $methods)) $methods = ['*'];
-    foreach ($methods as $method) {
-      if (isset($methodMap[$method])) {
-        trigger_error(
-          "{$path}路由规则已存在（请求方法：{$method}），重复定义即覆盖路由", E_USER_WARNING
-        );
-      }
-      $methodMap[$method] = $routeIndex;
-    }
-  }
-
-  /**
-   * 注册静态路由到映射表
-   *
-   * 按 [路径 => [请求方法 => 路由引用链路]] 存储，同一路径允许不同请求方法共存，
-   * 仅当同一路径且同一请求方法重复定义时告警并覆盖。
-   *
-   * @param string $urlPath 完整 URL 路径
-   * @param string $routeIndex 路由引用链路
-   * @param string[] $methods 路由允许的请求方式列表
-   */
-  private function addStaticRoute(string $urlPath, string $routeIndex, array $methods): void
-  {
-    // 初始化方法映射表，避免引用传参时未定义维度自动置为 null 触发类型错误
-    if (!isset($this->staticRoute[$urlPath])) $this->staticRoute[$urlPath] = [];
-    $this->registerMethodRoute($this->staticRoute[$urlPath], $urlPath, $methods, $routeIndex);
   }
 
   /**
@@ -680,8 +230,9 @@ class Router extends Collector
       // 正则静态段以内联 (?i:) 分组实现大小写不敏感，动态参数值保留原始大小写
       $matchPath = $caseSensitive ? $candPath : strtolower($candPath);
       // 判断是否存在静态路由
-      if (isset($this->staticRoute[$matchPath])) {
-        $routeIndex = $this->selectRouteIndex($this->staticRoute[$matchPath], $method);
+      $methodMap = $this->routeTable->matchStatic($matchPath);
+      if ($methodMap !== null) {
+        $routeIndex = $this->selectRouteIndex($methodMap, $method);
         if ($routeIndex !== null) {
           $route = $this->getRoute($routeIndex);
         } else {
@@ -689,7 +240,7 @@ class Router extends Collector
         }
       } else {
         // 按段数定位动态路由分组
-        $routes = $this->dynamicRoute['segment_' . substr_count($candPath, '/')] ?? [];
+        $routes = $this->routeTable->dynamicBucket(substr_count($candPath, '/'));
         // 遍历正则匹配路由（使用原始大小写路径，保留动态参数值大小写）
         foreach (array_keys($routes) as $regex) {
           if (!preg_match($regex, $candPath, $matches)) continue;

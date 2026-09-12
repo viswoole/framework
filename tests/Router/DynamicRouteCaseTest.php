@@ -17,12 +17,12 @@ namespace Viswoole\Tests\Router;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionMethod;
 use ReflectionProperty;
 use Throwable;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Router\Exception\RouteNotFoundException;
+use Viswoole\Router\RouteTable;
 use Viswoole\Core\Middleware;
 use Viswoole\Router\Route\Collector;
 use Viswoole\Router\Route\Group;
@@ -68,15 +68,16 @@ class DynamicRouteCaseTest extends TestCase
     // 绕过构造函数创建实例，避免触发路由文件加载与控制器目录扫描
     $router = (new ReflectionClass(Router::class))->newInstanceWithoutConstructor();
     $this->setProperty(Collector::class, 'routes', $router, ['bench' => $group]);
-    $this->setProperty(Router::class, 'config', $router, $app->make(Config::class));
+    $config = $app->make(Config::class);
+    $this->setProperty(Router::class, 'config', $router, $config);
     $middleware = (new ReflectionClass(Middleware::class))->newInstanceWithoutConstructor();
     $this->setProperty(Router::class, 'middleware', $router, $middleware);
-    $this->setProperty(Router::class, 'staticRoute', $router, []);
-    $this->setProperty(Router::class, 'dynamicRoute', $router, []);
+    // 路由表已拆分到 RouteTable：注入空表并复用生产 insert() 注册
+    $routeTable = new RouteTable($config);
+    $this->setProperty(Router::class, 'routeTable', $router, $routeTable);
     // 与 Router::register 一致：使用规范化后的 getPaths() 注册
-    $insertRoute = new ReflectionMethod(Router::class, 'insertRoute');
     foreach ($route->getPaths() as $path) {
-      $insertRoute->invoke($router, $path, 'bench.api');
+      $routeTable->insert($path, 'bench.api', $route);
     }
     return $router;
   }

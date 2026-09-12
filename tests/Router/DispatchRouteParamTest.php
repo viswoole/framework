@@ -22,6 +22,7 @@ use ReflectionProperty;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Middleware;
+use Viswoole\Router\RouteTable;
 use Viswoole\Router\Route\Collector;
 use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
@@ -56,15 +57,16 @@ class DispatchRouteParamTest extends TestCase
     // 绕过构造函数创建实例，避免触发路由文件加载与控制器目录扫描
     $router = (new ReflectionClass(Router::class))->newInstanceWithoutConstructor();
     $this->setProperty(Collector::class, 'routes', $router, ['bench' => $group]);
-    $this->setProperty(Router::class, 'config', $router, $app->make(Config::class));
+    $config = $app->make(Config::class);
+    $this->setProperty(Router::class, 'config', $router, $config);
     // 中间件管理器同样绕过构造，避免加载全局中间件（如跨域中间件依赖 Swoole 上下文）
     $middleware = (new ReflectionClass(Middleware::class))->newInstanceWithoutConstructor();
     $this->setProperty(Router::class, 'middleware', $router, $middleware);
-    $this->setProperty(Router::class, 'staticRoute', $router, []);
-    $this->setProperty(Router::class, 'dynamicRoute', $router, []);
+    // 路由表已拆分到 RouteTable：注入空表并复用生产 insert() 注册动态路由
+    $routeTable = new RouteTable($config);
+    $this->setProperty(Router::class, 'routeTable', $router, $routeTable);
     // 通过生产方法注册动态路由：/bench/user/{id} → bench.api
-    $insertRoute = new ReflectionMethod(Router::class, 'insertRoute');
-    $insertRoute->invoke($router, '/bench/user/{id}', 'bench.api');
+    $routeTable->insert('/bench/user/{id}', 'bench.api', $route);
     return $router;
   }
 

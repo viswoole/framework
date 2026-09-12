@@ -25,9 +25,11 @@ use Viswoole\Core\Middleware;
 use Viswoole\Router\Annotation\Controller;
 use Viswoole\Router\Annotation\RouteMapping;
 use Viswoole\Router\Exception\RouteNotFoundException;
+use Viswoole\Router\RouteLoader;
 use Viswoole\Router\Route\Collector;
 use Viswoole\Router\Route\Group;
 use Viswoole\Router\Route\Route;
+use Viswoole\Router\RouteTable;
 use Viswoole\Router\Router;
 
 /**
@@ -60,8 +62,11 @@ class SamePathMultiMethodTest extends TestCase
     // 中间件管理器同样绕过构造，避免加载全局中间件（如跨域中间件依赖 Swoole 上下文）
     $middleware = (new ReflectionClass(Middleware::class))->newInstanceWithoutConstructor();
     $this->setProperty(Router::class, 'middleware', $router, $middleware);
-    $this->setProperty(Router::class, 'staticRoute', $router, []);
-    $this->setProperty(Router::class, 'dynamicRoute', $router, []);
+    // 路由表已拆分到 RouteTable，注入空表实例替代构造器初始化
+    $this->setProperty(
+      Router::class, 'routeTable', $router,
+      new RouteTable($app->make(Config::class))
+    );
     return $router;
   }
 
@@ -345,8 +350,8 @@ class SamePathMultiMethodTest extends TestCase
     $group = $controller->create([]);
     // 复用生产 parseMethod() 解析夹具控制器的注解方法
     $refClass = new ReflectionClass(SamePathAnnotationFixture::class);
-    (new ReflectionMethod(Router::class, 'parseMethod'))
-      ->invoke($router, $refClass->getMethods(), false, $group);
+    (new ReflectionMethod(RouteLoader::class, 'parseMethod'))
+      ->invoke(null, $refClass->getMethods(), false, $group);
     // 复用 loadAnnotationRoute() 的记录流程
     $router->recordRouteItem($group);
     $this->buildRouteTable($router);
