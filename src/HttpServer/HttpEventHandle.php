@@ -70,7 +70,23 @@ class HttpEventHandle
       self::handleResponse($result, $psr7Response);
     } catch (Throwable $e) {
       $exceptionHandle = $app->server->getConfig()['exception_handle'] ?? Handle::class;
-      $app->invokeMethod([$exceptionHandle, 'render'], [$e]);
+      try {
+        $app->invokeMethod([$exceptionHandle, 'render'], [$e]);
+      } catch (Throwable $renderError) {
+        // 异常渲染自身失败（如响应已结束、JSON 编码失败）时兜底输出 500，
+        // 避免异常逃逸 Swoole 导致客户端挂起至超时
+        try {
+          $app->make(ResponseInterface::class, [$response])
+            ->status(500)
+            ->send('Internal Server Error');
+        } catch (Throwable) {
+          // 响应完全不可用（如连接已断开）时仅记录告警，由 Swoole 断开连接
+          trigger_error(
+            '异常渲染失败: ' . get_class($renderError) . ': ' . $renderError->getMessage(),
+            E_USER_WARNING
+          );
+        }
+      }
     }
   }
 

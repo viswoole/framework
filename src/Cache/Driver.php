@@ -29,6 +29,11 @@ use Viswoole\Cache\Driver\Tag;
  * 各具体驱动（File、Redis 等）继承此类并实现差异化的存储逻辑。
  * 基类封装了标签管理、锁键生成、序列化/反序列化等横切关注点。
  *
+ * ⚠️ 安全边界：默认经 PHP serialize/unserialize 存取缓存值（通用缓存
+ * 无法穷举类白名单），缓存介质（runtime 目录、Redis）一旦被同权限进程
+ * 篡改，可能构成对象注入（CWE-502）——请确保存储介质的访问控制；
+ * 对安全敏感场景可通过 setSerialize() 切换为 JSON 等不含对象恢复语义的格式
+ *
  * @see CacheDriverInterface
  */
 abstract class Driver implements CacheDriverInterface

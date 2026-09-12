@@ -187,17 +187,34 @@ class FileStream
   }
 
   /**
+   * 获取 fopen 模式的读写语义
+   *
+   * 去除 b/t 二进制与文本标记后，按是否包含 r/w/+ 判断可读可写，
+   * 覆盖 r+、c/c+ 等全部合法组合，避免硬编码白名单遗漏
+   *
+   * @return string 归一化后的模式字符集（仅含 r/w/+）
+   */
+  private function normalizedMode(): string
+  {
+    $mode = stream_get_meta_data($this->stream)['mode'];
+    // 仅保留首个模式段（'rb' 后可能附带分割符等元信息）
+    $mode = strtok($mode, ":,;");
+    return str_replace(['b', 't', '+'], '', $mode) . (str_contains($mode, '+') ? '+' : '');
+  }
+
+  /**
    * 判断流是否可写
+   *
+   * 可写语义：包含 + 追加读写，或以 w/a/x/c（写入类）开头
    *
    * @return bool 可写返回 true
    */
   public function isWritable(): bool
   {
     if (!is_resource($this->stream)) return false;
-    return in_array(
-      stream_get_meta_data($this->stream)['mode'],
-      ['r+b', 'wb', 'w+b', 'ab', 'a+b', 'xb', 'x+b']
-    );
+    $mode = $this->normalizedMode();
+    return str_contains($mode, '+')
+      || ($mode !== '' && str_contains('waxc', $mode[0]));
   }
 
   /**
@@ -218,15 +235,16 @@ class FileStream
   /**
    * 判断流是否可读
    *
+   * 可读语义：包含 + 读写，或以 r（只读）开头
+   *
    * @return bool 可读返回 true
    */
   public function isReadable(): bool
   {
     if (!is_resource($this->stream)) return false;
-    return in_array(
-      stream_get_meta_data($this->stream)['mode'],
-      ['rb', 'r+b', 'w+b', 'a+b', 'x+b']
-    );
+    $mode = $this->normalizedMode();
+    return str_contains($mode, '+')
+      || ($mode !== '' && $mode[0] === 'r');
   }
 
   /**
@@ -251,6 +269,7 @@ class FileStream
    */
   public function getMetadata(?string $key = null): mixed
   {
+    if (!is_resource($this->stream)) return null;
     $metadata = stream_get_meta_data($this->stream);
     if ($key === null) {
       return $metadata;

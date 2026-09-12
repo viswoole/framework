@@ -81,7 +81,9 @@ class DbManager
     $this->table->column('debug', Table::TYPE_INT, 4);
     $this->table->column('save', Table::TYPE_INT, 4);
     $this->table->create();
-    $debug = $config->get('database.debug', true);
+    // 默认关闭：调试日志包含完整 SQL 及其内插的业务数据值，
+    // 未显式配置时默认开启会在生产环境造成敏感信息泄露
+    $debug = $config->get('database.debug', false);
     // 修复: 配置路径错误，应与 database.debug 一致使用 database 命名空间下的 info_save_manner
     $save = $config->get(
       'database.info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER

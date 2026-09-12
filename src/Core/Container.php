@@ -290,7 +290,10 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
       if ($meta['factory'] !== null) {
         $construct = 'factory()';
         $args = $this->injectParams($meta['factory'], $params);
-        return $meta['factory']->invokeArgs(null, $args);
+        $instance = $meta['factory']->invokeArgs(null, $args);
+        // factory 分支同样触发解析钩子，保持与构造器分支行为对称
+        $this->invokeAfter($class, $instance);
+        return $instance;
       }
       $args = $meta['constructor'] ? $this->injectParams($meta['constructor'], $params) : [];
     } catch (ValidateException $e) {
@@ -814,6 +817,9 @@ abstract class Container implements ArrayAccess, IteratorAggregate, Countable
   public function offsetUnset(mixed $offset): void
   {
     unset($this->bindings[$offset]);
+    // 同步清理单例实例，与 remove() 语义对齐：仅清绑定会残留旧实例，
+    // 后续 get() 仍会返回已解除绑定的旧对象
+    $this->remove($offset);
   }
 
   /**

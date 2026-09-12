@@ -84,7 +84,9 @@ class Collection extends BaseCollection
    */
   private function cloneSelf(array $data): static
   {
-    $instance = new static($this->query, $data);
+    // 重索引：filter/reject/sortBy 保留原键，重索引保证 first()/last()
+    // 等按位置取值的方法语义不受过滤后键空洞影响
+    $instance = new static($this->query, array_values($data));
     $instance->hidden(...$this->hidden);
     foreach ($this->withAttr as $key => $value) {
       $instance->withAttr($key, $value);
@@ -312,12 +314,14 @@ class Collection extends BaseCollection
   private function getPks(string $pk): array
   {
     $pkList = [];
-    foreach ($this as /** @var DataSet $row */ $row) {
+    foreach ($this as $index => /** @var DataSet $row */ $row) {
       if (isset($row[$pk])) {
         $pkList[] = $row[$pk];
       } else {
+        // 错误消息仅引用集合索引：DataSet 无 __toString，
+        // 内插对象本身会抛 Error 而非预期的 RuntimeException
         throw new RuntimeException(
-          "操作失败，缺少主键字段($pk) index:$row"
+          "操作失败，集合第 $index 行缺少主键字段($pk)"
         );
       }
     }

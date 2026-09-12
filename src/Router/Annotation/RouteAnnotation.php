@@ -104,7 +104,7 @@ abstract class RouteAnnotation
     $route->setHidden($this->hidden);
     $route->setSort($this->sort);
     $route->setDescription($this->description ?? '');
-    $route->setTitle($this->title);
+    $route->setTitle($this->title ?? '');
     return $route;
   }
 }

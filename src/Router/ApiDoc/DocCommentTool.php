@@ -106,7 +106,8 @@ class DocCommentTool
   public static function extract(string $docComment, string $tag): string
   {
     if (empty($docComment)) return '';
-    $pattern = "/@$tag\s+([\s\S]*?)(?=\s*(?:\*\/|\* @))/";
+    // tag 需转义：作为正则字面量拼接，防止含正则元字符的标签名破坏模式
+    $pattern = "/@" . preg_quote($tag, '/') . "\s+([\s\S]*?)(?=\s*(?:\*\/|\* @))/";
     if (preg_match($pattern, $docComment, $matches)) {
       return self::normalizeDocText($matches[1] ?? '');
     }

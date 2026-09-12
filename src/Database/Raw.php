@@ -23,6 +23,11 @@ use Override;
  *
  * 用于在查询构建器中嵌入不被参数绑定的SQL片段，
  * 如函数调用、子查询等。支持位置占位符(?)和命名占位符(:name)。
+ *
+ * ⚠️ 安全边界：本类是显式绕过参数绑定的逃逸口，$sql 与 $bindings 均会
+ * 直接参与最终 SQL 的拼接（merge() 仅做尽力而为的轻量转义，不识别字符集
+ * 与引号上下文）。禁止将任何来自用户输入的值传入本类——用户输入必须走
+ * where()/whereIn() 等参数绑定入口，否则将构成 SQL 注入
  */
 class Raw implements JsonSerializable
 {

@@ -121,10 +121,10 @@ class ObjectStructure extends ClassTypeStructure
   }
 
   /**
-   * 解析类构造参数
+   * 解析类公开属性
    *
-   * @param ReflectionProperty[] $properties 参数列表
-   * @param array $dependMap
+   * @param ReflectionProperty[] $properties 属性列表
+   * @param array $dependMap 对象依赖映射
    * @return void
    */
   private function parseProperties(array $properties, array &$dependMap): void

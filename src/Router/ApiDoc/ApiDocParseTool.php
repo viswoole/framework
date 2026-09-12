@@ -48,9 +48,12 @@ class ApiDocParseTool
         }
         $list[] = $item;
       } catch (Throwable $e) {
-        // 解析单条路由失败时记录错误，继续解析其他路由
+        // 解析单条路由失败时记录错误（含路由标识与异常类名，便于定位问题路由），
+        // 继续解析其他路由
+        $routeLabel = $route instanceof Route ? $route->getCiteLink() : $route->getId();
         trigger_error(
-          'ApiDoc解析路由失败: ' . $e->getMessage(),
+          'ApiDoc解析路由失败（' . $routeLabel . '）: '
+          . get_class($e) . ': ' . $e->getMessage(),
           E_USER_WARNING
         );
       }
@@ -120,7 +123,7 @@ class ApiDocParseTool
    *   paths: string[],
    *   methods: string[],
    *   domains: string[],
-   *   suffix: string,
+   *   suffix: string[],
    *   params: array<array>,
    *   tags: string[],
    *   createdAt: string,

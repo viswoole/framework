@@ -88,12 +88,11 @@ class FieldStructure
     } elseif ($type instanceof ReflectionUnionType) {
       $types = [];
       foreach ($type->getTypes() as $typeItem) {
-        if ($typeItem instanceof ReflectionIntersectionType) {
-          $type = new TypeStructure(Types::Object);
-        } else {
-          $type = $this->parseNamedType($typeItem, $dependMap);
-        }
-        $types[$type->name] = $type;
+        // 使用局部变量承接解析结果，避免覆盖入参 $type 造成混淆
+        $parsed = $typeItem instanceof ReflectionIntersectionType
+          ? new TypeStructure(Types::Object)
+          : $this->parseNamedType($typeItem, $dependMap);
+        $types[$parsed->name] = $parsed;
       }
     } else {
       $type = $this->parseNamedType($type, $dependMap);

@@ -92,7 +92,7 @@ class Server
    */
   const array DEFAULT_CONSTRUCT_ARGUMENTS = [
     //指定监听的 ip 地址。
-    'host' => '0,0,0,0',
+    'host' => '0.0.0.0',
     //指定监听的端口
     'port' => 9501,
     //运行模式
