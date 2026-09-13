@@ -68,6 +68,8 @@ final class XaRecovery
     $rows = $journal->all();
     if ($rows === []) return;
     /** @var array<string,array{state:int,branches:string[],created_at:string,blocked?:bool}> $rows */
+    // 过滤前的全量行（供 recoverXid 区分"被 --xid 过滤跳过"与"确实无记录"）
+    $allRows = $rows;
     // xid 过滤：仅保留命中的行（其余行与其分支保持原样）
     if ($onlyGtrid !== null) {
       foreach ($rows as $gtrid => $row) {
@@ -101,7 +103,7 @@ final class XaRecovery
       // 仅扫描可能持有 XA 分支的通道：跳过既消除非 MySQL 通道的
       // 扫描告警噪音，也避免其扫描失败永久阻塞 journal 行清理
       if (!self::canHostXaBranches($channel)) continue;
-      self::recoverChannel($channel, $rows, $dryRun);
+      self::recoverChannel($channel, $rows, $dryRun, $allRows);
     }
     if ($dryRun) return; // dry-run 到此为止：终结语句与 journal 删除均已按计划输出而未执行
     // 仅删除所有通道均确认无未决分支的行；任一通道扫描失败则保留待下次
@@ -171,15 +173,16 @@ final class XaRecovery
    * @param Channel $channel 数据库通道
    * @param array<string,array{state:int,branches:string[],blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
    * @param bool $dryRun true 时仅报告未决分支与计划动作，不执行终结语句
+   * @param array<string,array{state:int,branches:string[],created_at:string}> $allRows 过滤前的全量 journal 行（区分"被过滤跳过"与"无记录"）
    */
-  private static function recoverChannel(Channel $channel, array &$rows, bool $dryRun = false): void
+  private static function recoverChannel(Channel $channel, array &$rows, bool $dryRun = false, array $allRows = []): void
   {
     try {
       $connect = $channel->pop('write');
       try {
         $inDoubtXids = XaDriver::recover($connect);
         foreach ($inDoubtXids as $xid) {
-          self::recoverXid($connect, $xid, $rows, $dryRun);
+          self::recoverXid($connect, $xid, $rows, $dryRun, $allRows);
         }
       } finally {
         $channel->put($connect);
@@ -202,11 +205,28 @@ final class XaRecovery
    * @param string $xid 未决分支 xid
    * @param array<string,array{state:int,branches:string[],blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
    * @param bool $dryRun true 时仅输出计划动作，不执行终结语句
+   * @param array<string,array{state:int,branches:string[],created_at:string}> $allRows 过滤前的全量 journal 行
    */
-  private static function recoverXid(object $connect, string $xid, array &$rows, bool $dryRun = false): void
-  {
+  private static function recoverXid(
+    object $connect,
+    string $xid,
+    array  &$rows,
+    bool   $dryRun = false,
+    array  $allRows = []
+  ): void {
     $gtrid = self::matchJournalRow($rows, $xid);
     if ($gtrid === null) {
+      // 二级匹配：journal 有记录但被 --xid 过滤排除——明确提示"已过滤跳过"，
+      // 避免与"确实无记录需人工处理"混淆（后者可能意味着 journal 丢失等异常）
+      $skippedGtrid = $allRows === [] ? null : self::matchJournalRow($allRows, $xid);
+      if ($skippedGtrid !== null) {
+        echo_log(
+          "XA 恢复：xid {$xid} 归属事务（gtrid: {$skippedGtrid}）已过滤跳过，本次不处置",
+          'XA',
+          backtrace: 0
+        );
+        return;
+      }
       // 不属于框架管理的事务（或 journal 丢失）：只告警不处理，避免误伤他方事务
       echo_log(
         "XA 恢复：发现无 journal 记录的未决事务，已跳过请人工处理（xid: {$xid}）",

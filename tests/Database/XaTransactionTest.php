@@ -671,6 +671,73 @@ class XaTransactionTest extends TestCase
   }
 
   /**
+   * 场景20b（提示语义区分）：--xid 过滤时范围外悬挂事务的提示必须是
+   * "已过滤跳过"（journal 有记录但不在本次范围），而非"无 journal 记录"
+   */
+  public function testXidFilterReportsSkippedInsteadOfMissing(): void
+  {
+    $gtridTarget = 'vw' . str_repeat('aa', 8);
+    $gtridOther = 'vw' . str_repeat('bb', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelTarget = new XaRecordingChannel();
+    $channelOther = new XaRecordingChannel();
+    $channelTarget->recoverRows = ["{$gtridTarget}-b1"];
+    $channelOther->recoverRows = ["{$gtridOther}-b1"];
+    $output = $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_target' => $channelTarget, 'xa_other' => $channelOther],
+      journalRows: [
+        [
+          'gtrid' => $gtridTarget,
+          'state' => XaJournal::STATE_PREPARED,
+          'branches' => '["' . $gtridTarget . '-b1"]',
+          'created_at' => '2020-01-01 00:00:00',
+        ],
+        [
+          'gtrid' => $gtridOther,
+          'state' => XaJournal::STATE_PREPARED,
+          'branches' => '["' . $gtridOther . '-b1"]',
+          'created_at' => '2020-01-01 00:00:00',
+        ],
+      ],
+      onlyGtrid: $gtridTarget
+    );
+    self::assertStringContainsString('已过滤跳过', $output, '范围外悬挂应提示"已过滤跳过"');
+    self::assertStringContainsString($gtridOther, $output, '提示应指明被跳过事务的 gtrid');
+    self::assertStringNotContainsString('无 journal 记录', $output, '有记录的悬挂不得误报为"无 journal 记录"');
+  }
+
+  /**
+   * 场景22（基线锁定）：全量恢复时，真正无 journal 记录的悬挂事务
+   * 报"无 journal 记录请人工处理"（journal 需有其他行才会触发通道扫描）
+   */
+  public function testUnrecordedInDoubtStillReportsMissingJournal(): void
+  {
+    $gtridKnown = 'vw' . str_repeat('aa', 8);
+    $gtridMissing = 'vw' . str_repeat('cc', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelKnown = new XaRecordingChannel();
+    $channelMissing = new XaRecordingChannel();
+    $channelKnown->recoverRows = ["{$gtridKnown}-b1"];
+    $channelMissing->recoverRows = ["{$gtridMissing}-b1"];
+    $output = $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_known' => $channelKnown, 'xa_missing' => $channelMissing],
+      journalRows: [
+        [
+          'gtrid' => $gtridKnown,
+          'state' => XaJournal::STATE_PREPARED,
+          'branches' => '["' . $gtridKnown . '-b1"]',
+          'created_at' => '2020-01-01 00:00:00',
+        ],
+      ]
+    );
+    // 有记录的分支被正常处置（证明扫描已发生）
+    self::assertNotNull($this->firstSqlMatching($channelKnown->log, '/^XA COMMIT /'));
+    self::assertStringContainsString('无 journal 记录', $output, '无记录悬挂应提示人工处理');
+    self::assertStringContainsString($gtridMissing, $output, '提示应包含悬挂事务的 xid');
+    self::assertNull($this->firstSqlMatching($channelMissing->log, '/^XA (COMMIT|ROLLBACK) /'), '无记录悬挂不得被处置');
+  }
+
+  /**
    * 场景21：非 MySQL 的 PDO 通道参与 XA——开启瞬间抛出明确异常（fail-fast），
    * 而非数据库底层"syntax error at or near XA"；连接归还无泄漏
    */
@@ -748,6 +815,7 @@ class XaTransactionTest extends TestCase
    * @param array<int,array<string,mixed>>|null $journalRows 显式 journal 模拟行，优先于自动推导
    * @param string|null $onlyGtrid 仅处置指定 gtrid 的行（模拟 xa:recover --xid）
    * @param bool $dryRun 仅预览不执行（模拟 xa:recover --dry-run）
+   * @return string 恢复任务的日志输出（供断言提示文案）
    */
   private function runRecoveryWith(
     array $channels,
@@ -755,7 +823,7 @@ class XaTransactionTest extends TestCase
     ?array $journalRows = null,
     ?string $onlyGtrid = null,
     bool   $dryRun = false
-  ): void
+  ): string
   {
     $db = App::factory()->make(DbManager::class);
     foreach ($channels as $name => $channel) $db->addChannel($name, $channel);
@@ -784,16 +852,17 @@ class XaTransactionTest extends TestCase
     $origin = $prop->getValue($db);
     try {
       $prop->setValue($db, $channels);
-      // 恢复任务的 echo_log 告警输出会污染 PHPUnit 输出，捕获屏蔽
+      // 恢复任务的 echo_log 告警输出会污染 PHPUnit 输出，捕获后返回供断言
       ob_start();
       try {
         XaRecovery::run($onlyGtrid, $dryRun);
       } finally {
-        ob_end_clean();
+        $output = ob_get_clean();
       }
     } finally {
       $prop->setValue($db, $origin);
     }
+    return $output ?? '';
   }
 }
 
