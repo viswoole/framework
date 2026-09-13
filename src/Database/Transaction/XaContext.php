@@ -28,8 +28,8 @@ use Random\RandomException;
  * 3. 分支状态注册表以 spl_object_id 索引连接，连接对象在事务期间由
  *    ConnectManager 持有引用，对象 ID 不会被复用，索引安全。
  *
- * gtrid 与分支 xid 均为框架生成的 [0-9a-f-] 字符集（journal 内联 SQL 安全的前提，
- * 见 XaJournal），创建时做格式校验兜底。
+ * gtrid 与分支 xid 均为框架生成的 [0-9a-f-] 字符集；journal 内联 SQL 的
+ * 注入防线位于 XaJournal::assertValidGtrid 写入口（覆盖库内读回值被篡改的场景）。
  */
 final class XaContext
 {

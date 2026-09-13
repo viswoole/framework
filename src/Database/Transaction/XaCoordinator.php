@@ -61,6 +61,9 @@ final class XaCoordinator
    */
   public static function commit(XaContext $context, array $branches): void
   {
+    // 无分支（开启后未执行任何 SQL）：无服务端事务需要终结，
+    // journal 写入/清理均为无效 I/O，直接返回
+    if ($branches === []) return;
     $gtrid = $context->gtrid;
     try {
       // ① 分支终止业务语句

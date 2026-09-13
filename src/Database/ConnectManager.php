@@ -117,18 +117,27 @@ class ConnectManager
       // 结束——后续写入落在从库（只读库报错、可写库失去主库互斥语义），
       // 且读自身未提交写入必须与写在同一连接。读写分离下事务整体走主库。
       $connect = $channel->pop('write');
-      if ($this->xaContext !== null) {
-        // XA 模式：新加入连接以独立分支 xid 开启 XA 事务（分支后缀避免同实例
-        // 双连接 XA START 同一 xid 触发 XAER_DUPID，见 XaContext 注释）
-        $xid = $this->xaContext->registerBranch($connect);
-        XaDriver::execute($connect, "XA START '$xid'");
-      } elseif ($connect instanceof PDOProxy || $connect instanceof PDO) {
-        $connect->beginTransaction();
-      } /** @noinspection PhpComposerExtensionStubsInspection */ elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
-        $connect->autocommit(false);
-      }
-      for ($level = 2; $level <= $this->transactionDepth; $level++) {
-        $this->executeSavepointSql($connect, 'SAVEPOINT ' . self::savepointName($level));
+      try {
+        if ($this->xaContext !== null) {
+          // XA 模式：新加入连接以独立分支 xid 开启 XA 事务（分支后缀避免同实例
+          // 双连接 XA START 同一 xid 触发 XAER_DUPID，见 XaContext 注释）
+          $xid = $this->xaContext->registerBranch($connect);
+          XaDriver::execute($connect, "XA START '$xid'");
+        } elseif ($connect instanceof PDOProxy || $connect instanceof PDO) {
+          $connect->beginTransaction();
+        } /** @noinspection PhpComposerExtensionStubsInspection */ elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
+          $connect->autocommit(false);
+        }
+        for ($level = 2; $level <= $this->transactionDepth; $level++) {
+          $this->executeSavepointSql($connect, 'SAVEPOINT ' . self::savepointName($level));
+        }
+      } catch (Throwable $e) {
+        // 事务开启（BEGIN/XA START）或保存点补齐失败：连接既不在事务池中也未被归还，
+        // 必须显式归还避免泄漏；forcePut 会兜底回滚已开启的事务状态
+        // （BEGIN/XA START 成功但保存点失败的中间态），避免回池后被
+        // 其他协程复用造成隐式事务污染
+        $this->forcePut($channel, $connect);
+        throw $e;
       }
       $this->connections[] = [
         'connect' => $connect,

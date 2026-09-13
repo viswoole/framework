@@ -34,8 +34,9 @@ use function config;
  * XA 事务，崩溃时意图记录会随事务一起未决，journal 形同虚设。
  * 连接保持 autocommit（PDO 默认），每条语句独立落盘。
  *
- * SQL 采用内联值而非参数绑定：journal 的全部值（gtrid、分支 xid、状态整数）
- * 均为框架生成的 [0-9a-] 字符集（见 XaContext），无用户输入，注入面为零。
+ * SQL 采用内联值而非参数绑定：journal 的 gtrid 在写方法入口经
+ * assertValidGtrid 白名单校验（[0-9a-zA-Z._-]），状态为整数、分支 xid 为
+ * 框架生成值——校验后无用户可控内容进入 SQL，注入面为零。
  */
 final class XaJournal
 {
@@ -43,6 +44,11 @@ final class XaJournal
   public const int STATE_PREPARE_START = 1;
   /** journal 行状态：PREPARE 全部成功，恢复时对未决分支执行 XA COMMIT */
   public const int STATE_PREPARED = 2;
+
+  /**
+   * @var bool 表已确认存在（实例级缓存，避免每次写语句都执行 DDL）
+   */
+  private bool $tableEnsured = false;
 
   /**
    * @param Channel $channel journal 所在数据库通道
@@ -53,6 +59,23 @@ final class XaJournal
     private readonly string  $table = 'viswoole_xa_journal'
   )
   {
+  }
+
+  /**
+   * 校验 gtrid 合法性（内联 SQL 的注入防线）
+   *
+   * journal 写方法的 gtrid 来自两类来源：框架生成（必然合法）与
+   * journal 表读回的值（库内数据可能被篡改）。校验白名单与框架生成格式
+   * （[0-9a-zA-Z._-]，见 XaContext）对齐，非法值直接拒绝。
+   *
+   * @param string $gtrid 待校验的全局事务 ID
+   * @throws DbException 校验失败时抛出
+   */
+  private static function assertValidGtrid(string $gtrid): void
+  {
+    if (!preg_match('/^[0-9a-zA-Z._-]{1,64}$/', $gtrid)) {
+      throw new DbException("非法的 XA 全局事务 ID（gtrid）：" . addcslashes($gtrid, "\0..\37"));
+    }
   }
 
   /**
@@ -79,6 +102,7 @@ final class XaJournal
    */
   public function recordPrepareStart(string $gtrid, array $xids): void
   {
+    self::assertValidGtrid($gtrid);
     $this->executeOnFreshConnection(
       "INSERT INTO {$this->quotedTable()} (gtrid, state, branches) VALUES ('$gtrid', "
       . self::STATE_PREPARE_START . ", '" . json_encode($xids) . "')"
@@ -109,6 +133,9 @@ final class XaJournal
    */
   private function ensureTable(): void
   {
+    // 实例级缓存：同一 journal 实例的建表只执行一次，
+    // 事务提交关键路径上的后续写语句不再重复 DDL
+    if ($this->tableEnsured) return;
     $connect = $this->channel->pop('write');
     try {
       XaDriver::execute(
@@ -123,6 +150,7 @@ final class XaJournal
     } finally {
       $this->channel->put($connect);
     }
+    $this->tableEnsured = true;
   }
 
   /**
@@ -142,6 +170,7 @@ final class XaJournal
    */
   public function markPrepared(string $gtrid): void
   {
+    self::assertValidGtrid($gtrid);
     $this->executeOnFreshConnection(
       "UPDATE {$this->quotedTable()} SET state = " . self::STATE_PREPARED . " WHERE gtrid = '$gtrid'"
     );
@@ -154,13 +183,14 @@ final class XaJournal
    */
   public function remove(string $gtrid): void
   {
+    self::assertValidGtrid($gtrid);
     $this->executeOnFreshConnection("DELETE FROM {$this->quotedTable()} WHERE gtrid = '$gtrid'");
   }
 
   /**
    * 读取全部 journal 行（恢复任务调用）
    *
-   * @return array<string,array{state:int,branches:string[]}> 键为 gtrid
+   * @return array<string,array{state:int,branches:string[],created_at:string}> 键为 gtrid
    */
   public function all(): array
   {
@@ -168,7 +198,7 @@ final class XaJournal
     $connect = $this->channel->pop('write');
     try {
       $rows = XaDriver::query(
-        $connect, "SELECT gtrid, state, branches FROM {$this->quotedTable()}"
+        $connect, "SELECT gtrid, state, branches, created_at FROM {$this->quotedTable()}"
       );
     } finally {
       $this->channel->put($connect);
@@ -181,6 +211,7 @@ final class XaJournal
       $result[$gtrid] = [
         'state' => (int)($row['state'] ?? self::STATE_PREPARE_START),
         'branches' => is_array($branches) ? $branches : [],
+        'created_at' => (string)($row['created_at'] ?? ''),
       ];
     }
     return $result;

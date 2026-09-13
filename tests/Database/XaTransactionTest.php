@@ -14,6 +14,8 @@ use RuntimeException;
 use function Swoole\Coroutine\run;
 use Viswoole\Core\App;
 use Viswoole\Database\Channel;
+use Viswoole\Database\Channel\PDO\DriverType;
+use Viswoole\Database\Channel\PDO\PDOChannel;
 use Viswoole\Database\ConnectManager;
 use Viswoole\Database\DbManager;
 use Viswoole\Database\Exception\DbException;
@@ -316,6 +318,243 @@ class XaTransactionTest extends TestCase
     self::assertNotNull($this->firstSqlMatching($channelA->log, '/^XA COMMIT /'));
   }
 
+  /**
+   * 场景11（H1 复现）：恢复任务对"年轻的 prepare_start 行"（尚在提交进行中）
+   * 不得处置——须过冷却期，防止误删活跃事务的 journal 行或误回滚其分支
+   */
+  public function testRecoverySkipsYoungPrepareStartRows(): void
+  {
+    $gtrid = 'vw' . str_repeat('ef', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelA = new XaRecordingChannel();
+    // 该事务正提交到一半：journal 行为 prepare_start 且刚写入，分支已 prepared
+    // 但 XA RECOVER 尚未返回（或返回后本通道扫描）——模拟恢复任务在此刻运行
+    $channelA->recoverRows = ["{$gtrid}-b1"];
+    $channelA->journalState = XaJournal::STATE_PREPARE_START;
+    $this->runRecoveryWith(['xa_journal' => $journalChannel, 'xa_a' => $channelA], youngRow: true);
+    // 不对未决分支执行任何终结语句（避免误回滚活跃事务的已 prepared 分支）
+    self::assertNull(
+      $this->firstSqlMatching($channelA->log, "/^XA (COMMIT|ROLLBACK) '$gtrid-b1'/"),
+      '冷却期内的 prepare_start 行不应被处置'
+    );
+    // journal 行不被删除（误删后崩溃将丢失恢复依据）
+    $journalSql = implode(';', $journalChannel->log);
+    self::assertStringNotContainsString('DELETE FROM', $journalSql, '冷却期内的 journal 行不应被删除');
+  }
+
+  /**
+   * 场景12（H2 复现）：XA START 失败（如引擎不支持）时连接须归还通道而非泄漏
+   */
+  public function testFailedXaStartReturnsConnectionToChannel(): void
+  {
+    $channel = new class () extends XaRecordingChannel {
+      public array $brokenConnections = [];
+
+      #[\Override]
+      public function pop(string $type): \PDO
+      {
+        // 返回一个 XA START 必然失败的连接（记录日志时抛出，模拟执行失败）
+        $broken = new class ($this) extends \PDO {
+          public function __construct(private readonly XaRecordingChannel $owner)
+          {
+            parent::__construct('sqlite::memory:');
+          }
+
+          #[\Override]
+          public function exec(string $statement): int|false
+          {
+            // 首条 XA START 模拟存储引擎不支持而失败
+            if (str_starts_with($statement, 'XA START')) {
+              throw new \PDOException('XA not supported by storage engine');
+            }
+            return parent::exec($statement);
+          }
+        };
+        $this->brokenConnections[] = $broken;
+        return $broken;
+      }
+    };
+    run(function () use ($channel): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal(new XaRecordingChannel(), 'jt'));
+      try {
+        $manager->pop($channel, 'write');
+        self::fail('XA START 失败应向外抛出异常');
+      } catch (DbException) {
+      }
+    });
+    self::assertCount(1, $channel->puts, 'XA START 失败的连接必须归还通道，不得泄漏');
+  }
+
+  /**
+   * 场景13（H3 复现）：XaJournal 写方法拒绝含引号/空白等危险字符的 gtrid（注入防御）
+   */
+  public function testJournalRejectsMalformedGtrid(): void
+  {
+    $journal = new XaJournal(new XaRecordingChannel(), 'jt');
+    $malformed = ["vw' OR '1'='1", "vw; DROP TABLE t--", "vw\nabc", ''];
+    $rejected = 0;
+    foreach ($malformed as $gtrid) {
+      foreach (
+        [
+          fn() => $journal->recordPrepareStart($gtrid, []),
+          fn() => $journal->markPrepared($gtrid),
+          fn() => $journal->remove($gtrid),
+        ] as $write
+      ) {
+        try {
+          $write();
+          self::fail("非法 gtrid（{$gtrid}）应被拒绝");
+        } catch (DbException) {
+          $rejected++;
+        }
+      }
+    }
+    self::assertSame(count($malformed) * 3, $rejected, '全部非法 gtrid 均应被三个写方法拒绝');
+  }
+
+  /**
+   * 场景14（H6 复现）：无任何分支（未执行 SQL）的 XA 事务提交不产生 journal 写入
+   */
+  public function testEmptyBranchesCommitSkipsJournalIo(): void
+  {
+    $journalChannel = new XaRecordingChannel();
+    run(function () use ($journalChannel): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal($journalChannel, 'jt'));
+      // 未执行任何 SQL——无分支
+      $manager->commit();
+      self::assertSame(0, $manager->transactionLevel());
+    });
+    // 建表探测可以有，但不得有 INSERT/UPDATE/DELETE 三连写
+    $journalSql = implode(';', $journalChannel->log);
+    self::assertStringNotContainsString('INSERT INTO', $journalSql, '空分支事务不应写 journal 行');
+    self::assertStringNotContainsString('UPDATE', $journalSql);
+    self::assertStringNotContainsString('DELETE FROM', $journalSql);
+  }
+
+  /**
+   * 场景15（遗留①复现）：普通事务 BEGIN 失败（连接失效）时连接须归还通道而非泄漏
+   */
+  public function testBeginTransactionFailureReturnsConnectionToChannel(): void
+  {
+    $channel = new class () extends XaRecordingChannel {
+      #[\Override]
+      public function pop(string $type): \PDO
+      {
+        return new class () extends \PDO {
+          public function __construct()
+          {
+            parent::__construct('sqlite::memory:');
+          }
+
+          #[\Override]
+          public function beginTransaction(): bool
+          {
+            throw new \PDOException('MySQL server has gone away');
+          }
+        };
+      }
+    };
+    run(function () use ($channel): void {
+      $manager = ConnectManager::factory();
+      $manager->start();
+      try {
+        $manager->pop($channel, 'write');
+        self::fail('BEGIN 失败应向外抛出异常');
+      } catch (\PDOException) {
+      }
+      $manager->rollBack();
+    });
+    self::assertCount(1, $channel->puts, 'BEGIN 失败的连接必须归还通道，不得泄漏');
+  }
+
+  /**
+   * 场景16（遗留①复现）：BEGIN 成功但保存点补齐失败的中间态——
+   * 连接归还前必须回滚已开启的事务，避免带事务状态回池污染其他协程
+   */
+  public function testSavepointFailureRollsBackAndReturnsConnection(): void
+  {
+    $channel = new class () extends XaRecordingChannel {
+      #[\Override]
+      public function pop(string $type): \PDO
+      {
+        return new class () extends \PDO {
+          public bool $rolledBack = false;
+
+          public function __construct()
+          {
+            parent::__construct('sqlite::memory:');
+          }
+
+          #[\Override]
+          public function exec(string $statement): int|false
+          {
+            if (str_starts_with($statement, 'SAVEPOINT')) {
+              throw new \PDOException('savepoint failed');
+            }
+            return parent::exec($statement);
+          }
+
+          #[\Override]
+          public function rollBack(): bool
+          {
+            $this->rolledBack = true;
+            return parent::rollBack();
+          }
+        };
+      }
+    };
+    run(function () use ($channel): void {
+      $manager = ConnectManager::factory();
+      $manager->start();                                     // L1
+      $manager->start();                                     // L2：pop 时需补保存点
+      try {
+        $manager->pop($channel, 'write');
+        self::fail('保存点失败应向外抛出异常');
+      } catch (\PDOException) {
+      }
+      $manager->rollBack();
+      $manager->rollBack();
+    });
+    self::assertCount(1, $channel->puts, '保存点失败的连接必须归还通道，不得泄漏');
+    self::assertTrue($channel->puts[0]->rolledBack, '归还前应回滚已开启的事务（BEGIN 成功的中间态）');
+  }
+
+  /**
+   * 场景17（遗留②复现）：恢复任务跳过非 MySQL PDO 通道——
+   * XA START 在 SQLite 等数据库上必然失败、分支从未建立，扫描只会产生
+   * 告警噪音并永久阻塞 journal 行清理
+   */
+  public function testRecoverySkipsNonMysqlPdoChannels(): void
+  {
+    if (!in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
+      self::markTestSkipped('当前环境未启用 pdo_sqlite 驱动，跳过该用例');
+    }
+    $gtrid = 'vw' . str_repeat('12', 8);
+    $journalChannel = new XaRecordingChannel();
+    $tmpDb = sys_get_temp_dir() . '/viswoole_xa_skip_' . uniqid() . '.sqlite';
+    (new \PDO('sqlite:' . $tmpDb))->exec('CREATE TABLE t (id INTEGER PRIMARY KEY)');
+    $sqliteChannel = new PDOChannel(type: DriverType::SQLite, database: $tmpDb);
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_sqlite' => $sqliteChannel],
+      journalRows: [[
+        'gtrid' => $gtrid,
+        'state' => XaJournal::STATE_PREPARED,
+        'branches' => '["' . $gtrid . '-b1"]',
+        'created_at' => '2020-01-01 00:00:00',
+      ]]
+    );
+    // 修复前：SQLite 通道被扫描 → XA RECOVER 语法错误 → journal 行被阻塞（无 DELETE）；
+    // 修复后：非 MySQL PDO 通道被跳过 → 行正常清理
+    self::assertStringContainsString(
+      'DELETE FROM',
+      implode(';', $journalChannel->log),
+      '非 MySQL PDO 通道应被跳过，不得阻塞 journal 行清理'
+    );
+    @unlink($tmpDb);
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */
@@ -358,34 +597,49 @@ class XaTransactionTest extends TestCase
 
   /**
    * 在隔离的通道集合下执行恢复任务（恢复任务遍历全部通道，需排除真实 default 通道），
-   * journal SELECT 返回按业务通道 recoverRows + journalState 推导的模拟行
+   * journal SELECT 返回按业务通道 recoverRows + journalState 推导的模拟行，
+   * 或直接使用显式传入的 journalRows
    *
    * @param array<string,XaRecordingChannel> $channels 测试通道集合
+   * @param bool $youngRow 模拟 journal 行是否处于冷却期内（created_at 为当前时间）
+   * @param array<int,array<string,mixed>>|null $journalRows 显式 journal 模拟行，优先于自动推导
    */
-  private function runRecoveryWith(array $channels): void
+  private function runRecoveryWith(array $channels, bool $youngRow = false, ?array $journalRows = null): void
   {
     $db = App::factory()->make(DbManager::class);
     foreach ($channels as $name => $channel) $db->addChannel($name, $channel);
-    // 按业务通道的未决 xid 推导 journal 模拟行
     $journalChannel = $channels['xa_journal'];
-    $rows = [];
-    foreach ($channels as $channel) {
-      if ($channel === $journalChannel) continue;
-      foreach ($channel->recoverRows as $xid) {
-        $gtrid = preg_replace('/-b\d+$/', '', $xid);
-        $rows[$gtrid] = [
-          'gtrid' => $gtrid,
-          'state' => $channel->journalState,
-          'branches' => '["' . $xid . '"]',
-        ];
+    if ($journalRows !== null) {
+      $journalChannel->selectRows = $journalRows;
+    } else {
+      // 按业务通道的未决 xid 推导 journal 模拟行
+      $rows = [];
+      foreach ($channels as $channel) {
+        if ($channel === $journalChannel) continue;
+        foreach ($channel->recoverRows as $xid) {
+          $gtrid = preg_replace('/-b\d+$/', '', $xid);
+          $rows[$gtrid] = [
+            'gtrid' => $gtrid,
+            'state' => $channel->journalState,
+            'branches' => '["' . $xid . '"]',
+            // 冷却期内 = created_at 为现在；冷却期外 = 足够久远的过去
+            'created_at' => $youngRow ? date('Y-m-d H:i:s') : '2020-01-01 00:00:00',
+          ];
+        }
       }
+      $journalChannel->selectRows = array_values($rows);
     }
-    $journalChannel->selectRows = array_values($rows);
     $prop = new ReflectionProperty(DbManager::class, 'channels');
     $origin = $prop->getValue($db);
     try {
       $prop->setValue($db, $channels);
-      XaRecovery::run();
+      // 恢复任务的 echo_log 告警输出会污染 PHPUnit 输出，捕获屏蔽
+      ob_start();
+      try {
+        XaRecovery::run();
+      } finally {
+        ob_end_clean();
+      }
     } finally {
       $prop->setValue($db, $origin);
     }

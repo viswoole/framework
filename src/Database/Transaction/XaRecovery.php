@@ -18,6 +18,8 @@ namespace Viswoole\Database\Transaction;
 use Throwable;
 use Viswoole\Core\App;
 use Viswoole\Database\Channel;
+use Viswoole\Database\Channel\PDO\DriverType;
+use Viswoole\Database\Channel\PDO\PDOChannel;
 use Viswoole\Database\DbManager;
 use function echo_log;
 
@@ -40,6 +42,19 @@ use function echo_log;
 final class XaRecovery
 {
   /**
+   * prepare_start 行的处置冷却期（秒）
+   *
+   * prepare_start 行可能在事务提交进行中被读出（journal 写入与 PREPARE/COMMIT
+   * 之间无全局互斥）：此刻其分支可能已 prepared 但尚不该被终结（事务还活着），
+   * 或分支尚未 prepared（XA RECOVER 查不到）。处置此类"年轻"行会误删
+   * 活跃事务的恢复依据、甚至误回滚其分支。冷却期内只跳过不处置，
+   * 下次恢复（行仍在且已过冷却期）才安全收敛。
+   * prepared 行无此竞态：对其未决分支补 XA COMMIT 与 commit() 的
+   * 正常路径幂等重合，可即时处置。
+   */
+  private const int PREPARE_START_GRACE_SECONDS = 60;
+
+  /**
    * 执行崩溃恢复（journal 为空时仅一次探测查询，常规启动开销可忽略）
    *
    * @throws Throwable journal 读取失败时向上抛出（调用方负责告警，不影响服务启动）
@@ -49,9 +64,26 @@ final class XaRecovery
     $journal = XaJournal::fromConfig();
     $rows = $journal->all();
     if ($rows === []) return;
-    /** @var array<string,array{state:int,branches:string[],blocked?:bool}> $rows */
+    /** @var array<string,array{state:int,branches:string[],created_at:string,blocked?:bool}> $rows */
+    // 过滤冷却期内的 prepare_start 行：不处置、不删除，留待下次恢复
+    foreach ($rows as $gtrid => $row) {
+      if (
+        $row['state'] === XaJournal::STATE_PREPARE_START
+        && !self::isBeyondGrace($row['created_at'])
+      ) {
+        echo_log(
+          "XA 恢复：journal 行（gtrid: {$gtrid}）处于冷却期内，跳过待下次恢复",
+          'XA',
+          backtrace: 0
+        );
+        unset($rows[$gtrid]);
+      }
+    }
     $db = App::factory()->make(DbManager::class);
     foreach ($db->getChannels() as $channel) {
+      // 仅扫描可能持有 XA 分支的通道：跳过既消除非 MySQL 通道的
+      // 扫描告警噪音，也避免其扫描失败永久阻塞 journal 行清理
+      if (!self::canHostXaBranches($channel)) continue;
       self::recoverChannel($channel, $rows);
     }
     // 仅删除所有通道均确认无未决分支的行；任一通道扫描失败则保留待下次
@@ -59,6 +91,36 @@ final class XaRecovery
       if (!empty($row['blocked'])) continue;
       $journal->remove($gtrid);
     }
+  }
+
+  /**
+   * 判断通道是否可能持有框架创建的 XA 分支
+   *
+   * PDO 通道按驱动类型判定：XA START 在非 MySQL 数据库（SQLite/PostgreSQL 等）
+   * 上必然失败，分支从未建立——扫描此类通道只会产生告警噪音并阻塞 journal 行
+   * 清理。自定义通道能力未知，保守起见仍尝试扫描，由扫描失败时的阻塞机制兜底。
+   *
+   * @param Channel $channel 待判断的通道
+   * @return bool 可能持有返回 true
+   */
+  private static function canHostXaBranches(Channel $channel): bool
+  {
+    if ($channel instanceof PDOChannel) {
+      return $channel->type === DriverType::MYSQL;
+    }
+    return true;
+  }
+
+  /**
+   * 判断 journal 行是否已超过处置冷却期
+   *
+   * @param string $createdAt 行写入时间（journal 表 created_at，数据库时区）
+   * @return bool 已超过返回 true；解析失败按未超期处理（保守处置）
+   */
+  private static function isBeyondGrace(string $createdAt): bool
+  {
+    $timestamp = strtotime($createdAt);
+    return $timestamp !== false && (time() - $timestamp) >= self::PREPARE_START_GRACE_SECONDS;
   }
 
   /**
