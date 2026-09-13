@@ -213,6 +213,12 @@ class XaTransactionTest extends TestCase
     $journalSql = implode(';', $journalChannel->log);
     self::assertStringContainsString('SELECT', $journalSql);
     self::assertStringContainsString('DELETE FROM', $journalSql);
+    // XA RECOVER 语句精确断言（真实 MySQL 仅接受 CONVERT XID，
+    // 曾误写 CONVERT INTO 导致单测 mock 未暴露、真机恢复全挂）
+    self::assertNotNull(
+      $this->firstSqlMatching($channelA->log, '/^XA RECOVER CONVERT XID$/'),
+      'XA RECOVER 必须使用 CONVERT XID 语法（MySQL 官方语法）'
+    );
   }
 
   /**

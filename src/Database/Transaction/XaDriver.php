@@ -107,7 +107,9 @@ final class XaDriver
    */
   public static function recover(object $connect): array
   {
-    $rows = self::query($connect, 'XA RECOVER CONVERT INTO');
+    // CONVERT XID 使 data 列以 0x 前缀十六进制返回（不同驱动/版本也可能返回
+    // 裸 hex 或原始二进制），统一由 decodeXidData 解析
+    $rows = self::query($connect, 'XA RECOVER CONVERT XID');
     $xids = [];
     foreach ($rows as $row) {
       $row = array_change_key_case($row);
