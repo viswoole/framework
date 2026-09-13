@@ -26,6 +26,7 @@ use Swoole\Server\Port;
 use Viswoole\Core\Exception\Handle;
 use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Exception\ServerNotFoundException;
+use Viswoole\Core\Server\ProcessRole;
 use Viswoole\Core\Server\ServerEventHook;
 
 /**
@@ -296,6 +297,9 @@ class Server
     $this->isStart = true;
     // 触发ServerStarting事件
     $this->event->emit(FrameworkEvent::ServerStarting, [$this]);
+    // 标记 master 角色：fork 出的 manager/worker 在各自 workerStart 前继承此角色，
+    // 连接池据此让非 worker 进程走一次性短连接，防止污染 worker 连接池
+    ProcessRole::markAsMaster();
     // 进程守护
     if ($daemonize) $this->server->set([Constant::OPTION_DAEMONIZE => $daemonize]);
     $result = $this->server->start();

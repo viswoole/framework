@@ -24,6 +24,7 @@ use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Cache\RedisConfig;
 use Viswoole\Cache\RedisPool;
 use Viswoole\Core\Coroutine;
+use Viswoole\Core\Server\ProcessRole;
 
 /**
  * 基于 Redis 的缓存驱动，通过连接池管理 Redis 连接并提供缓存操作
@@ -118,7 +119,7 @@ class Redis extends Driver
   #[Override] public function inc(string $key, int $step = 1): false|int
   {
     $key = $this->getCacheKey($key);
-    return $this->connect()->incrBy($key, $step);
+    return $this->withConnection(fn(\Redis $redis) => $redis->incrBy($key, $step));
   }
 
   /**
@@ -127,22 +128,109 @@ class Redis extends Driver
    * 连接按协程隔离存储于协程上下文；首次借出时注册 defer 回调，
    * 协程结束（含异常退出）自动归还连接，杜绝借出未还导致的连接滞留。
    *
+   * 非协程环境区分两种模式：
+   * - CLI 进程（命令行脚本）：连接存入进程级上下文长期持有以复用，
+   *   复用前 ping 检测存活并恢复会话状态（见 isAlive），失效关闭重建；
+   * - server 模式非 worker 进程（master/manager 回调，如非协程化的
+   *   managerStart）：短连接模式，不缓存连接，由 withConnection 在每条
+   *   命令后即时归还（池在旁路模式下 put 即关闭），避免常驻进程长期占用。
+   *
    * @return \Redis Redis 连接实例
    * @throws RedisException 连接失败时抛出
    */
   #[Override] public function connect(): \Redis
   {
     $context = Coroutine::getContext();
-    if (!isset($context[self::CONTEXT_CONNECTION_KEY])) {
-      $redis = $this->pool->pop();
+    if (isset($context[self::CONTEXT_CONNECTION_KEY])) {
+      $redis = $context[self::CONTEXT_CONNECTION_KEY];
+      // 协程环境：连接生命周期 = 协程生命周期（defer 自动归还），
+      // 借出时池已做过健康检测，复用前不再 ping，避免每次操作多一次 RTT
+      if (Coroutine::isCoroutine()) return $redis;
+      // 非协程 CLI：连接被进程级上下文长期持有（无 defer 归还），
+      // 复用前必须检测存活——Redis 重启/空闲踢线后旧连接已失效，
+      // 直接复用会抛 RedisException。关闭失效连接并落入下方重建流程
+      if ($this->isAlive($redis)) return $redis;
+      try {
+        $redis->close();
+      } catch (RedisException) {
+        // 连接已失效时 close 可能再抛异常，丢弃旧连接即可
+      }
+      unset($context[self::CONTEXT_CONNECTION_KEY]);
+    }
+    $redis = $this->pool->pop();
+    // 短连接模式：连接不入上下文缓存，由 withConnection 在命令后即时归还
+    if (!$this->isShortConnection()) {
       $context[self::CONTEXT_CONNECTION_KEY] = $redis;
-      if (Coroutine::isCoroutine()) {
-        Coroutine::defer(function () use ($redis): void {
-          $this->releaseConnection($redis);
-        });
+    }
+    if (Coroutine::isCoroutine()) {
+      Coroutine::defer(function () use ($redis): void {
+        $this->releaseConnection($redis);
+      });
+    }
+    return $redis;
+  }
+
+  /**
+   * 判定当前是否为短连接模式：server 模式下的非 worker 非协程回调
+   *
+   * managerStart 等 Swoole 事件在部分版本中未协程化，回调若使用 Cache，
+   * 连接会因非协程无 defer 而滞留进程级上下文——常驻 manager 进程将
+   * 长期占用一条 Redis 连接。此模式下改为每条命令独立借还。
+   *
+   * @return bool 短连接模式返回 true
+   */
+  private function isShortConnection(): bool
+  {
+    return !Coroutine::isCoroutine() && ProcessRole::isServerMode() && !ProcessRole::isWorker();
+  }
+
+  /**
+   * 在连接上执行单条命令，短连接模式下执行完毕即时归还连接
+   *
+   * 协程模式与 CLI 复用模式下 finally 分支为一次布尔判定的空开销，
+   * 连接仍按原语义（协程隔离复用 / 进程级复用）持有。
+   *
+   * @param callable(\Redis):mixed $fn 接收连接并执行命令的闭包
+   * @return mixed 闭包的返回值
+   */
+  private function withConnection(callable $fn): mixed
+  {
+    $redis = $this->connect();
+    try {
+      return $fn($redis);
+    } finally {
+      if ($this->isShortConnection()) {
+        $this->pool->put($redis);
       }
     }
-    return $context[self::CONTEXT_CONNECTION_KEY];
+  }
+
+  /**
+   * 检测 Redis 连接是否存活并恢复会话状态（仅非协程复用路径调用）
+   *
+   * 注意 phpredis 6.x 的特性：连接断开后，下一次命令会透明重建 TCP 连接，
+   * 但 AUTH/SELECT 会话状态随旧连接一并丢失（密码场景报 NOAUTH、
+   * db_index 场景静默落入 db 0）。因此 ping 通过后还需显式选择配置库：
+   * 1. db_index !== 0 时执行幂等的 SELECT 恢复库状态；
+   * 2. 密码场景下 phpredis 透明重连后 ping 本身即抛 NOAUTH，
+   *    走 catch 判定失效，由调用方关闭重建（createConnection 重新认证）。
+   *
+   * @param \Redis $redis 待检测的连接实例
+   * @return bool 连接可用返回 true
+   */
+  private function isAlive(\Redis $redis): bool
+  {
+    try {
+      $result = $redis->ping();
+      if ($result !== true && $result !== '+PONG') return false;
+      // db_index 为 0 时无需恢复（phpredis 透明重连默认落在 db 0）
+      if ($this->pool->getConfig()->db_index !== 0) {
+        $redis->select($this->pool->getConfig()->db_index);
+      }
+      return true;
+    } catch (RedisException) {
+      return false;
+    }
   }
 
   /**
@@ -203,7 +291,7 @@ class Redis extends Driver
   #[Override] public function dec(string $key, int $step = 1): false|int
   {
     $key = $this->getCacheKey($key);
-    return $this->connect()->decrBy($key, $step);
+    return $this->withConnection(fn(\Redis $redis) => $redis->decrBy($key, $step));
   }
 
   /**
@@ -224,7 +312,7 @@ class Redis extends Driver
   #[Override] public function get(string $key, mixed $default = null): mixed
   {
     $key = $this->getCacheKey($key);
-    $value = $this->connect()->get($key);
+    $value = $this->withConnection(fn(\Redis $redis) => $redis->get($key));
     if (false === $value) return $default;
     return $this->unserialize($value);
   }
@@ -265,7 +353,7 @@ class Redis extends Driver
     foreach ($keys as $index => $key) {
       $keys[$index] = $this->getCacheKey($key);
     }
-    return $this->connect()->del(...$keys);
+    return $this->withConnection(fn(\Redis $redis) => $redis->del(...$keys));
   }
 
   /**
@@ -274,7 +362,8 @@ class Redis extends Driver
    */
   #[Override] public function has(string $key): bool
   {
-    return (bool)$this->connect()->exists($this->getCacheKey($key));
+    $key = $this->getCacheKey($key);
+    return (bool)$this->withConnection(fn(\Redis $redis) => $redis->exists($key));
   }
 
   /**
@@ -283,7 +372,7 @@ class Redis extends Driver
    */
   #[Override] public function clear(): bool
   {
-    return (bool)$this->connect()->flushDB();
+    return (bool)$this->withConnection(fn(\Redis $redis) => $redis->flushDB());
   }
 
   /**
@@ -303,7 +392,9 @@ class Redis extends Driver
     $lockId = md5(uniqid("{$key}_", true) . '_' . Coroutine::getCid());
     while ($retry-- > 0) {
       // 设置锁/取锁
-      $result = $this->connect()->set($key, $lockId, ['NX', 'EX' => $expire]);
+      $result = $this->withConnection(
+        fn(\Redis $redis) => $redis->set($key, $lockId, ['NX', 'EX' => $expire])
+      );
       if ($result) {
         // 加入到当前协程的锁列表中
         $this->addLock($lockId, [
@@ -338,7 +429,7 @@ class Redis extends Driver
     $options = [];
     if ($NX) $options[] = 'NX';
     if ($expire > 0) $options['EX'] = $expire;
-    return $this->connect()->set($key, $value, $options);
+    return $this->withConnection(fn(\Redis $redis) => $redis->set($key, $value, $options));
   }
 
   /**
@@ -361,7 +452,7 @@ class Redis extends Driver
   #[Override] public function ttl(string $key): false|int
   {
     $key = $this->getCacheKey($key);
-    $result = $this->connect()->ttl($key);
+    $result = $this->withConnection(fn(\Redis $redis) => $redis->ttl($key));
     if ($result === -2 || $result === false) return false;
     return $result;
   }
@@ -405,7 +496,7 @@ class Redis extends Driver
                 end
                 LUA;
     $value = $lockInfo['secretKey'];
-    $result = $this->connect()->eval($script, [$scene, $value], 1);
+    $result = $this->withConnection(fn(\Redis $redis) => $redis->eval($script, [$scene, $value], 1));
     if ($result) $this->removeLock($id);
     return (bool)$result;
   }
@@ -421,7 +512,7 @@ class Redis extends Driver
     // 因为 Redis Set 存储的是字符串，$this->serialize 对整数会跳过序列化直接返回 int，
     // 但 Redis sAdd 会将 int 转为字符串，后续 unserialize 无法正确反序列化原始字符串
     $values = array_map('serialize', $values);
-    return $this->connect()->sAdd($key, ...$values);
+    return $this->withConnection(fn(\Redis $redis) => $redis->sAdd($key, ...$values));
   }
 
   /**
@@ -431,7 +522,7 @@ class Redis extends Driver
   #[Override] public function getArray(string $key): array|false
   {
     $name = $this->getCacheKey($key);
-    $result = $this->connect()->sMembers($name);
+    $result = $this->withConnection(fn(\Redis $redis) => $redis->sMembers($name));
     if ($result === false) return false;
     // 修复：与 sAddArray 保持一致，使用 unserialize() 而非 $this->unserialize()
     // 因为 sAddArray 使用 serialize() 存入，getArray 必须使用 unserialize() 取出
@@ -447,6 +538,6 @@ class Redis extends Driver
     // 修复：与 sAddArray 保持一致，使用 serialize() 而非 $this->serialize()
     $values = array_map('serialize', $values);
     $name = $this->getCacheKey($key);
-    return $this->connect()->sRem($name, ...$values);
+    return $this->withConnection(fn(\Redis $redis) => $redis->sRem($name, ...$values));
   }
 }

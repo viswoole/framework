@@ -33,6 +33,9 @@ class ServerEventHook
     'start' => [[ServerEventHook::class, 'onStart']],
     'shutdown' => [[ServerEventHook::class, 'onShutdown']],
     'beforeshutdown' => [[ServerEventHook::class, 'onBeforeShutdown']],
+    // 内置 workerStart 处理器必须排在最前：它将进程角色标记为 worker，
+    // 连接池在 workerStart 中的 fill 依赖此标记判定"当前是合法的池归属进程"
+    'workerstart' => [[ServerEventHook::class, 'onWorkerStart']],
   ];
 
   /**
@@ -128,6 +131,22 @@ class ServerEventHook
       color    : Output::LABEL_COLOR['DEBUG'],
       backtrace: 0
     );
+  }
+
+  /**
+   * workerStart 回调，将当前进程标记为 worker 角色
+   *
+   * worker 与 task worker 均触发本事件（task worker 的 workerId >= worker_num），
+   * 两者都是连接池的合法归属者，无需按 workerId 区分。manager 进程不触发
+   * workerStart，保持继承自 master 的角色——连接池据此对非 worker 进程
+   * 强制走一次性短连接。
+   *
+   * 声明为无参：Swoole 传入的 ($server, $workerId) 参数由 dispatch 经
+   * 容器 injectParams 按位置注入，多余实参自动忽略，无需在此声明。
+   */
+  private static function onWorkerStart(): void
+  {
+    ProcessRole::markAsWorker();
   }
 
   /**

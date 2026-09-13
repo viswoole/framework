@@ -18,9 +18,12 @@ use function Swoole\Coroutine\run;
 /**
  * 非协程环境事务守护测试
  *
- * 锁定事务体系在非协程上下文（CLI 脚本、xa:recover 命令、workerStart 钩子）
- * 下的行为基线，防止未来改动（Swoole 升级、Context 重构、连接池调整）
- * 静默破坏非协程支持。
+ * 锁定事务体系在非协程上下文（纯 CLI 脚本、xa:recover 命令等无 Swoole
+ * 事件循环的场景，cid=-1）下的行为基线，防止未来改动（Swoole 升级、
+ * Context 重构、连接池调整）静默破坏非协程支持。
+ *
+ * 注意：Swoole 6.x 的 server 事件回调（onStart/workerStart 等）本身已
+ * 协程化，非协程语境仅存在于无事件循环的 CLI 进程。
  *
  * 正确性的两个支柱（缺一即红）：
  * 1. ConnectionPool 非协程适配：pop 直接 createConnection、put 直接 closeConnection；

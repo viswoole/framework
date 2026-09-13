@@ -17,11 +17,12 @@ namespace Viswoole\Database;
 
 
 use Override;
+use Swoole\Server;
 use Throwable;
-use function config;
-use Viswoole\Core\Service\Provider;
 use Viswoole\Core\Server\ServerEventHook;
+use Viswoole\Core\Service\Provider;
 use Viswoole\Database\Transaction\XaRecovery;
+use function config;
 use function echo_log;
 
 /**
@@ -37,7 +38,8 @@ class DbService extends Provider
   /**
    * 所有系统服务绑定完毕后调用，初始化数据库通道管理器
    */
-  #[Override] public function boot(): void
+  #[Override]
+  public function boot(): void
   {
     // 创建数据库通道管理器
     $this->app->make('db');
@@ -49,7 +51,8 @@ class DbService extends Provider
     // 必须挂在 workerStart（连接池随 worker 进程独立创建，master 阶段
     // 创建的连接无法安全共享给 fork 出的 worker）。
     if (!config('database.xa.auto_recovery', false)) return;
-    ServerEventHook::addEvent('workerStart', function (?\Swoole\Server $server, int $workerId): void {
+    ServerEventHook::addEvent(
+      'workerStart', function (?Server $server, int $workerId): void {
       if ($workerId !== 0) return;
       try {
         XaRecovery::run();
@@ -57,13 +60,15 @@ class DbService extends Provider
         // 恢复失败不阻断 worker 启动：残留 journal 行保留，下次启动/重试继续收敛
         echo_log('XA 崩溃恢复任务执行失败：' . $e->getMessage(), 'XA', backtrace: 0);
       }
-    });
+    }
+    );
   }
 
   /**
    * 注册数据库管理器到服务容器
    */
-  #[Override] public function register(): void
+  #[Override]
+  public function register(): void
   {
     /**
      * 绑定数据库通道管理器
