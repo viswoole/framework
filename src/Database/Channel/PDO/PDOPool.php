@@ -11,13 +11,14 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database\Channel\PDO;
 
 use Exception;
 use Override;
 use PDO;
+use PDO\Mysql;
 use Throwable;
 use Viswoole\Core\Channel\ConnectionPool;
 
@@ -43,7 +44,8 @@ class PDOPool extends ConnectionPool
    *
    * @return PDOConfig 连接配置实例
    */
-  #[Override] public function getConfig(): PDOConfig
+  #[Override]
+  public function getConfig(): PDOConfig
   {
     return $this->PDOConfig;
   }
@@ -54,7 +56,8 @@ class PDOPool extends ConnectionPool
    * @param float $timeout 超时时间
    * @return PDOProxy
    */
-  #[Override] public function get(float $timeout = -1): PDOProxy
+  #[Override]
+  public function get(float $timeout = -1): PDOProxy
   {
     return parent::get($timeout);
   }
@@ -72,16 +75,25 @@ class PDOPool extends ConnectionPool
   /**
    * 创建新的 PDO 代理连接
    *
+   * MySQL 连接按 timezone 配置注入连接时区（SET time_zone）：
+   * 命名时区统一转为 UTC 偏移（服务端时区表加载情况不可靠），
+   * 经 MYSQL_ATTR_INIT_COMMAND 在建连时执行；用户已设置 INIT_COMMAND
+   * 时追加而非覆盖。PG 经 DSN options 注入（见 createDSN）。
+   *
    * @return PDOProxy 新建的 PDO 代理连接
    * @throws Exception 驱动不支持时抛出
    */
-  #[Override] protected function createConnection(): PDOProxy
+  #[Override]
+  protected function createConnection(): PDOProxy
   {
     $options = ['dsn' => $this->createDSN($this->PDOConfig->type)];
     if ($this->PDOConfig->type !== DriverType::SQLite) {
       $options['username'] = $this->PDOConfig->username;
       $options['password'] = $this->PDOConfig->password;
       $options['options'] = $this->PDOConfig->options;
+      if ($this->PDOConfig->type === DriverType::MYSQL) {
+        $this->applyMysqlTimezone($options['options']);
+      }
     }
     return new PDOProxy(...$options);
   }
@@ -102,6 +114,11 @@ class PDOPool extends ConnectionPool
         break;
       case 'pgsql':
         $dsn = 'pgsql:host=' . ($this->PDOConfig->unixSocket ?: $this->PDOConfig->host) . ";port={$this->PDOConfig->port};dbname={$this->PDOConfig->database}";
+        // PG 原生支持命名时区，经 DSN options 每连接生效（对齐应用/配置时区）
+        $timezone = $this->PDOConfig->resolveTimezone();
+        if ($timezone !== null) {
+          $dsn .= ";options='-c TimeZone=" . str_replace("'", "''", $timezone) . "'";
+        }
         break;
       case 'oci':
         $host = $this->PDOConfig->unixSocket ?: $this->PDOConfig->host;
@@ -135,12 +152,37 @@ class PDOPool extends ConnectionPool
   }
 
   /**
+   * 在 MySQL 连接选项中注入连接时区语句
+   *
+   * 空数组 options 不修改原配置：$options 为值拷贝（数组传值），
+   * 且 INIT_COMMAND 追加语义要求保留用户已有语句。
+   *
+   * @param array $options PDO 选项（引用修改，含用户已配置项）
+   */
+  private function applyMysqlTimezone(array &$options): void
+  {
+    $timezone = $this->PDOConfig->resolveTimezone();
+    if ($timezone === null) return;
+    // PHP 8.5 起 PDO::MYSQL_ATTR_INIT_COMMAND 弃用，改用驱动常量
+    $initCommand = Mysql::ATTR_INIT_COMMAND;
+    if (isset($options[$initCommand])) {
+      // 用户已设置 INIT_COMMAND：其中已含时区语句（如自行 SET time_zone）时
+      // 尊重用户设置不再追加，否则以分号追加时区语句在后
+      if (stripos((string)$options[$initCommand], 'set time_zone') !== false) return;
+      $options[$initCommand] .= ";SET time_zone = '" . PDOConfig::toMysqlOffset($timezone) . "'";
+    } else {
+      $options[$initCommand] = "SET time_zone = '" . PDOConfig::toMysqlOffset($timezone) . "'";
+    }
+  }
+
+  /**
    * 通过执行 SELECT 1 检测连接是否仍然可用
    *
    * @param PDO|PDOProxy $connection 待检测的连接
    * @return bool 连接可用返回 true
    */
-  #[Override] protected function connectionDetection(mixed $connection): bool
+  #[Override]
+  protected function connectionDetection(mixed $connection): bool
   {
     try {
       $connection->query('SELECT 1');
@@ -157,7 +199,8 @@ class PDOPool extends ConnectionPool
    *
    * @param PDO|PDOProxy $connection 待关闭的连接
    */
-  #[Override] protected function closeConnection(mixed $connection): void
+  #[Override]
+  protected function closeConnection(mixed $connection): void
   {
     if ($connection instanceof PDOProxy) {
       $connection->close();

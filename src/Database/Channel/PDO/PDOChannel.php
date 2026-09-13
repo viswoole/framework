@@ -54,6 +54,9 @@ class PDOChannel extends Channel
    * @param string $username 用户名
    * @param string $password 密码
    * @param string $charset 字符集编码
+   * @param string|null $timezone 连接时区：null 对齐应用时区（date_default_timezone_get），
+   *                              字符串使用指定时区（命名时区或 UTC 偏移），空串不设置（维持服务端默认）；
+   *                              仅 MySQL（INIT_COMMAND）与 PostgreSQL（DSN）生效
    * @param array $options 额外 PDO 配置项
    * @param int $pool_max_size 连接池最大连接数
    * @param int $pool_fill_size 连接池初始填充数，0 表示不预填充
@@ -68,6 +71,7 @@ class PDOChannel extends Channel
     string                     $username = 'root',
     string                     $password = 'root',
     string                     $charset = 'utf8mb4',
+    public ?string             $timezone = null,
     array                      $options = [],
     int                        $pool_max_size = 10,
     int                        $pool_fill_size = 0,
@@ -80,6 +84,7 @@ class PDOChannel extends Channel
       'username',
       'password',
       'charset',
+      'timezone',
       'options',
       'pool_max_size',
       'pool_fill_size'
