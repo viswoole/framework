@@ -295,11 +295,11 @@ class Server
     $serverName = $this->serverName;
     if ($this->isStart) throw new ServerException("{$serverName}服务已在运行中，请勿重复启动服务。");
     $this->isStart = true;
+    // 在触发启动事件前标记 master 角色：ServerStarting 监听器已处于服务启动
+    // 流程内，其 Db/Cache 调用应遵循非 worker 进程短连接语义，而非 CLI 池行为
+    ProcessRole::markAsMaster();
     // 触发ServerStarting事件
     $this->event->emit(FrameworkEvent::ServerStarting, [$this]);
-    // 标记 master 角色：fork 出的 manager/worker 在各自 workerStart 前继承此角色，
-    // 连接池据此让非 worker 进程走一次性短连接，防止污染 worker 连接池
-    ProcessRole::markAsMaster();
     // 进程守护
     if ($daemonize) $this->server->set([Constant::OPTION_DAEMONIZE => $daemonize]);
     $result = $this->server->start();

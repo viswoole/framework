@@ -141,10 +141,10 @@ class ServerEventHook
    * workerStart，保持继承自 master 的角色——连接池据此对非 worker 进程
    * 强制走一次性短连接。
    *
-   * 声明为无参：Swoole 传入的 ($server, $workerId) 参数由 dispatch 经
-   * 容器 injectParams 按位置注入，多余实参自动忽略，无需在此声明。
+   * 声明为变参签名：显式消费 Swoole 传入的 ($server, $workerId) 实参，
+   * 不依赖容器 injectParams 忽略多余实参的内部行为。
    */
-  private static function onWorkerStart(): void
+  private static function onWorkerStart(mixed ...$args): void
   {
     ProcessRole::markAsWorker();
   }

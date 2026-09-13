@@ -285,7 +285,12 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     // 在无协程上下文中安全挂起等待，且非 worker 进程不应持有池连接，
     // 统一显式关闭，防止长循环脚本（如全量导入）积压连接打爆数据库连接数（1040）
     if ($this->shouldBypassPool()) {
-      $this->closeConnection($connection);
+      try {
+        $this->closeConnection($connection);
+      } catch (Throwable) {
+        // 与 fork-aware 分支同语义：归还属兜底清理，对端已断开等关闭失败
+        // 不影响新池/调用方安全，吞掉以避免掩盖调用方业务异常
+      }
       return;
     }
     // 判断返回连接是否为NULL 和 连接是否可用 可用则归还连接

@@ -15,9 +15,12 @@ declare(strict_types=1);
 
 namespace Viswoole\Tests\Core\Channel;
 
+use Override;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
+use RuntimeException;
 use Swoole\Coroutine;
+use Throwable;
 use Viswoole\Core\Server\ProcessRole;
 
 /**
@@ -149,5 +152,42 @@ class ConnectionPoolBypassTest extends TestCase
     });
 
     static::assertSame(1, $pool->length(), 'CLI 协程应保持池化借还行为');
+  }
+
+  /**
+   * 短连接归还时 closeConnection 抛异常不应向外传播
+   *
+   * 回归验证（加固 H1）：manager 回调（非协程短连接）经 withConnection 的
+   * finally 归还连接，若归还瞬间对端恰好断开导致 close 抛异常，异常会从
+   * finally 中冒出掩盖调用方的业务异常。短连接归还属兜底清理，与
+   * fork-aware 分支的防御语义一致，必须吞掉清理异常。
+   *
+   * @return void
+   */
+  public function testPutInMasterCoroutineSwallowsCloseFailure(): void
+  {
+    ProcessRole::markAsMaster();
+    $pool = new class(4) extends FakeConnectionPool {
+      #[Override]
+      protected function closeConnection(mixed $connection): void
+      {
+        throw new RuntimeException('mock: 对端已断开，关闭失败');
+      }
+    };
+    $connection = $pool->createForTest();
+    $caught = null;
+
+    Coroutine\run(static function () use ($pool, $connection, &$caught): void {
+      try {
+        $pool->put($connection);
+      } catch (Throwable $e) {
+        $caught = $e;
+      }
+    });
+
+    static::assertNull(
+      $caught,
+      '短连接归还的清理异常不应向外传播: ' . ($caught ? $caught->getMessage() : '')
+    );
   }
 }
