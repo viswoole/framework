@@ -56,7 +56,9 @@ final class XaDriver
         }
         return;
       }
-      throw new RuntimeException('XA 事务仅支持 PDO/mysqli 系驱动连接，收到 ' . get_debug_type($connect));
+      throw new RuntimeException(
+        'XA 事务仅支持 PDO/mysqli 系驱动连接，收到 ' . get_debug_type($connect)
+      );
     } catch (DbException $e) {
       throw $e;
     } catch (Throwable $e) {
@@ -80,12 +82,14 @@ final class XaDriver
         throw new DbException("XA 查询执行失败：{$sql}");
       }
       return $statement->fetchAll(PDO::FETCH_ASSOC);
-    } /** @noinspection PhpComposerExtensionStubsInspection */ if ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
+    }
+    /** @noinspection PhpComposerExtensionStubsInspection */
+    if ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
       $result = $connect->query($sql);
       if ($result === false) {
         throw new DbException("XA 查询执行失败：{$sql}");
       }
-      /** @noinspection PhpUndefinedMethodInspection */
+      /** @noinspection PhpComposerExtensionStubsInspection */
       return $result->fetch_all(MYSQLI_ASSOC);
     }
     throw new DbException('XA 事务仅支持 PDO/mysqli 系驱动连接，收到 ' . get_debug_type($connect));
@@ -116,20 +120,6 @@ final class XaDriver
   }
 
   /**
-   * 判断异常是否为 XAER_NOTA（未知 xid，事务已终结或不存在）
-   *
-   * 恢复场景的幂等基石：并发恢复/重试时后到者对已终结 xid 执行终结语句
-   * 将得到 XAER_NOTA，视为已完成而非错误。
-   *
-   * @param Throwable $e 待判断的异常
-   * @return bool 是 XAER_NOTA 返回 true
-   */
-  public static function isNotExists(Throwable $e): bool
-  {
-    return str_contains($e->getMessage(), 'XAER_NOTA') || (int)$e->getCode() === 1390;
-  }
-
-  /**
    * 解码 XA RECOVER 返回的 data 列
    *
    * @param string $data 原始列值（0x 前缀 hex / 裸 hex / 二进制）
@@ -147,5 +137,19 @@ final class XaDriver
       return (string)hex2bin($data);
     }
     return $data;
+  }
+
+  /**
+   * 判断异常是否为 XAER_NOTA（未知 xid，事务已终结或不存在）
+   *
+   * 恢复场景的幂等基石：并发恢复/重试时后到者对已终结 xid 执行终结语句
+   * 将得到 XAER_NOTA，视为已完成而非错误。
+   *
+   * @param Throwable $e 待判断的异常
+   * @return bool 是 XAER_NOTA 返回 true
+   */
+  public static function isNotExists(Throwable $e): bool
+  {
+    return str_contains($e->getMessage(), 'XAER_NOTA') || (int)$e->getCode() === 1390;
   }
 }
