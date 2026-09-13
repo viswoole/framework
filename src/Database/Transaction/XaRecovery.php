@@ -57,14 +57,27 @@ final class XaRecovery
   /**
    * 执行崩溃恢复（journal 为空时仅一次探测查询，常规启动开销可忽略）
    *
+   * @param string|null $onlyGtrid 仅处置指定 gtrid 的行（xa:recover --xid），
+   *                               null 处置全部；未命中过滤的行与其分支保持原样
+   * @param bool $dryRun 仅扫描并报告将执行的动作，不终结分支、不删除 journal 行（xa:recover --dry-run）
    * @throws Throwable journal 读取失败时向上抛出（调用方负责告警，不影响服务启动）
    */
-  public static function run(): void
+  public static function run(?string $onlyGtrid = null, bool $dryRun = false): void
   {
     $journal = XaJournal::fromConfig();
     $rows = $journal->all();
     if ($rows === []) return;
     /** @var array<string,array{state:int,branches:string[],created_at:string,blocked?:bool}> $rows */
+    // xid 过滤：仅保留命中的行（其余行与其分支保持原样）
+    if ($onlyGtrid !== null) {
+      foreach ($rows as $gtrid => $row) {
+        if ($gtrid !== $onlyGtrid) unset($rows[$gtrid]);
+      }
+      if ($rows === []) {
+        echo_log("XA 恢复：journal 中不存在 gtrid 为 {$onlyGtrid} 的行", 'XA', backtrace: 0);
+        return;
+      }
+    }
     // 过滤冷却期内的 prepare_start 行：不处置、不删除，留待下次恢复
     foreach ($rows as $gtrid => $row) {
       if (
@@ -79,17 +92,43 @@ final class XaRecovery
         unset($rows[$gtrid]);
       }
     }
+    if ($dryRun) {
+      // 先输出基于 journal 意图的处置计划，随后扫描各通道报告实际未决分支
+      self::reportPlan($rows);
+    }
     $db = App::factory()->make(DbManager::class);
     foreach ($db->getChannels() as $channel) {
       // 仅扫描可能持有 XA 分支的通道：跳过既消除非 MySQL 通道的
       // 扫描告警噪音，也避免其扫描失败永久阻塞 journal 行清理
       if (!self::canHostXaBranches($channel)) continue;
-      self::recoverChannel($channel, $rows);
+      self::recoverChannel($channel, $rows, $dryRun);
     }
+    if ($dryRun) return; // dry-run 到此为止：终结语句与 journal 删除均已按计划输出而未执行
     // 仅删除所有通道均确认无未决分支的行；任一通道扫描失败则保留待下次
     foreach ($rows as $gtrid => $row) {
       if (!empty($row['blocked'])) continue;
       $journal->remove($gtrid);
+    }
+  }
+
+  /**
+   * 输出 dry-run 的 journal 行处置计划（基于意图，实际未决分支在扫描阶段逐个报告）
+   *
+   * @param array<string,array{state:int,branches:string[],created_at:string,blocked?:bool}> $rows 待处置的 journal 行
+   */
+  private static function reportPlan(array $rows): void
+  {
+    if ($rows === []) {
+      echo_log('XA 恢复（dry-run）：无可处置的 journal 行', 'XA', backtrace: 0);
+      return;
+    }
+    foreach ($rows as $gtrid => $row) {
+      $action = $row['state'] === XaJournal::STATE_PREPARED ? 'XA COMMIT' : 'XA ROLLBACK';
+      echo_log(
+        "XA 恢复（dry-run）：gtrid {$gtrid} 状态 {$row['state']}，将对未决分支执行 {$action}，随后删除该 journal 行",
+        'XA',
+        backtrace: 0
+      );
     }
   }
 
@@ -131,15 +170,16 @@ final class XaRecovery
    *
    * @param Channel $channel 数据库通道
    * @param array<string,array{state:int,branches:string[],blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
+   * @param bool $dryRun true 时仅报告未决分支与计划动作，不执行终结语句
    */
-  private static function recoverChannel(Channel $channel, array &$rows): void
+  private static function recoverChannel(Channel $channel, array &$rows, bool $dryRun = false): void
   {
     try {
       $connect = $channel->pop('write');
       try {
         $inDoubtXids = XaDriver::recover($connect);
         foreach ($inDoubtXids as $xid) {
-          self::recoverXid($connect, $xid, $rows);
+          self::recoverXid($connect, $xid, $rows, $dryRun);
         }
       } finally {
         $channel->put($connect);
@@ -161,18 +201,25 @@ final class XaRecovery
    * @param object $connect 通道连接（终结语句以 xid 寻址，可用任意连接执行）
    * @param string $xid 未决分支 xid
    * @param array<string,array{state:int,branches:string[],blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
+   * @param bool $dryRun true 时仅输出计划动作，不执行终结语句
    */
-  private static function recoverXid(object $connect, string $xid, array &$rows): void
+  private static function recoverXid(object $connect, string $xid, array &$rows, bool $dryRun = false): void
   {
     $gtrid = self::matchJournalRow($rows, $xid);
     if ($gtrid === null) {
       // 不属于框架管理的事务（或 journal 丢失）：只告警不处理，避免误伤他方事务
       echo_log(
-        "XA 恢复：发现无 journal 记录的未决事务，已跳过请人工处理（xid: {$xid}）", 'XA', backtrace: 0
+        "XA 恢复：发现无 journal 记录的未决事务，已跳过请人工处理（xid: {$xid}）",
+        'XA',
+        backtrace: 0
       );
       return;
     }
     $action = $rows[$gtrid]['state'] === XaJournal::STATE_PREPARED ? 'XA COMMIT' : 'XA ROLLBACK';
+    if ($dryRun) {
+      echo_log("XA 恢复（dry-run）：将对未决分支 {$xid} 执行 {$action}", 'XA', backtrace: 0);
+      return;
+    }
     try {
       XaDriver::execute($connect, "{$action} '{$xid}'");
     } catch (Throwable $e) {

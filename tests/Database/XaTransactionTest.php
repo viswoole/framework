@@ -597,6 +597,73 @@ class XaTransactionTest extends TestCase
     self::assertNull($this->firstSqlMatching($channelB->log, '/^XA ROLLBACK /'));
   }
 
+  /**
+   * 场景19（dry-run）：只扫描并报告将执行的动作，不实际终结分支、不删 journal 行
+   */
+  public function testRecoveryDryRunMakesNoChanges(): void
+  {
+    $gtrid = 'vw' . str_repeat('77', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelA = new XaRecordingChannel();
+    $channelA->recoverRows = ["{$gtrid}-b1"];
+    $channelA->journalState = XaJournal::STATE_PREPARED;
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_a' => $channelA],
+      journalRows: [[
+        'gtrid' => $gtrid,
+        'state' => XaJournal::STATE_PREPARED,
+        'branches' => '["' . $gtrid . '-b1"]',
+        'created_at' => '2020-01-01 00:00:00',
+      ]],
+      dryRun: true
+    );
+    // 分支不被终结、journal 行不被删除——一切状态保持原样
+    self::assertNull($this->firstSqlMatching($channelA->log, '/^XA (COMMIT|ROLLBACK) /'), 'dry-run 不得终结分支');
+    self::assertStringNotContainsString('DELETE FROM', implode(';', $journalChannel->log), 'dry-run 不得删除 journal 行');
+    // 但探测扫描照常执行（dry-run 的价值在于预览将处置什么）
+    self::assertStringContainsString('XA RECOVER', implode(';', $channelA->log));
+  }
+
+  /**
+   * 场景20（xid 过滤）：仅处置指定 gtrid 的 journal 行与未决分支，
+   * 其余 gtrid 的行与分支保持原样
+   */
+  public function testRecoveryWithXidFilterOnlyTouchesMatchingRow(): void
+  {
+    $gtridTarget = 'vw' . str_repeat('aa', 8);
+    $gtridOther = 'vw' . str_repeat('bb', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelTarget = new XaRecordingChannel();
+    $channelOther = new XaRecordingChannel();
+    $channelTarget->recoverRows = ["{$gtridTarget}-b1"];
+    $channelOther->recoverRows = ["{$gtridOther}-b1"];
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_target' => $channelTarget, 'xa_other' => $channelOther],
+      journalRows: [
+        [
+          'gtrid' => $gtridTarget,
+          'state' => XaJournal::STATE_PREPARED,
+          'branches' => '["' . $gtridTarget . '-b1"]',
+          'created_at' => '2020-01-01 00:00:00',
+        ],
+        [
+          'gtrid' => $gtridOther,
+          'state' => XaJournal::STATE_PREPARED,
+          'branches' => '["' . $gtridOther . '-b1"]',
+          'created_at' => '2020-01-01 00:00:00',
+        ],
+      ],
+      onlyGtrid: $gtridTarget
+    );
+    // 目标分支被 XA COMMIT、目标行被删除
+    self::assertNotNull($this->firstSqlMatching($channelTarget->log, '/^XA COMMIT /'));
+    self::assertStringContainsString("DELETE FROM", implode(';', $journalChannel->log));
+    self::assertStringContainsString($gtridTarget, implode(';', $journalChannel->log));
+    // 其他 gtrid 的分支不动、行不删
+    self::assertNull($this->firstSqlMatching($channelOther->log, '/^XA (COMMIT|ROLLBACK) /'), '未过滤命中的分支不得被处置');
+    self::assertStringNotContainsString("'$gtridOther'", implode(';', $journalChannel->log), '未过滤命中的行不得被删除');
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */
@@ -645,8 +712,16 @@ class XaTransactionTest extends TestCase
    * @param array<string,XaRecordingChannel> $channels 测试通道集合
    * @param bool $youngRow 模拟 journal 行是否处于冷却期内（created_at 为当前时间）
    * @param array<int,array<string,mixed>>|null $journalRows 显式 journal 模拟行，优先于自动推导
+   * @param string|null $onlyGtrid 仅处置指定 gtrid 的行（模拟 xa:recover --xid）
+   * @param bool $dryRun 仅预览不执行（模拟 xa:recover --dry-run）
    */
-  private function runRecoveryWith(array $channels, bool $youngRow = false, ?array $journalRows = null): void
+  private function runRecoveryWith(
+    array $channels,
+    bool   $youngRow = false,
+    ?array $journalRows = null,
+    ?string $onlyGtrid = null,
+    bool   $dryRun = false
+  ): void
   {
     $db = App::factory()->make(DbManager::class);
     foreach ($channels as $name => $channel) $db->addChannel($name, $channel);
@@ -678,7 +753,7 @@ class XaTransactionTest extends TestCase
       // 恢复任务的 echo_log 告警输出会污染 PHPUnit 输出，捕获屏蔽
       ob_start();
       try {
-        XaRecovery::run();
+        XaRecovery::run($onlyGtrid, $dryRun);
       } finally {
         ob_end_clean();
       }
