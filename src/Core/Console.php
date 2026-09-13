@@ -19,6 +19,7 @@ use InvalidArgumentException;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Viswoole\Core\Console\Commands\CommandDiscover;
+use Viswoole\Core\Console\Commands\Database\XaRecover;
 use Viswoole\Core\Console\Commands\Optimize\Facade;
 use Viswoole\Core\Console\Commands\Server\ServerClose;
 use Viswoole\Core\Console\Commands\Server\ServerReload;
@@ -44,7 +45,8 @@ class Console extends Application
     ServerReload::class,
     CommandDiscover::class,
     ServiceDiscover::class,
-    VendorPublish::class
+    VendorPublish::class,
+    XaRecover::class
   ];
 
   public function __construct()

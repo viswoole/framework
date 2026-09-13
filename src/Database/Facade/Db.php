@@ -33,6 +33,7 @@ use Viswoole\Database\Raw;
  * @method static bool hasChannel(string $channel_name) 判断通道是否存在
  * @method static void start() 开启事务（支持嵌套）
  * @method static mixed startTransaction(?Closure $query = null) 开启事务，传入闭包则自动管理事务并返回闭包返回值（支持嵌套：内层基于保存点可独立回滚；跨通道/跨库事务不保证原子性，见 DbManager::startTransaction）
+ * @method static mixed startXaTransaction(?Closure $query = null) 开启 XA 两阶段提交事务，跨通道/跨库原子提交 + 崩溃恢复（需数据库支持 XA，见 DbManager::startXaTransaction）
  * @method static void commit() 提交当前最内层事务（嵌套层仅释放保存点）
  * @method static void rollBack() 回滚当前最内层事务（嵌套层仅回滚到该层保存点，外层不受影响）
  * @method static int transactionLevel() 获取当前事务嵌套层级（0 表示无事务）

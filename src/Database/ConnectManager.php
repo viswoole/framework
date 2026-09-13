@@ -20,6 +20,12 @@ use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
 use Throwable;
 use Viswoole\Core\Coroutine\Context;
+use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\Transaction\XaBranchState;
+use Viswoole\Database\Transaction\XaContext;
+use Viswoole\Database\Transaction\XaCoordinator;
+use Viswoole\Database\Transaction\XaDriver;
+use Viswoole\Database\Transaction\XaJournal;
 
 /**
  * 连接管理器
@@ -37,6 +43,13 @@ use Viswoole\Core\Coroutine\Context;
  *    由此维持不变式"事务池中每个连接都持有每一层的回滚锚点"；
  * 3. 内层 rollBack 即 ROLLBACK TO SAVEPOINT（只丢弃该层工作，外层可继续），
  *    内层 commit 即 RELEASE SAVEPOINT（数据仍受外层保护，最外层提交才真正落库）。
+ *
+ * XA 模式（startXa 开启）：
+ * 首层为两阶段提交事务，用于跨通道/跨库的原子提交；每个加入事务的连接以
+ * 独立分支 xid 开启 XA START，嵌套层照常使用 SAVEPOINT（XA 事务内可用）；
+ * 首层 commit 交由 XaCoordinator 按 END → journal → PREPARE → COMMIT 编排，
+ * 首层 rollBack 对各分支 XA ROLLBACK。普通事务与 XA 事务不可嵌套混用
+ * （XA START 必须是事务首条语句，无法中途升级）。
  */
 class ConnectManager
 {
@@ -46,6 +59,8 @@ class ConnectManager
   protected array $connections = [];
   /** @var int 当前事务嵌套层级，0 表示未开启事务 */
   protected int $transactionDepth = 0;
+  /** @var XaContext|null XA 事务上下文，非 XA 模式为 null */
+  protected ?XaContext $xaContext = null;
 
   /**
    * 获取当前协程中的连接管理器单例，首次调用时自动创建
@@ -102,7 +117,12 @@ class ConnectManager
       // 结束——后续写入落在从库（只读库报错、可写库失去主库互斥语义），
       // 且读自身未提交写入必须与写在同一连接。读写分离下事务整体走主库。
       $connect = $channel->pop('write');
-      if ($connect instanceof PDOProxy || $connect instanceof PDO) {
+      if ($this->xaContext !== null) {
+        // XA 模式：新加入连接以独立分支 xid 开启 XA 事务（分支后缀避免同实例
+        // 双连接 XA START 同一 xid 触发 XAER_DUPID，见 XaContext 注释）
+        $xid = $this->xaContext->registerBranch($connect);
+        XaDriver::execute($connect, "XA START '$xid'");
+      } elseif ($connect instanceof PDOProxy || $connect instanceof PDO) {
         $connect->beginTransaction();
       } /** @noinspection PhpComposerExtensionStubsInspection */ elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
         $connect->autocommit(false);
@@ -134,7 +154,7 @@ class ConnectManager
   {
     if ($connect instanceof PDO || $connect instanceof PDOProxy) {
       $connect->exec($sql);
-    } elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
+    } /** @noinspection PhpComposerExtensionStubsInspection */ elseif ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
       $connect->query($sql);
     }
   }
@@ -150,6 +170,33 @@ class ConnectManager
   private static function savepointName(int $level): string
   {
     return 'viswoole_sp_' . $level;
+  }
+
+  /**
+   * 开启 XA 两阶段提交事务（首层）
+   *
+   * 与 start() 的 BEGIN 路径互斥：XA START 必须是事务首条语句，
+   * 普通事务进行中调用将抛出异常（无法中途升级）；XA 事务内再次调用
+   * 视为嵌套层，等价于 start()（内层走 SAVEPOINT）。
+   * 用户需自行保证所有参与通道的数据库支持 XA 事务。
+   *
+   * @param XaJournal $journal 提交意图日志（崩溃恢复依据）
+   * @throws DbException 普通事务进行中调用时抛出
+   */
+  public function startXa(XaJournal $journal): void
+  {
+    if ($this->transactionDepth > 0) {
+      if ($this->xaContext !== null) {
+        $this->start();
+        return;
+      }
+      throw new DbException(
+        '普通事务进行中无法开启 XA 事务（XA START 必须是事务首条语句，无法中途升级），'
+        . '请在外层使用 startXaTransaction 开启或将本操作移出当前事务'
+      );
+    }
+    $this->xaContext = XaContext::create($journal);
+    $this->transactionDepth = 1;
   }
 
   /**
@@ -197,6 +244,17 @@ class ConnectManager
       return;
     }
     // 首层：真实提交。使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
+    if ($this->xaContext !== null) {
+      // XA 首层：两阶段协议（XA END → journal → XA PREPARE → XA COMMIT），
+      // 失败语义见 XaCoordinator；prepared 分支事务由服务端持有，
+      // 连接可安全归还（forcePut 依据分支状态决定是否需要显式 XA ROLLBACK）
+      try {
+        XaCoordinator::commit($this->xaContext, $this->xaBranches());
+      } finally {
+        $this->close();
+      }
+      return;
+    }
     try {
       $array = $this->connections;
       foreach ($array as $key => $item) {
@@ -212,6 +270,46 @@ class ConnectManager
   }
 
   /**
+   * 收集当前 XA 事务全部分支（连接与 xid 配对）
+   *
+   * @return array<int,array{connect:object,xid:string}> 分支列表
+   */
+  private function xaBranches(): array
+  {
+    if ($this->xaContext === null) return [];
+    $branches = [];
+    foreach ($this->connections as $item) {
+      $connect = $item['connect'];
+      // is_object 而非 instanceof object：object 是保留类型名而非类名，
+      // instanceof 对恒定返回 false
+      if (!is_object($connect)) continue;
+      $xid = $this->xaContext->branchXidOf($connect);
+      if ($xid !== null) {
+        $branches[] = ['connect' => $connect, 'xid' => $xid];
+      }
+    }
+    return $branches;
+  }
+
+  /**
+   * 关闭事务，归还所有连接并重置事务状态
+   */
+  protected function close(): void
+  {
+    // 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
+    $array = $this->connections;
+    foreach ($array as $key => $item) {
+      unset($this->connections[$key]);
+      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
+      // （forcePut 依赖 xaContext 判定 XA 分支状态，必须在重置之前执行）
+      $this->forcePut($item['channel'], $item['connect']);
+    }
+    $this->transactionDepth = 0;
+    $this->connections = [];
+    $this->xaContext = null;
+  }
+
+  /**
    * 强制归还连接到通道连接池（绕过事务标记分支），并兜底回滚未完成事务
    *
    * commit/rollBack/close 释放事务连接时使用：此时尚未重置事务标志，
@@ -219,17 +317,59 @@ class ConnectManager
    * 连接若仍处于活跃事务（如 commit 因网络失败抛异常），归还前先回滚，
    * 避免带事务状态的连接回池后被其他协程复用造成隐式事务污染。
    *
+   * XA 模式下 PDO 的 inTransaction() 不感知 exec 发起的 XA 事务，
+   * 改按分支状态判定：Active/Ended（未进入 PREPARE）分支归还前显式
+   * XA ROLLBACK；Prepared/Done 分支事务由服务端持有（连接已解除
+   * 关联），可直接归还。
+   *
    * @param Channel $channel 连接所属通道
    * @param mixed $connect 底层连接
    */
   private function forcePut(Channel $channel, mixed $connect): void
   {
+    if ($this->xaContext !== null) {
+      if (is_object($connect)) {
+        $state = $this->xaContext->branchStateOf($connect);
+        if ($state === XaBranchState::Active || $state === XaBranchState::Ended) {
+          try {
+            XaDriver::execute(
+              $connect,
+              "XA ROLLBACK '" . $this->xaContext->branchXidOf($connect) . "'"
+            );
+          } catch (Throwable) {
+            // 回滚失败说明连接已失效：服务端断连时自行回滚，
+            // 连接交由连接池健康检查淘汰（与普通模式语义一致）
+          }
+        }
+      }
+      $channel->put($connect);
+      return;
+    }
     if ($connect instanceof PDO || $connect instanceof PDOProxy) {
       if ($connect->inTransaction()) {
         try {
           $connect->rollBack();
         } catch (Throwable) {
           // 回滚失败说明连接已失效，仍归还交由连接池健康检查淘汰
+        }
+      }
+    }
+    $channel->put($connect);
+  }
+
+  /**
+   * 归还连接到通道，事务中仅标记为空闲而非真正归还
+   *
+   * @param Channel $channel 数据库通道
+   * @param mixed $connect 数据库连接实例
+   */
+  public function put(Channel $channel, mixed $connect): void
+  {
+    if ($this->transactionDepth > 0) {
+      foreach ($this->connections as &$item) {
+        if ($item['connect'] === $connect && $item['channel'] === $channel) {
+          $item['active'] = false;
+          return;
         }
       }
     }
@@ -272,6 +412,15 @@ class ConnectManager
    */
   private function rollBackAll(): void
   {
+    // XA 模式：各分支 XA ROLLBACK（尽力而为，不抛出——析构兜底路径依赖此约定）
+    if ($this->xaContext !== null) {
+      try {
+        XaCoordinator::rollBack($this->xaContext, $this->xaBranches());
+      } finally {
+        $this->close();
+      }
+      return;
+    }
     // 使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
     try {
       $array = $this->connections;
@@ -284,41 +433,6 @@ class ConnectManager
     } finally {
       $this->close();
     }
-  }
-
-  /**
-   * 关闭事务，归还所有连接并重置事务状态
-   */
-  protected function close(): void
-  {
-    // 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
-    $array = $this->connections;
-    foreach ($array as $key => $item) {
-      unset($this->connections[$key]);
-      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
-      $this->forcePut($item['channel'], $item['connect']);
-    }
-    $this->transactionDepth = 0;
-    $this->connections = [];
-  }
-
-  /**
-   * 归还连接到通道，事务中仅标记为空闲而非真正归还
-   *
-   * @param Channel $channel 数据库通道
-   * @param mixed $connect 数据库连接实例
-   */
-  public function put(Channel $channel, mixed $connect): void
-  {
-    if ($this->transactionDepth > 0) {
-      foreach ($this->connections as &$item) {
-        if ($item['connect'] === $connect && $item['channel'] === $channel) {
-          $item['active'] = false;
-          return;
-        }
-      }
-    }
-    $channel->put($connect);
   }
 
   /**

@@ -17,7 +17,11 @@ namespace Viswoole\Database;
 
 
 use Override;
+use Throwable;
 use Viswoole\Core\Service\Provider;
+use Viswoole\Core\Server\ServerEventHook;
+use Viswoole\Database\Transaction\XaRecovery;
+use function echo_log;
 
 /**
  * 数据库服务提供者
@@ -36,6 +40,18 @@ class DbService extends Provider
   {
     // 创建数据库通道管理器
     $this->app->make('db');
+    // 每个 worker 进程启动时执行 XA 崩溃恢复：journal 为空时仅一次探测查询，
+    // 常规启动开销可忽略；恢复操作幂等（XAER_NOTA 容忍），多 worker 并发安全。
+    // 必须挂在 workerStart（连接池随 worker 进程独立创建，master 阶段
+    // 创建的连接无法安全共享给 fork 出的 worker）。
+    ServerEventHook::addEvent('workerStart', function (): void {
+      try {
+        XaRecovery::run();
+      } catch (Throwable $e) {
+        // 恢复失败不阻断 worker 启动：残留 journal 行保留，下次启动/重试继续收敛
+        echo_log('XA 崩溃恢复任务执行失败：' . $e->getMessage(), 'XA', backtrace: 0);
+      }
+    });
   }
 
   /**

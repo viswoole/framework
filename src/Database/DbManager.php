@@ -25,6 +25,7 @@ use Viswoole\Core\Config;
 use Viswoole\Core\Console\Output;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\RunInfo;
+use Viswoole\Database\Transaction\XaJournal;
 use Viswoole\Log\LogManager;
 
 /**
@@ -224,7 +225,7 @@ class DbManager
    *
    * 限制：跨通道/跨库事务不保证原子性。commit 按连接加入顺序逐个提交（无两阶段提交），
    * 中途某通道提交失败时，先前提交通道的数据已落库（部分提交），失败通道会被兜底回滚。
-   * 需要跨库原子性的业务应避免在同一事务内混合写入不同通道，或自行实现补偿逻辑。
+   * 需要跨库原子性请使用 {@see startXaTransaction()}（两阶段提交 + 崩溃恢复）。
    *
    * @param Closure|null $query 闭包内执行事务操作，传入后自动 commit/rollBack
    * @return mixed 闭包的返回值；未传闭包时返回 null
@@ -236,6 +237,47 @@ class DbManager
     if ($query instanceof Closure) {
       try {
         // 先捕获闭包返回值，提交成功后透传给调用方（修复：原实现丢弃返回值）
+        $result = $query();
+        $this->commit();
+        return $result;
+      } catch (Throwable $e) {
+        $this->rollBack();
+        throw $e;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 开启 XA 两阶段提交事务（跨通道/跨库原子性）
+   *
+   * 与 startTransaction 的差异：首层提交改为两阶段协议——各分支 XA END 后、
+   * 逐分支 XA PREPARE 前先在 journal 表（默认 default 通道，可经
+   * database.xa.journal_channel / database.xa.journal_table 配置）记录提交意图，
+   * PREPARE 全部成功才逐分支 XA COMMIT；中途任一环节失败时未进入提交阶段的
+   * 分支全体回滚，已 prepared 的分支停留未决状态交由崩溃恢复任务
+   * （worker 启动时自动执行，见 XaRecovery）按 journal 意图收敛。
+   *
+   * 嵌套规则：XA 事务内的嵌套开启（startTransaction/startXaTransaction）
+   * 均走 SAVEPOINT，与普通嵌套事务语义一致；普通事务内无法升级为 XA
+   * （XA START 必须是事务首条语句），尝试开启将抛出 DbException。
+   *
+   * 使用前提（用户自行保证）：
+   * - 所有参与通道的数据库支持 XA 事务（如 MySQL InnoDB）；
+   * - journal 通道可用（其数据是崩溃恢复的决策依据）。
+   * 性能提示：XA 较普通事务多两轮磁盘同步与一次 journal 落盘，
+   * 适合建店/换号等低频运营操作；高频路径请使用 startTransaction。
+   *
+   * @param Closure|null $query 闭包内执行事务操作，传入后自动 commit/rollBack
+   * @return mixed 闭包的返回值；未传闭包时返回 null
+   * @throws DbException 普通事务进行中调用、或提交失败（含未决等待恢复）时抛出
+   * @throws Throwable 闭包抛出的异常在回滚后原样重抛
+   */
+  public function startXaTransaction(?Closure $query = null): mixed
+  {
+    ConnectManager::factory()->startXa(XaJournal::fromConfig());
+    if ($query instanceof Closure) {
+      try {
         $result = $query();
         $this->commit();
         return $result;
