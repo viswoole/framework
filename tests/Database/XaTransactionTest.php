@@ -812,6 +812,41 @@ class XaTransactionTest extends TestCase
     $handlesProp->setValue(null, $handles);
   }
 
+  /**
+   * 场景25：恢复钩子仅 0 号 worker 实际执行——非 0 号 worker 启动直接跳过，
+   * 避免 N 个 worker 各自重复扫描（journal 探测仅在 workerId=0 时出现）
+   */
+  public function testRecoveryHookOnlyRunsOnWorkerZero(): void
+  {
+    $config = App::factory()->get('config');
+    $config->set('database.xa.auto_recovery', true);
+    $config->set('database.xa.journal_channel', 'nc_journal');
+    $config->set('database.xa.journal_table', 'jt');
+    $journalChannel = new XaRecordingChannel();
+    $journalChannel->journalTableExists = false; // 表不存在→探测后即返回，log 便于观察
+    App::factory()->make(DbManager::class)->addChannel('nc_journal', $journalChannel);
+    $handlesProp = new \ReflectionProperty(ServerEventHook::class, 'handles');
+    (new DbService(App::factory()))->boot();
+    // 取出 boot 刚注册的恢复闭包（handles 尾部）
+    $handles = $handlesProp->getValue();
+    $hook = end($handles['workerstart']);
+    try {
+      $hook(null, 5);   // 非 0 号 worker
+      self::assertSame([], $journalChannel->log, '非 0 号 worker 不得执行恢复探测');
+      $hook(null, 0);   // 0 号 worker
+      self::assertStringContainsString(
+        'information_schema.tables',
+        implode(';', $journalChannel->log),
+        '0 号 worker 应执行恢复探测'
+      );
+    } finally {
+      // 还原钩子与开关，避免污染其他用例
+      array_pop($handles['workerstart']);
+      $handlesProp->setValue(null, $handles);
+      $config->set('database.xa.auto_recovery', false);
+    }
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */

@@ -11,7 +11,7 @@
  *  +----------------------------------------------------------------------
  */
 
-declare (strict_types=1);
+declare(strict_types=1);
 
 namespace Viswoole\Database;
 
@@ -43,10 +43,14 @@ class DbService extends Provider
     $this->app->make('db');
     // XA 自动恢复默认关闭：未使用 XA 的项目零开销、零噪音（不建表、不探测），
     // 悬挂事务经 php viswoole xa:recover 手动/定时收敛；显式开启后才注册钩子。
-    // 恢复操作幂等（XAER_NOTA 容忍），多 worker 并发安全；必须挂在 workerStart
-    // （连接池随 worker 进程独立创建，master 阶段创建的连接无法共享给 fork 出的 worker）。
+    // 仅 0 号 worker 实际执行恢复：N 个 worker 各自启动会触发 N 次钩子，
+    // 重复扫描/并发终结虽被幂等设计吸收，但均为重复功——单点执行即可收敛，
+    // 且 reload 全量重启时 0 号必然重启，恢复不丢失。
+    // 必须挂在 workerStart（连接池随 worker 进程独立创建，master 阶段
+    // 创建的连接无法安全共享给 fork 出的 worker）。
     if (!config('database.xa.auto_recovery', false)) return;
-    ServerEventHook::addEvent('workerStart', function (): void {
+    ServerEventHook::addEvent('workerStart', function (?\Swoole\Server $server, int $workerId): void {
+      if ($workerId !== 0) return;
       try {
         XaRecovery::run();
       } catch (Throwable $e) {
