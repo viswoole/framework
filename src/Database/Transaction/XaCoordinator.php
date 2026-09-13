@@ -31,7 +31,8 @@ use Viswoole\Database\Exception\DbException;
  * ④ journal 标记 prepared（提交意图确立）
  * ⑤ 各分支 XA COMMIT——任一失败：保留 journal 行并抛出，已提交分支无法撤回、
  *    未决分支禁止静默回滚（那会复刻逐连接 commit 的部分提交问题），
- *    交由恢复任务按 journal 意图补齐
+ *    交由恢复任务按 journal 意图补齐；XAER_NOTA 例外——分支已被并发恢复
+ *    任务按意图终结，视为提交达成（与恢复侧容忍逻辑对称）
  * ⑥ journal 删除行（失败不阻断：残留行会被下次恢复任务自愈清理）
  *
  * 崩溃窗口分析：
@@ -87,7 +88,10 @@ final class XaCoordinator
       // 尚未执行任何 XA COMMIT，全体回滚不会造成部分提交
       self::abortAll($context, $branches);
       throw new DbException(
-        "XA 事务提交失败，已全体回滚（gtrid: {$gtrid}）：{$e->getMessage()}", 0, null, $e
+        "XA 事务提交失败，已全体回滚（gtrid: {$gtrid}）：{$e->getMessage()}",
+        0,
+        null,
+        $e
       );
     }
     // ⑤ 逐分支提交：任何失败保留 journal 行交由恢复任务重试（见类注释崩溃窗口分析）
@@ -96,9 +100,19 @@ final class XaCoordinator
         self::inject('commit', $i);
         XaDriver::execute($branch['connect'], "XA COMMIT '{$branch['xid']}'");
       } catch (Throwable $e) {
+        if (XaDriver::isNotExists($e)) {
+          // XAER_NOTA：该分支已被并发恢复任务按 journal 意图终结（提交达成），
+          // 与恢复侧 recoverXid 的容忍逻辑对称——幂等成立，继续下一分支，
+          // 不得当作失败抛出（否则调用方误判后重试业务造成重复数据）
+          $context->markBranch($branch['connect'], XaBranchState::Done);
+          continue;
+        }
         throw new DbException(
           "XA 事务 XA COMMIT 失败，事务停留未决状态，将由恢复任务按提交意图补齐"
-          . "（gtrid: {$gtrid}，xid: {$branch['xid']}）：{$e->getMessage()}", 0, null, $e
+            . "（gtrid: {$gtrid}，xid: {$branch['xid']}）：{$e->getMessage()}",
+          0,
+          null,
+          $e
         );
       }
       $context->markBranch($branch['connect'], XaBranchState::Done);

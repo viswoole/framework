@@ -555,6 +555,48 @@ class XaTransactionTest extends TestCase
     @unlink($tmpDb);
   }
 
+  /**
+   * 场景18（R1 复现）：并发恢复已按 journal 意图终结分支后，原事务的 XA COMMIT
+   * 得到 XAER_NOTA——提交侧须容忍（与恢复侧 recoverXid 对称），不得抛出
+   * "停留未决"异常导致调用方误判失败后重试业务造成重复数据
+   */
+  public function testConcurrentlyRecoveredBranchToleratesNotExists(): void
+  {
+    $journalChannel = new XaRecordingChannel();
+    $channelA = new XaRecordingChannel();
+    $channelB = new XaRecordingChannel();
+    // 注入：第二分支（索引 1）的 XA COMMIT 得到 XAER_NOTA
+    // （模拟恢复任务已抢先按 journal prepared 意图终结该分支）
+    XaCoordinator::$faultInjector = function (string $stage, int $branchIndex): void {
+      if ($stage === 'commit' && $branchIndex === 1) {
+        throw new RuntimeException('SQLSTATE[HY000] [1390] XAER_NOTA: Unknown XID');
+      }
+    };
+    run(function () use ($journalChannel, $channelA, $channelB): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal($journalChannel, 'jt'));
+      $manager->pop($channelA, 'write');
+      $manager->pop($channelB, 'write');
+      $thrown = null;
+      try {
+        $manager->commit();
+      } catch (DbException $e) {
+        $thrown = $e;
+      }
+      self::assertNull($thrown, 'XAER_NOTA（分支已被并发恢复终结）应被容忍，不得抛异常');
+      self::assertSame(0, $manager->transactionLevel());
+    });
+    // 提交语义完整达成：A 正常 XA COMMIT，B 走 PREPARE（终结由并发恢复完成）
+    self::assertNotNull($this->firstSqlMatching($channelA->log, '/^XA COMMIT /'));
+    self::assertNotNull($this->firstSqlMatching($channelB->log, '/^XA PREPARE /'));
+    // journal 行正常清理（事务已收敛，无未决残留）
+    self::assertStringContainsString('DELETE FROM', implode(';', $journalChannel->log));
+    // 连接全部归还（Done 分支不经 XA ROLLBACK 直接回池）
+    self::assertCount(1, $channelA->puts);
+    self::assertCount(1, $channelB->puts);
+    self::assertNull($this->firstSqlMatching($channelB->log, '/^XA ROLLBACK /'));
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */
