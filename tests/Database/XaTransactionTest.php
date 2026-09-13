@@ -670,6 +670,34 @@ class XaTransactionTest extends TestCase
     self::assertStringNotContainsString("'$gtridOther'", implode(';', $journalChannel->log), '未过滤命中的行不得被删除');
   }
 
+  /**
+   * 场景21：非 MySQL 的 PDO 通道参与 XA——开启瞬间抛出明确异常（fail-fast），
+   * 而非数据库底层"syntax error at or near XA"；连接归还无泄漏
+   */
+  public function testNonMysqlPdoChannelRejectsXaWithClearError(): void
+  {
+    if (!in_array('sqlite', \PDO::getAvailableDrivers(), true)) {
+      self::markTestSkipped('当前环境未启用 pdo_sqlite 驱动，跳过该用例');
+    }
+    $tmpDb = sys_get_temp_dir() . '/viswoole_xa_pg_' . uniqid() . '.sqlite';
+    (new \PDO('sqlite:' . $tmpDb))->exec('CREATE TABLE t (id INTEGER)');
+    $sqliteChannel = new PDOChannel(type: DriverType::SQLite, database: $tmpDb);
+    run(function () use ($sqliteChannel, $tmpDb): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal(new XaRecordingChannel(), 'jt'));
+      try {
+        $manager->pop($sqliteChannel, 'write');
+        self::fail('非 MySQL PDO 通道参与 XA 应抛出明确异常');
+      } catch (DbException $e) {
+        self::assertStringContainsString('不支持 XA 事务', $e->getMessage());
+        self::assertStringContainsString('sqlite', $e->getMessage());
+        self::assertStringContainsString('MySQL', $e->getMessage());
+      }
+      $manager->rollBack();
+    });
+    @unlink($tmpDb);
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */

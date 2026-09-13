@@ -20,6 +20,7 @@ use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
 use Throwable;
 use Viswoole\Core\Coroutine\Context;
+use Viswoole\Database\Channel\PDO\{DriverType, PDOChannel};
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Transaction\XaBranchState;
 use Viswoole\Database\Transaction\XaContext;
@@ -119,6 +120,15 @@ class ConnectManager
       $connect = $channel->pop('write');
       try {
         if ($this->xaContext !== null) {
+          // 前置驱动检查：非 MySQL 的 PDO 通道不支持 XA 协议（PG/SQLite 等对
+          // XA START 直接报语法错误）。开启瞬间给出明确错误，而非数据库底层
+          // 的"syntax error at or near XA"，调用方可第一时间定位问题
+          if ($channel instanceof PDOChannel && $channel->type !== DriverType::MYSQL) {
+            throw new DbException(
+              "通道（{$channel->type->value}）不支持 XA 事务：仅 MySQL InnoDB 支持 XA 协议，"
+              . '请将 XA 事务的参与通道全部替换为 MySQL，或改用普通事务'
+            );
+          }
           // XA 模式：新加入连接以独立分支 xid 开启 XA 事务（分支后缀避免同实例
           // 双连接 XA START 同一 xid 触发 XAER_DUPID，见 XaContext 注释）
           $xid = $this->xaContext->registerBranch($connect);
