@@ -13,11 +13,13 @@ use ReflectionProperty;
 use RuntimeException;
 use function Swoole\Coroutine\run;
 use Viswoole\Core\App;
+use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Database\Channel;
 use Viswoole\Database\Channel\PDO\DriverType;
 use Viswoole\Database\Channel\PDO\PDOChannel;
 use Viswoole\Database\ConnectManager;
 use Viswoole\Database\DbManager;
+use Viswoole\Database\DbService;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\Options;
 use Viswoole\Database\Raw;
@@ -765,6 +767,51 @@ class XaTransactionTest extends TestCase
     @unlink($tmpDb);
   }
 
+  /**
+   * 场景23：journal 表不存在（项目从未使用过 XA）时，恢复任务只探测不建表——
+   * 未使用 XA 的项目零副作用（无 CREATE TABLE DDL）
+   */
+  public function testRecoveryDoesNotCreateJournalTableWhenAbsent(): void
+  {
+    $journalChannel = new XaRecordingChannel();
+    $journalChannel->journalTableExists = false;
+    App::factory()->get('config')->set('database.xa.journal_channel', 'nc_journal');
+    App::factory()->get('config')->set('database.xa.journal_table', 'jt');
+    App::factory()->make(DbManager::class)->addChannel('nc_journal', $journalChannel);
+    $this->runRecoveryWith(['xa_journal' => $journalChannel, 'nc_journal' => $journalChannel]);
+    $journalSql = implode(';', $journalChannel->log);
+    self::assertStringContainsString('information_schema.tables', $journalSql, '应执行表存在性探测');
+    self::assertStringNotContainsString('CREATE TABLE', $journalSql, '表不存在时不得建表');
+    self::assertStringNotContainsString('DELETE FROM', $journalSql);
+    self::assertNull($this->firstSqlMatching($journalChannel->log, '/^SELECT gtrid/'), '表不存在时不得查询 journal 行');
+  }
+
+  /**
+   * 场景24：auto_recovery 开关控制 workerStart 恢复钩子的注册——
+   * false（默认）不注册，true 注册
+   */
+  public function testAutoRecoverySwitchControlsHookRegistration(): void
+  {
+    $config = App::factory()->get('config');
+    $config->set('database.xa.auto_recovery', false);
+    $handlesProp = new \ReflectionProperty(ServerEventHook::class, 'handles');
+    /** @var array<string,callable[]> $handles */
+    $handles = $handlesProp->getValue();
+    $countBefore = count($handles['workerstart'] ?? []);
+    (new DbService(App::factory()))->boot();
+    $countAfterOff = count($handlesProp->getValue()['workerstart'] ?? []);
+    self::assertSame($countBefore, $countAfterOff, 'auto_recovery=false 不得注册恢复钩子');
+    $config->set('database.xa.auto_recovery', true);
+    (new DbService(App::factory()))->boot();
+    $countAfterOn = count($handlesProp->getValue()['workerstart'] ?? []);
+    self::assertSame($countAfterOff + 1, $countAfterOn, 'auto_recovery=true 应注册恢复钩子');
+    // 还原：关闭开关并移除测试注册的钩子，避免污染其他用例
+    $config->set('database.xa.auto_recovery', false);
+    $handles = $handlesProp->getValue();
+    array_pop($handles['workerstart']);
+    $handlesProp->setValue(null, $handles);
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */
@@ -886,6 +933,8 @@ class XaRecordingChannel extends Channel
   public array $selectRows = [];
   /** @var int 模拟 journal 行状态（1=prepare_start 2=prepared） */
   public int $journalState = 2;
+  /** @var bool 模拟 journal 表是否存在（tableExists 探测的返回） */
+  public bool $journalTableExists = true;
 
   #[Override]
   public function execute(
@@ -963,6 +1012,10 @@ class XaRecordingConnection extends PDO
         ],
         $this->owner->recoverRows
       ));
+    }
+    // journal 表存在性探测（information_schema 计数）
+    if (str_contains($sql, 'information_schema.tables')) {
+      return $this->statementFor(['cnt'], [['cnt' => $this->owner->journalTableExists ? 1 : 0]]);
     }
     if (preg_match('/^\s*SELECT/i', $sql) === 1 && $this->owner->selectRows !== []) {
       $columns = array_keys($this->owner->selectRows[0]);

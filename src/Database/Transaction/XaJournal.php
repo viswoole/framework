@@ -190,11 +190,15 @@ final class XaJournal
   /**
    * 读取全部 journal 行（恢复任务调用）
    *
+   * 只探测不建表：journal 表不存在（该项目从未使用过 XA 事务）时返回空数组，
+   * 恢复任务据此静默返回——建表仅发生在 XA 提交路径（首次 startXaTransaction），
+   * 保证未使用 XA 的项目零副作用（不建表、零 DDL）。
+   *
    * @return array<string,array{state:int,branches:string[],created_at:string}> 键为 gtrid
    */
   public function all(): array
   {
-    $this->ensureTable();
+    if (!$this->tableExists()) return [];
     $connect = $this->channel->pop('write');
     try {
       $rows = XaDriver::query(
@@ -215,5 +219,28 @@ final class XaJournal
       ];
     }
     return $result;
+  }
+
+  /**
+   * 探测 journal 表是否已存在（只读，不执行 DDL）
+   *
+   * @return bool 表存在返回 true
+   */
+  private function tableExists(): bool
+  {
+    if ($this->tableEnsured) return true;
+    $connect = $this->channel->pop('write');
+    try {
+      // information_schema 精确匹配（SHOW TABLES LIKE 的 _/% 通配符会误匹配表名）；
+      // journal 通道本就要求 MySQL（见使用前提），information_schema 可用
+      $rows = XaDriver::query(
+        $connect,
+        "SELECT COUNT(*) AS cnt FROM information_schema.tables "
+        . "WHERE table_schema = DATABASE() AND table_name = '{$this->table}'"
+      );
+    } finally {
+      $this->channel->put($connect);
+    }
+    return (int)($rows[0]['cnt'] ?? 0) > 0;
   }
 }

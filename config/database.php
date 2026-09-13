@@ -17,6 +17,8 @@ return [
   'info_save_manner' => Db::DEBUG_SAVE_CONSOLE | Db::DEBUG_SAVE_LOGGER,
   // XA 两阶段提交事务配置（Db::startXaTransaction 跨通道原子提交）
   'xa' => [
+    // 是否开启自动恢复
+    'auto_recovery' => false,
     // journal 表所在通道名（提交意图日志，崩溃恢复的决策依据），
     // 必须是支持 XA 的 MySQL 通道；留空或未配置时使用默认通道
     'journal_channel' => env('DATABASE_XA_JOURNAL_CHANNEL', 'default'),
