@@ -500,11 +500,10 @@ class Query extends BaseQuery
     $filteredData = empty($columns) ? $data : array_intersect_key($data, array_flip($columns));
     // 修复: 主键已显式传入（雪花 ID 表，应用侧生成主键、非自增）时直接 insert
     // 并以传入值为准——此前无条件走 insertGetId 回填，lastInsertId 对非自增表
-    // 返回 '0' 会覆盖手动传入的主键。null/''/0 视为未显式传入（0 传给自增列
-    // 时由 MySQL 重新生成，保持 insertGetId 回填真实自增值的原语义）
-    $explicitPk = isset($filteredData[$this->pk])
-      && $filteredData[$this->pk] !== ''
-      && $filteredData[$this->pk] !== 0;
+    // 返回 '0' 会覆盖手动传入的主键。空值（null/''/0/'0'）视为未显式传入：
+    // 0/'0' 传给自增列时由 MySQL 重新生成，保持 insertGetId 回填真实自增值、
+    // DataSet 与库内数据一致的原语义
+    $explicitPk = !empty($filteredData[$this->pk]);
     if ($explicitPk) {
       $this->insert($filteredData);
       $id = $filteredData[$this->pk];

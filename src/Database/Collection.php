@@ -280,11 +280,8 @@ class Collection extends BaseCollection
         $pk = $this->query->getPrimaryKey();
         // 修复: 主键已显式传入（雪花 ID 表）时直接 insert——lastInsertId 对非自增
         // 表返回 '0'，回填会覆盖手动传入的主键（对齐 Model::create 修复）；
-        // null/''/0 视为未显式传入，保持自增回填语义
-        $explicitPk = array_key_exists($pk, $value)
-          && $value[$pk] !== null
-          && $value[$pk] !== ''
-          && $value[$pk] !== 0;
+        // 空值（null/''/0/'0'）视为未显式传入，保持自增回填语义
+        $explicitPk = !empty($value[$pk]);
         if ($explicitPk) {
           $query->strict(false)->insert($value);
         } else {

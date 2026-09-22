@@ -94,6 +94,21 @@ class ExplicitPkInsertTest extends TestCase
   }
 
   /**
+   * create 传字符串 '0'（表单空值常见形态）同样视为未显式传入，
+   * 保持 insertGetId 回填真实自增值（DataSet 与库内数据一致）
+   */
+  public function testCreateWithStringZeroPkStillAutoIncrement(): void
+  {
+    $fake = new FakeChannel('7');
+    $this->makeManager($fake);
+
+    $ds = ExplicitPkModel::create(['id' => '0', 'name' => 'x']);
+
+    self::assertSame('id', $fake->calls[0]['getId']);
+    self::assertSame('7', $ds['id']);
+  }
+
+  /**
    * append($value, true) 显式传主键时应走 insert 并保留传入值
    */
   public function testAppendWithExplicitPkKeepsId(): void
@@ -123,6 +138,23 @@ class ExplicitPkInsertTest extends TestCase
 
     $collection = new Collection((new ExplicitPkModel())->query, []);
     $collection->append(['name' => 'x'], true);
+
+    self::assertSame('id', $fake->calls[0]['getId']);
+    $row = $collection->first();
+    self::assertInstanceOf(DataSet::class, $row);
+    self::assertSame('9', $row['id']);
+  }
+
+  /**
+   * append 传字符串 '0' 主键同样视为未显式传入，保持 insertGetId 回填
+   */
+  public function testAppendWithStringZeroPkStillAutoIncrement(): void
+  {
+    $fake = new FakeChannel('9');
+    $this->makeManager($fake);
+
+    $collection = new Collection((new ExplicitPkModel())->query, []);
+    $collection->append(['id' => '0', 'name' => 'x'], true);
 
     self::assertSame('id', $fake->calls[0]['getId']);
     $row = $collection->first();
