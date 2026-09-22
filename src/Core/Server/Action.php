@@ -46,20 +46,10 @@ class Action
     $pid = self::getServerPid($server_name);
     if (self::checkPidStatus($pid)) {
       if ($forceStart) {
-        $status = false;
-        $i = 0;
         Output::system("{$server_name}服务正在运行中，正在尝试关闭，请等待...", 'WARNING');
-        while ($i++ < 5) {
-          if (!self::checkPidStatus($pid)) {
-            $status = true;
-            break;
-          } else {
-            Process::kill($pid, SIGINT);
-            sleep(1);
-          }
-        }
-        // 判断是否强制关闭服务成功
-        if ($status) {
+        // 修复: 强制重启复用统一的「发送信号→等待退出→超时强杀→清理PID」流程，
+        // 替代原先固定 5 轮 SIGINT+sleep 的盲试
+        if (self::stopAndWait($pid, $server_name, 5)) {
           App::factory()->make('server', [$server_name])->start($daemonize);
         } else {
           throw new ServerException(
@@ -97,13 +87,60 @@ class Action
       $file_content = @file_get_contents($pid_file);
       if (!empty($file_content)) {
         $pid = (int)$file_content;
-        // 判断进程是否正在运行
-        $status = Process::kill($pid, 0);
+        // 判断进程是否正在运行；
+        // 修复: 仅验存活会被 PID 复用误判——容器内 PID 回收后其他进程占号，
+        // 导致 start 报「服务正在运行中」而实际服务已死。追加 cmdline 匹配
+        // 本框架入口（/proc 不可用时退回仅存活校验）
+        $status = Process::kill($pid, 0) && self::isViswooleProcess($pid);
         // 如果没有运行则删除pid文件
         if (!$status) unlink($pid_file);
       }
     }
     return $status ? $pid : false;
+  }
+
+  /**
+   * 判断指定 PID 的进程是否为本框架服务进程
+   *
+   * 读取 /proc/{pid}/cmdline 匹配 viswoole 入口关键词（NUL 分隔符归一为空格）；
+   * /proc 不可用（非 Linux / 权限受限）时保守返回 true，退回仅存活校验的旧行为
+   *
+   * @param int $pid 进程ID
+   * @return bool 匹配本框架进程（或无法判定时）返回 true
+   */
+  private static function isViswooleProcess(int $pid): bool
+  {
+    $cmdline = @file_get_contents("/proc/{$pid}/cmdline");
+    if ($cmdline === false || $cmdline === '') return true;
+    return stripos(str_replace("\0", ' ', $cmdline), 'viswoole') !== false;
+  }
+
+  /**
+   * 停止服务主进程：发送 SIGINT 触发优雅停机，等待退出；超时 SIGKILL 强杀兜底，
+   * 结束后清理 PID 文件避免残留影响下次 start 判定
+   *
+   * @param int $pid 服务主进程 PID
+   * @param string $server_name 服务名称（用于定位 PID 文件）
+   * @param int $timeout 等待优雅退出的超时秒数
+   * @return bool 进程已退出返回 true，发送信号失败返回 false
+   */
+  private static function stopAndWait(int $pid, string $server_name, int $timeout = 10): bool
+  {
+    if (!Process::kill($pid, SIGINT)) return false;
+    // 修复: 此前发完 SIGINT 即返回，不等待 worker 退出——worker 协程阻塞时
+    // 端口仍 LISTEN、请求全部挂起，形成僵死服务
+    $waited = 0;
+    while ($waited++ < $timeout && Process::kill($pid, 0)) {
+      sleep(1);
+    }
+    if (Process::kill($pid, 0)) {
+      // SIGKILL 不可捕获不可忽略，防僵死兜底
+      Process::kill($pid, SIGKILL);
+      usleep(300000); // 给内核回收进程留出时间
+    }
+    $pid_file = self::getPidStore($server_name) . "/$server_name.pid";
+    if (is_file($pid_file)) @unlink($pid_file);
+    return !Process::kill($pid, 0);
   }
 
   /**
@@ -164,15 +201,16 @@ class Action
         Output::system('🈚️ 没有找到任何服务进程', 'WARNING');
       } else {
         foreach ($files as $file) {
-          $pid = file_get_contents($file);
+          $pid = (int)file_get_contents($file);
+          $server_name = basename($file, '.pid');
           if (self::checkPidStatus($pid)) {
-            $status = Process::kill((int)$pid, SIGINT);
-            $server_name = basename($file, '.pid');
-            if (!$status) {
-              throw new ServerException("❌ 向{$server_name}服务主进程($pid)发送SIGINT信号失败");
-            } else {
-              Output::system("✅ 向{$server_name}服务主进程($pid)发送SIGINT信号成功");
+            // 修复: 发送 SIGINT 后等待服务退出（超时强杀）并清理 PID 文件，
+            // 避免发完信号即返回、worker 未退出时端口仍 LISTEN 的僵死态
+            Output::system("⏳ 正在停止{$server_name}服务主进程($pid)...");
+            if (!self::stopAndWait($pid, $server_name)) {
+              throw new ServerException("❌ {$server_name}服务主进程($pid)停止失败，请手动kill进程。");
             }
+            Output::system("✅ {$server_name}服务已停止");
           } else {
             // 删除掉无效的pid文件
             unlink($file);
@@ -185,12 +223,12 @@ class Action
         // 发送SIGINT信号替代掉SIGTERM，
         // 因为无法在内部Process::signal捕获SIGTERM信号触发ServerShuttingDown事件，清理掉资源，如定时器，
         // 所以采用SIGINT信号替代SIGTERM信号，已在服务启动事件中监听了SIGINT，并调用Server::shutdown。
-        $status = Process::kill($pid, SIGINT);
-        if (!$status) {
-          throw new ServerException("❌ 向{$server_name}服务主进程($pid)发送SIGINT信号失败");
-        } else {
-          Output::system("✅ 向{$server_name}服务主进程($pid)发送SIGINT信号成功");
+        // 修复: 发送 SIGINT 后等待服务退出（超时强杀）并清理 PID 文件，防僵死
+        Output::system("⏳ 正在停止{$server_name}服务主进程($pid)...");
+        if (!self::stopAndWait($pid, $server_name)) {
+          throw new ServerException("❌ {$server_name}服务主进程($pid)停止失败，请手动kill进程。");
         }
+        Output::system("✅ {$server_name}服务已停止");
       } else {
         Output::system("🈚️ {$server_name}服务未运行", 'WARNING');
       }
