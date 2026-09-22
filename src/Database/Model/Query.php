@@ -349,8 +349,16 @@ class Query extends BaseQuery
             );
           }
         }
-        // 自动写入主键
-        if ($this->autoWritePk && property_exists($this->model, 'autoWritePk')) {
+        // 自动写入主键：模型须定义 autoWritePk() 方法生成主键值（如雪花 ID）
+        // 修复: 原守卫 property_exists 恒真（基类已声明 $autoWritePk 属性），
+        // 开关开启但模型未定义生成方法时会经魔术转发抛出晦涩的 RuntimeException，
+        // 现给出明确错误
+        if ($this->autoWritePk) {
+          if (!method_exists($this->model, 'autoWritePk')) {
+            throw new InvalidArgumentException(
+              '模型 ' . get_class($this->model) . ' 开启了 $autoWritePk 但未定义 autoWritePk() 方法，无法自动生成主键'
+            );
+          }
           if ($isMoreWrite) {
             array_walk($this->options->data, function (&$item) {
               if (!array_key_exists($this->pk, $item)) {

@@ -93,6 +93,11 @@ class Options implements ArrayAccess
    * @var string 查询操作类型：insert|insertGetId|update|delete|select
    */
   public string $type = '';
+  /**
+   * @var bool 是否强制走主库（写连接）——读写分离场景的一致性读；
+   *   写语句天然路由写库，仅 SELECT 场景有意义
+   */
+  public bool $master = false;
 
   /**
    * @var array 要写入的数据，单条为关联数组，批量为索引数组

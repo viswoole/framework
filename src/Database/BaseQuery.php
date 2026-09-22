@@ -102,6 +102,10 @@ class BaseQuery
   /**
    * 获取最近一次查询的运行信息
    *
+   * ⚠️ 仅实例方法语义：运行信息绑定在查询实例上。经 Model::__callStatic 静态
+   * 调用（Model::getLastQuery()）时每次都会创建全新查询实例，永远返回 null——
+   * 需要运行信息时须复用同一查询实例（如 $model->query->getLastQuery()）
+   *
    * @return RunInfo|null 查询运行信息，未执行过查询时返回 null
    */
   public function getLastQuery(): ?RunInfo
@@ -294,26 +298,60 @@ class BaseQuery
   /**
    * 设置要查询的列，支持别名（column AS alias）
    *
-   * @param string ...$column 列名，不传则查询所有列
+   * Raw 表达式原样追加（不解析不 quote，可携带自身绑定参数），
+   * 用于函数表达式等原生片段，如 columns(new Raw('COUNT(*) AS cnt'))
+   *
+   * @param string|Raw ...$column 列名或原生表达式，不传则查询所有列
    * @return static 支持链式调用
    */
-  public function columns(string ...$column): static
+  public function columns(string|Raw ...$column): static
   {
-    if (!empty($column)) {
-      $columns = [];
-      foreach ($column as $value) {
-        if (str_contains($value, ' as ')) {
-          $value = explode(' as ', $value);
-          $columns[trim($value[0])] = trim($value[1]);
-        } elseif (str_contains($value, ' AS ')) {
-          $value = explode(' AS ', $value);
-          $columns[trim($value[0])] = trim($value[1]);
-        } else {
-          $columns[$value] = null;
-        }
+    foreach ($column as $value) {
+      if ($value instanceof Raw) {
+        $this->options->columns[] = $value;
+        continue;
       }
-      $this->options->columns = array_merge($this->options->columns, $columns);
+      if (str_contains($value, ' as ')) {
+        $value = explode(' as ', $value);
+        $this->options->columns[trim($value[0])] = trim($value[1]);
+      } elseif (str_contains($value, ' AS ')) {
+        $value = explode(' AS ', $value);
+        $this->options->columns[trim($value[0])] = trim($value[1]);
+      } else {
+        $this->options->columns[$value] = null;
+      }
     }
+    return $this;
+  }
+
+  /**
+   * 以原生 SQL 片段追加查询列（支持聚合/函数表达式等），等价于 columns(new Raw(...))
+   *
+   * ⚠️ $sql 直接参与 SQL 拼接（$bindings 走参数绑定），禁止将用户输入拼入片段
+   *
+   * @param string $sql 原生列表达式，可含 AS 别名
+   * @param array $bindings 表达式内占位符的绑定参数
+   * @return static 支持链式调用
+   */
+  public function selectRaw(string $sql, array $bindings = []): static
+  {
+    return $this->columns(new Raw($sql, $bindings));
+  }
+
+  /**
+   * 强制本次查询走主库（写连接），用于读写分离场景「刚写完立读」的一致性读取
+   *
+   * 写语句天然路由写库，本方法仅对 SELECT 有意义；不绕过显式配置的查询缓存
+   * （->cache(...) 命中时仍返回缓存）。
+   * 注意：SELECT ... FOR UPDATE / FOR SHARE 等锁定读已由框架自动路由写库，
+   * 无需手动调用
+   *
+   * @param bool $force true=强制主库，false=恢复默认读写路由
+   * @return static 支持链式调用
+   */
+  public function master(bool $force = true): static
+  {
+    $this->options->master = $force;
     return $this;
   }
 

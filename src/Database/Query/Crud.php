@@ -103,7 +103,7 @@ trait Crud
     /**
      * @var PDOStatement $statement
      */
-    $statement = $this->channel->execute($raw->sql, $raw->bindings);
+    $statement = $this->channel->execute($raw->sql, $raw->bindings, false, $this->options->master);
     // 获取查询结果
     $result = $statement->fetchAll(PDO::FETCH_ASSOC);
     $statement->closeCursor();
@@ -169,6 +169,15 @@ trait Crud
       $statement->closeCursor();
     } else {
       $result = $statement;
+    }
+    // 修复: 非自增表（雪花 ID）lastInsertId 恒返回 '0'——写入数据已含非空主键
+    // （业务显式传入或 autoWritePk 生成）时，以写入值为准，避免覆盖
+    if (
+      $result === '0'
+      && isset($this->options->data[$this->options->pk])
+      && !empty($this->options->data[$this->options->pk])
+    ) {
+      $result = $this->options->data[$this->options->pk];
     }
     // 删除缓存
     if ($this->options->cache) {
@@ -435,7 +444,7 @@ trait Crud
     /**
      * @var PDOStatement $statement
      */
-    $statement = $this->channel->execute($raw);
+    $statement = $this->channel->execute($raw, master: $this->options->master);
     // 保存执行信息
     $this->setRunInfo($start, $raw);
     // 重置查询参数
@@ -474,7 +483,7 @@ trait Crud
         /**
          * @var PDOStatement $statement
          */
-        $statement = $this->channel->execute($raw);
+        $statement = $this->channel->execute($raw, master: $this->options->master);
         $results = $statement->fetchAll(PDO::FETCH_ASSOC);
         $statement->closeCursor();
         $this->setRunInfo($start, $raw);

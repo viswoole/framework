@@ -59,7 +59,9 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Query force(string $index) 强制索引
  * @method static Query alias(string $alias) 表别名
  * @method static Query reset() 重置查询选项。
- * @method static Query columns(string $column) 选择要查询的列。
+ * @method static Query columns(string|Raw ...$column) 选择要查询的列（Raw 原生表达式原样追加）。
+ * @method static Query selectRaw(string $sql, array $bindings = []) 以原生 SQL 片段追加查询列。
+ * @method static Query master(bool $force = true) 强制本次查询走主库（读写分离一致性读）。
  * @method static string getPrimaryKey() 获取主键字段名
  * @method static string getTableName() 获取表名。
  * @method static Query with(array|string $relation) 关联查询。
