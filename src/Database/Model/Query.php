@@ -498,8 +498,19 @@ class Query extends BaseQuery
     }
     // 拿到只写入的列
     $filteredData = empty($columns) ? $data : array_intersect_key($data, array_flip($columns));
-    // 写入数据并获取主键
-    $id = $this->insertGetId($filteredData);
+    // 修复: 主键已显式传入（雪花 ID 表，应用侧生成主键、非自增）时直接 insert
+    // 并以传入值为准——此前无条件走 insertGetId 回填，lastInsertId 对非自增表
+    // 返回 '0' 会覆盖手动传入的主键。null/''/0 视为未显式传入（0 传给自增列
+    // 时由 MySQL 重新生成，保持 insertGetId 回填真实自增值的原语义）
+    $explicitPk = isset($filteredData[$this->pk])
+      && $filteredData[$this->pk] !== ''
+      && $filteredData[$this->pk] !== 0;
+    if ($explicitPk) {
+      $this->insert($filteredData);
+      $id = $filteredData[$this->pk];
+    } else {
+      $id = $this->insertGetId($filteredData);
+    }
     // 返回值与实际写入保持一致：insertGetId 内部已对写入数据应用修改器，
     // 此处同步应用后再补充主键，避免 DataSet 中的值与库中数据不一致
     $data = $this->applyMutators($data);
