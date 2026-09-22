@@ -265,16 +265,40 @@ trait Where
   /**
    * 添加原生 WHERE 条件，直接嵌入SQL片段
    *
+   * 与 where() 链式混用时按 $connector 拼接（默认 AND），避免生成缺失
+   * 连接符的坏 SQL；作为首个条件时前导连接符由 SqlBuilder::parseWhere 剥离。
+   *
+   * @param string $sql 原生SQL条件语句
+   * @param array $bindings 绑定参数
+   * @param string $connector 条件连接符 AND|OR，默认 AND
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException 连接符无效时抛出
+   */
+  public function whereRaw(
+    string $sql,
+    array  $bindings = [],
+    string $connector = 'AND'
+  ): static {
+    $connector = strtoupper($connector);
+    if (!in_array($connector, ['AND', 'OR'], true)) {
+      throw new InvalidArgumentException('无效的条件连接符，仅只支持AND和OR');
+    }
+    $raw = Db::raw($sql, $bindings);
+    $raw->connector = $connector;
+    $this->options->where[] = $raw;
+    return $this;
+  }
+
+  /**
+   * 添加 OR 连接的原生 WHERE 条件
+   *
    * @param string $sql 原生SQL条件语句
    * @param array $bindings 绑定参数
    * @return static 支持链式调用
    */
-  public function whereRaw(
-    string $sql,
-    array  $bindings = []
-  ): static {
-    $this->options->where[] = Db::raw($sql, $bindings);
-    return $this;
+  public function orWhereRaw(string $sql, array $bindings = []): static
+  {
+    return $this->whereRaw($sql, $bindings, 'OR');
   }
 
   /**

@@ -34,8 +34,14 @@ class Raw implements JsonSerializable
   /**
    * @param string $sql SQL语句，支持占位符
    * @param array $bindings 绑定参数
+   * @param string $connector WHERE 条件连接符（AND|OR，仅当 Raw 作为 where 条件时被
+   *   SqlBuilder::parseWhereItem 消费；作为 update 数据/列表达式等其他场景时忽略）
    */
-  public function __construct(public string $sql, public array $bindings = [])
+  public function __construct(
+    public string $sql,
+    public array $bindings = [],
+    public string $connector = 'AND'
+  )
   {
   }
 

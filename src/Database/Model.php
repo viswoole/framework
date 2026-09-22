@@ -81,7 +81,8 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Query whereBetween(string $column, array $value, string $connector = 'AND') 查询条件（BETWEEN）
  * @method static Query whereGroup(array $wheres, string $connector = 'AND') 查询条件组，支持嵌套
  * @method static Query whereExists(string $sql, array $bindings = []) 查询条件（EXISTS）
- * @method static Query whereRaw(string $sql, array $bindings = []) 原生 where 查询sql
+ * @method static Query whereRaw(string $sql, array $bindings = [], string $connector = 'AND') 原生 where 查询sql
+ * @method static Query orWhereRaw(string $sql, array $bindings = []) OR 连接的原生 where 查询sql
  * @method static Query whereNotExists(string $sql, array $bindings = []) 查询条件（NOT EXISTS）
  * @method static Query leftJoin(string $table, string $localKey, string $foreignKey, string $operator = '=') 关联查询（LEFT）
  * @method static Query join(string $table, string $localKey, string $foreignKey, string $operator = '=', string $type = 'INNER') 关联查询
