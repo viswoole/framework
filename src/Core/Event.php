@@ -19,6 +19,7 @@ use BackedEnum;
 use InvalidArgumentException;
 use ReflectionClass;
 use UnitEnum;
+use Viswoole\Core\Console\Output;
 
 /**
  * 事件管理器
@@ -58,8 +59,28 @@ class Event
       // 修复: explode 参数顺序应为 (分隔符, 字符串, 限制)
       [$event, $id] = explode('.', $event, 2);
       $this->callHandle($event, $id, $arguments);
+      // 修复: 定向触发不存在的监听器原先完全静默——事件名拼写错误（如以旧
+      // 字符串事件名注册，而框架以 FrameworkEvent 枚举触发）时监听器从未
+      // 生效且无任何线索，debug 模式给出提示（生产零开销）
+      if (isDebug() && !isset($this->listens[$event][$id])) {
+        Output::echo(
+          "事件 {$event}.{$id} 无监听者（请核对注册名；框架内置事件应使用 FrameworkEvent 枚举）",
+          'EVENT',
+          backtrace: 0
+        );
+      }
     } else {
       $listens = $this->listens[$event] ?? [];
+      // 修复: 无人监听时原先空循环静默返回——框架钩子事件触发无监听通常意味着
+      // 服务提供者的监听注册未生效（如以旧字符串事件名注册），debug 模式给出
+      // 可见线索（生产零开销）
+      if ($listens === [] && isDebug()) {
+        Output::echo(
+          "事件 {$event} 无监听者（请核对注册名；框架内置事件应使用 FrameworkEvent 枚举）",
+          'EVENT',
+          backtrace: 0
+        );
+      }
       foreach (array_keys($listens) as $id) {
         $this->callHandle($event, $id, $arguments);
       }

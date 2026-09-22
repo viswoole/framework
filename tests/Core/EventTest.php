@@ -56,6 +56,9 @@ class EventTest extends TestCase
   {
     $this->event = App::factory()->make(Event::class);
     $this->event->offAll();
+    // 事件日志提示仅在 debug 模式输出——测试默认关闭（需要验证提示的用例自行开启），
+    // 避免「移除后 emit」等无监听场景的预期输出被 PHPUnit 标记 risky
+    App::factory()->setDebug(false);
   }
 
   /**
@@ -389,5 +392,79 @@ class EventTest extends TestCase
   {
     $this->expectException(InvalidArgumentException::class);
     $this->event->on('enumHandle', TestStringEvent::class);
+  }
+
+  /**
+   * 测试 debug 模式下触发无监听者的事件输出可见线索
+   *
+   * 修复前缺陷：emit 无人监听时空循环静默返回——以旧字符串事件名（如
+   * 'CreateServerBefore'）注册监听，而框架以 FrameworkEvent 枚举触发时，
+   * 监听器从未生效且无任何线索（真实踩坑：Snowflake worker 注册静默失效）。
+   */
+  public function testEmitWithoutListenersOutputsHintInDebugMode(): void
+  {
+    // ⚠️ isDebug() 读 App 内部 Swoole\Table（App::setDebug 控制），
+    // 与容器中的 Config 实例无关
+    App::factory()->setDebug(true);
+    try {
+      ob_start();
+      $this->event->emit('nonExistentEvent');
+      $out = ob_get_clean();
+      static::assertStringContainsString('无监听者', $out);
+      static::assertStringContainsString('nonexistentevent', $out);
+    } finally {
+      App::factory()->setDebug(false);
+    }
+  }
+
+  /**
+   * 测试非 debug 模式下无监听者触发零输出（生产零开销）
+   *
+   * @return void
+   */
+  public function testEmitWithoutListenersSilentWhenNotDebug(): void
+  {
+    App::factory()->setDebug(false);
+    ob_start();
+    $this->event->emit('nonExistentEvent');
+    $out = ob_get_clean();
+    static::assertSame('', $out);
+  }
+
+  /**
+   * 测试 debug 模式下定向语法触发不存在的监听器输出可见线索
+   *
+   * @return void
+   */
+  public function testEmitTargetedMissingListenerOutputsHint(): void
+  {
+    App::factory()->setDebug(true);
+    try {
+      ob_start();
+      $this->event->emit('user.nonexistent');
+      $out = ob_get_clean();
+      static::assertStringContainsString('user.nonexistent', $out);
+    } finally {
+      App::factory()->setDebug(false);
+    }
+  }
+
+  /**
+   * 测试有监听者时即使 debug 模式也不输出提示
+   *
+   * @return void
+   */
+  public function testEmitWithListenersOutputsNothing(): void
+  {
+    App::factory()->setDebug(true);
+    try {
+      $this->event->on('hasListener', fn() => null);
+      ob_start();
+      $this->event->emit('hasListener');
+      $out = ob_get_clean();
+      static::assertStringNotContainsString('无监听者', $out);
+    } finally {
+      App::factory()->setDebug(false);
+    }
   }
 }
