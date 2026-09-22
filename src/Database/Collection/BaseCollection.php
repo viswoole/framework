@@ -75,6 +75,14 @@ abstract class BaseCollection extends ArrayObject implements JsonSerializable
   public function toArray(bool $withAttr = true, bool $hidden = true, int $maxDepth = 10): array
   {
     $withAttrColumn = array_keys($this->withAttr);
+    // 获取器拼写自检（debug 模式按模型类一次性提示）：单行 DataSet 检查本行字段；
+    // 多行 Collection 外层键为行号（int），自检发生在子 DataSet 的递归 toArray 内
+    if ($withAttr && $this->query instanceof Query) {
+      $stringFields = array_filter(array_keys($this->getArrayCopy()), 'is_string');
+      if ($stringFields !== []) {
+        $this->query->inspectAccessors($stringFields);
+      }
+    }
     $array = [];
     foreach ($this as $key => $value) {
       // 修复: 顶层字段（含标量）此前从未经过 hidden 过滤（仅数组值递归处理），

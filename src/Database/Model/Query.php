@@ -23,6 +23,7 @@ use Swoole\Coroutine\WaitGroup;
 use Throwable;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Common\Str;
+use Viswoole\Core\Console\Output;
 use Viswoole\Database\BaseQuery as BaseQuery;
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
@@ -48,6 +49,8 @@ class Query extends BaseQuery
   private array $relations = [];
   /** @var array<string,true> 模型 public 方法名缓存（小写键），避免批量水合时反复调用 get_class_methods */
   private array $publicMethods = [];
+  /** @var array<class-string,true> 已完成获取器拼写自检的模型类（进程级，每类仅提示一次） */
+  private static array $accessorInspected = [];
 
   /**
    * 初始化模型查询实例，从模型属性读取表名、主键和通道配置
@@ -226,6 +229,50 @@ class Query extends BaseQuery
       return call_user_func([$this->model, 'getAttr'], $key, $value);
     }
     return $value;
+  }
+
+  /**
+   * 获取器拼写自检：模型定义的 get{Field}Attr 具名获取器若未对应本次结果集的
+   * 任何字段，通常意味着字段名拼写错误（如字段 image_key 误写 getImageAttr）
+   *
+   * debug 模式下按模型类一次性提示（进程级去重），生产 isDebug 短路零开销。
+   * 提示是启发式线索而非错误：模型可为非本次查询的字段预定义获取器（宽用途
+   * 模型），提示措辞仅作核对指引。多行集合的外层无字符串键，自检发生在子
+   * DataSet 的 toArray 内。
+   *
+   * @param array<int, mixed> $fields 本次结果集的字段名列表
+   */
+  public function inspectAccessors(array $fields): void
+  {
+    if (!isDebug()) return;
+    $modelClass = get_class($this->model);
+    if (isset(self::$accessorInspected[$modelClass])) return;
+    self::$accessorInspected[$modelClass] = true;
+
+    // 收集模型 public 的具名获取器 get{Field}Attr（正则天然排除通配 getAttr：
+    // 模式最少 8 字符而 getAttr 仅 7 字符）。键统一小写——与 hasPublicAttrMethod
+    // 的大小写不敏感匹配语义对齐（如 getNameAttr 与 getnameAttr 等价）
+    $defined = [];
+    foreach (get_class_methods($modelClass) as $method) {
+      if (preg_match('/^get[A-Z]\w*Attr$/', $method) === 1) {
+        $defined[strtolower($method)] = $method;
+      }
+    }
+    if ($defined === []) return;
+
+    foreach ($fields as $field) {
+      if (!is_string($field)) continue;
+      unset($defined[strtolower('get' . Str::snakeCaseToCamelCase($field) . 'Attr')]);
+    }
+    foreach ($defined as $method) {
+      // ⚠️ 勿用 Output::debug(...)：__callStatic 转发与命名参数不兼容
+      //（echo 第 4 参会错位收到字符串标签），须直接调 Output::echo
+      Output::echo(
+        "模型 {$modelClass} 的获取器 {$method}() 未对应本次查询的任何字段，请核对字段名拼写（如 image_key 应为 getImageKeyAttr）",
+        'ACCESSOR',
+        backtrace: 0
+      );
+    }
   }
 
   /**
