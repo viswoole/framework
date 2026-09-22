@@ -17,98 +17,119 @@ namespace Viswoole\Tests\Core;
 
 use Closure;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 use Viswoole\Core\Contract\MiddlewareInterface;
 use Viswoole\Core\Middleware;
 
 /**
- * 中间件实例缓存回归测试（P2-15）
+ * 中间件实例缓存回归测试（P2-15，IS_STATELESS 显式声明制）
  *
- * 修复前缺陷：类中间件在管道执行时每请求 invokeClass 实例化——
- * 反射解析 + 构造注入的开销发生在每个请求（业务压测 p50 258ms 的
- * 嫌疑构成之一）。
+ * 设计决策（用户拍板 2026-09-23）：框架不做启发式静态分析判定中间件是否
+ * 可缓存——构造注入只是请求数据的入口之一，Facade 门面、全局函数同样可以
+ * 拿到请求态。实例复用为 **opt-in 显式声明**：类声明 `const IS_STATELESS = true`
+ * 才启用进程级缓存复用（键 = class:md5(params)），默认每请求实例化，
+ * 存量中间件零行为变化。
  *
- * 修复语义：无请求态构造依赖（未注入 Request/Response）的类中间件
- * 实例进程级缓存复用（键 = class:md5(params)）；含请求态依赖的中间件
- * 每请求新建；构造参数含不可序列化值（如闭包）时放弃缓存。
- *
- * ⚠️ 实例缓存是进程级静态状态：需要断言「首次构造」的用例各自使用
- * 独立中间件类，避免跨用例污染。
+ * ⚠️ 实例缓存是进程级静态状态：各用例使用独立中间件类，避免跨用例污染。
+ * ⚠️ 断言用强引用持有的实例对比——无引用的实例被 GC 后 spl_object_id 会
+ * 被新实例复用，不能直接比较裸 id。
  */
 class MiddlewareInstanceCacheTest extends TestCase
 {
   /**
-   * 无请求态构造依赖的类中间件应进程级缓存复用（两次请求命中同一实例）
-   *
-   * ⚠️ 用 spl_object_id 断言实例身份而非静态构造计数——PHPUnit 默认逆序执行
-   * 同文件用例，静态计数会被同类前序用例污染
+   * 未声明 IS_STATELESS 的类默认每请求新建实例（存量中间件零行为变化）
    */
-  public function testStatelessClassMiddlewareInstanceCached(): void
+  public function testStatefulNotCachedByDefault(): void
   {
     $middleware = new Middleware();
 
     $middleware->process(function () {
-    }, [CacheableCountingMiddleware::class]);
-    $firstId = CacheableCountingMiddleware::$lastInstanceId;
-    self::assertNotSame(0, $firstId);
+    }, [StatefulMiddleware::class]);
+    $first = end(StatefulMiddleware::$instances);
 
     $middleware->process(function () {
-    }, [CacheableCountingMiddleware::class]);
-    self::assertSame($firstId, CacheableCountingMiddleware::$lastInstanceId, '两次请求应命中同一缓存实例');
+    }, [StatefulMiddleware::class]);
+    $second = end(StatefulMiddleware::$instances);
+
+    self::assertNotSame($first, $second, '默认应每请求实例化（未声明不缓存）');
   }
 
   /**
-   * 不同构造参数应产生不同实例（缓存键含 params）
+   * 声明 IS_STATELESS = true 的类应进程级缓存复用（两次请求命中同一实例）
+   */
+  public function testStatelessDeclaredCached(): void
+  {
+    $middleware = new Middleware();
+
+    $middleware->process(function () {
+    }, [StatelessDeclaredMiddleware::class]);
+    $first = end(StatelessDeclaredMiddleware::$instances);
+
+    $middleware->process(function () {
+    }, [StatelessDeclaredMiddleware::class]);
+    $second = end(StatelessDeclaredMiddleware::$instances);
+
+    self::assertSame($first, $second, '声明无状态应复用实例');
+  }
+
+  /**
+   * 显式声明 IS_STATELESS = false 的类不缓存（与未声明同语义）
+   */
+  public function testDeclaredFalseNotCached(): void
+  {
+    $middleware = new Middleware();
+
+    $middleware->process(function () {
+    }, [StatelessFalseMiddleware::class]);
+    $first = end(StatelessFalseMiddleware::$instances);
+
+    $middleware->process(function () {
+    }, [StatelessFalseMiddleware::class]);
+    $second = end(StatelessFalseMiddleware::$instances);
+
+    self::assertNotSame($first, $second);
+  }
+
+  /**
+   * 声明类：不同构造参数产生不同实例（缓存键含 params）
    */
   public function testDifferentParamsProduceDifferentInstances(): void
   {
     $middleware = new Middleware();
 
     $middleware->process(function () {
-    }, [[ParamTagMiddleware::class, ['tag' => 'a']]]);
-    $firstId = ParamTagMiddleware::$lastInstanceId;
-    self::assertSame('a', ParamTagMiddleware::$lastTag);
+    }, [[StatelessTaggedMiddleware::class, ['tag' => 'a']]]);
+    $first = end(StatelessTaggedMiddleware::$instances);
+    self::assertSame('a', StatelessTaggedMiddleware::$lastTag);
 
-    $middleware->process(function () use (&$seen) {
-    }, [[ParamTagMiddleware::class, ['tag' => 'b']]]);
-    self::assertSame('b', ParamTagMiddleware::$lastTag);
-    self::assertNotSame($firstId, ParamTagMiddleware::$lastInstanceId, '不同参数应各自构造');
+    $middleware->process(function () {
+    }, [[StatelessTaggedMiddleware::class, ['tag' => 'b']]]);
+    $second = end(StatelessTaggedMiddleware::$instances);
+    self::assertSame('b', StatelessTaggedMiddleware::$lastTag);
+    self::assertNotSame($first, $second, '不同参数应各自构造');
   }
 
   /**
-   * 相同参数重复注册应命中同一缓存实例
+   * 声明类：相同构造参数重复注册命中同一缓存实例
    */
   public function testSameParamsHitSameCacheKey(): void
   {
     $middleware = new Middleware();
 
     $middleware->process(function () {
-    }, [[ParamTagMiddleware::class, ['tag' => 'same']]]);
-    $firstId = ParamTagMiddleware::$lastInstanceId;
+    }, [[StatelessTaggedMiddleware::class, ['tag' => 'same']]]);
+    $first = end(StatelessTaggedMiddleware::$instances);
 
     $middleware->process(function () {
-    }, [[ParamTagMiddleware::class, ['tag' => 'same']]]);
-    self::assertSame($firstId, ParamTagMiddleware::$lastInstanceId, '相同参数应命中缓存复用实例');
+    }, [[StatelessTaggedMiddleware::class, ['tag' => 'same']]]);
+    $second = end(StatelessTaggedMiddleware::$instances);
+
+    self::assertSame($first, $second, '相同参数应命中缓存复用实例');
   }
 
   /**
-   * isRequestScoped 判定：构造注入 Request/Response 的类判为请求态
-   * （含联合类型参数），无参类判为非请求态
+   * 闭包中间件与未声明类混合管道行为不受影响（回归锁定：执行顺序）
    */
-  public function testRequestScopedDetection(): void
-  {
-    $method = new ReflectionMethod(Middleware::class, 'isRequestScoped');
-
-    self::assertTrue($method->invoke(null, RequestInjectedMiddleware::class));
-    self::assertTrue($method->invoke(null, UnionRequestInjectedMiddleware::class));
-    self::assertFalse($method->invoke(null, CacheableCountingMiddleware::class));
-    self::assertFalse($method->invoke(null, NoConstructorMiddleware::class));
-  }
-
-  /**
-   * 闭包中间件行为不受影响（回归锁定：执行顺序与参数注入）
-   */
-  public function testClosureMiddlewareStillWorks(): void
+  public function testClosureAndStatefulMixedPipelineStillWorks(): void
   {
     $middleware = new Middleware();
     $order = [];
@@ -123,7 +144,7 @@ class MiddlewareInstanceCacheTest extends TestCase
         $order[] = 'closure-after';
         return $result;
       },
-      CacheableCountingMiddleware::class,
+      StatefulMiddleware::class,
     ]);
 
     self::assertSame('done', $result);
@@ -132,26 +153,62 @@ class MiddlewareInstanceCacheTest extends TestCase
 }
 
 /**
- * 测试用中间件：无构造参数，process 时回写实例身份
+ * 测试用中间件：未声明 IS_STATELESS（默认每请求实例化）。
+ * $instances 持有强引用防止对象 GC 后 spl_object_id 复用干扰断言
  */
-class CacheableCountingMiddleware implements MiddlewareInterface
+class StatefulMiddleware implements MiddlewareInterface
 {
-  public static int $lastInstanceId = 0;
+  public static array $instances = [];
 
   public function process(Closure $handler): mixed
   {
-    self::$lastInstanceId = spl_object_id($this);
+    self::$instances[] = $this;
     return $handler();
   }
 }
 
 /**
- * 测试用中间件：构造参数 tag，process 时回写实例身份与最近标签
+ * 测试用中间件：显式声明无状态（启用实例缓存复用）
  */
-class ParamTagMiddleware implements MiddlewareInterface
+class StatelessDeclaredMiddleware implements MiddlewareInterface
 {
+  public const IS_STATELESS = true;
+
+  public static array $instances = [];
+
+  public function process(Closure $handler): mixed
+  {
+    self::$instances[] = $this;
+    return $handler();
+  }
+}
+
+/**
+ * 测试用中间件：显式声明 false（与未声明同语义）
+ */
+class StatelessFalseMiddleware implements MiddlewareInterface
+{
+  public const IS_STATELESS = false;
+
+  public static array $instances = [];
+
+  public function process(Closure $handler): mixed
+  {
+    self::$instances[] = $this;
+    return $handler();
+  }
+}
+
+/**
+ * 测试用中间件：声明无状态且带构造参数（验证缓存键含 params）。
+ * $instances 持有强引用（见 StatefulMiddleware 注释）
+ */
+class StatelessTaggedMiddleware implements MiddlewareInterface
+{
+  public const IS_STATELESS = true;
+
   public static string $lastTag = '';
-  public static int $lastInstanceId = 0;
+  public static array $instances = [];
 
   public function __construct(private readonly string $tag)
   {
@@ -160,48 +217,7 @@ class ParamTagMiddleware implements MiddlewareInterface
   public function process(Closure $handler): mixed
   {
     self::$lastTag = $this->tag;
-    self::$lastInstanceId = spl_object_id($this);
-    return $handler();
-  }
-}
-
-/**
- * 测试用中间件：构造注入请求态类型（RequestInterface）
- */
-class RequestInjectedMiddleware implements MiddlewareInterface
-{
-  public function __construct(\Viswoole\HttpServer\RequestInterface $request)
-  {
-  }
-
-  public function process(Closure $handler): mixed
-  {
-    return $handler();
-  }
-}
-
-/**
- * 测试用中间件：联合类型参数中含请求态类型（应同样判为请求态）
- */
-class UnionRequestInjectedMiddleware implements MiddlewareInterface
-{
-  public function __construct(int|string|\Viswoole\HttpServer\RequestInterface $source)
-  {
-  }
-
-  public function process(Closure $handler): mixed
-  {
-    return $handler();
-  }
-}
-
-/**
- * 测试用中间件：无构造函数
- */
-class NoConstructorMiddleware implements MiddlewareInterface
-{
-  public function process(Closure $handler): mixed
-  {
+    self::$instances[] = $this;
     return $handler();
   }
 }

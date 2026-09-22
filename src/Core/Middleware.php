@@ -17,6 +17,7 @@ namespace Viswoole\Core;
 
 use Closure;
 use InvalidArgumentException;
+use Throwable;
 use Viswoole\Core\Contract\MiddlewareInterface;
 
 /**
@@ -28,6 +29,16 @@ use Viswoole\Core\Contract\MiddlewareInterface;
 class Middleware
 {
   /**
+   * @var array<string,object> 类中间件实例缓存（键 = class:md5(params)）。
+   * 仅缓存显式声明 const IS_STATELESS = true 的类——实例复用要求实现类
+   * 完全无状态（含 Facade 门面、全局函数等一切途径，见 MiddlewareInterface 契约）
+   */
+  private static array $instanceCache = [];
+  /**
+   * @var array<string,bool> 类是否声明 IS_STATELESS 的判定缓存（常量为编译期定义）
+   */
+  private static array $statelessCache = [];
+  /**
    * @var array 全局中间件列表，应用于所有服务器
    */
   protected array $middlewares = [];
@@ -35,25 +46,6 @@ class Middleware
    * @var array 按服务器名称分组的中间件列表
    */
   protected array $serverMiddlewares = [];
-  /**
-   * @var array<string,object> 类中间件实例缓存（键 = class:md5(params)）。
-   * 仅缓存无请求态构造依赖的实例——实例复用要求实现类无状态（见 MiddlewareInterface 契约）
-   */
-  private static array $instanceCache = [];
-  /**
-   * @var array<string,bool> 类是否含请求态构造依赖的判定缓存（反射结果）
-   */
-  private static array $requestScopedCache = [];
-  /**
-   * @var string[] 请求态类型白名单：构造注入这些类型的中间件每请求新建实例
-   * （Request/Response 由框架每请求创建并注入，实例跨请求复用会串请求）
-   */
-  private const REQUEST_SCOPED_TYPES = [
-    \Viswoole\HttpServer\RequestInterface::class,
-    \Viswoole\HttpServer\ResponseInterface::class,
-    \Viswoole\HttpServer\Request::class,
-    \Viswoole\HttpServer\Response::class,
-  ];
 
   /**
    * 注册中间件，指定 server 名称时注册到对应服务，否则注册为全局中间件
@@ -79,7 +71,8 @@ class Middleware
   public function register(
     callable|string|array $handler,
     ?string               $server = null
-  ): void {
+  ): void
+  {
     if ($server) {
       $this->serverMiddlewares[$server][] = self::checkMiddleware($handler);
     } else {
@@ -198,7 +191,12 @@ class Middleware
   }
 
   /**
-   * 解析类中间件实例：无请求态构造依赖的实例进程级缓存复用
+   * 解析类中间件实例：仅显式声明 const IS_STATELESS = true 的类启用进程级
+   * 缓存复用，默认（未声明或 false）每请求实例化。
+   *
+   * 框架不做启发式判定——构造注入只是请求数据的入口之一，Facade 门面、
+   * 全局函数同样可以拿到请求态，静态分析无法覆盖；是否可复用由类作者
+   * 显式声明并承担责任
    *
    * @param string $class 中间件类名（已断言实现 MiddlewareInterface）
    * @param array $params 构造参数
@@ -206,7 +204,10 @@ class Middleware
    */
   private static function resolveClassMiddleware(string $class, array $params): object
   {
-    if (self::isRequestScoped($class)) {
+    $reflection = new \ReflectionClass($class);
+    $stateless = self::$statelessCache[$class]
+      ??= ($reflection->hasConstant('IS_STATELESS') && $reflection->getConstant('IS_STATELESS') === true);
+    if (!$stateless) {
       return App::factory()->invokeClass($class, $params);
     }
     try {
@@ -216,35 +217,5 @@ class Middleware
       return App::factory()->invokeClass($class, $params);
     }
     return self::$instanceCache[$key] ??= App::factory()->invokeClass($class, $params);
-  }
-
-  /**
-   * 判断中间件类是否含请求态构造依赖（Request/Response 每请求新建，
-   * 注入这些类型的实例不可跨请求复用）；判定结果按类名缓存
-   *
-   * @param string $class 中间件类名
-   * @return bool 含请求态构造依赖返回 true
-   */
-  private static function isRequestScoped(string $class): bool
-  {
-    if (isset(self::$requestScopedCache[$class])) {
-      return self::$requestScopedCache[$class];
-    }
-    $scoped = false;
-    $constructor = (new \ReflectionClass($class))->getConstructor();
-    if ($constructor !== null) {
-      foreach ($constructor->getParameters() as $param) {
-        $type = $param->getType();
-        foreach ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType
-          ? $type->getTypes() : [$type] as $named) {
-          if ($named instanceof \ReflectionNamedType
-            && in_array($named->getName(), self::REQUEST_SCOPED_TYPES, true)) {
-            $scoped = true;
-            break 2;
-          }
-        }
-      }
-    }
-    return self::$requestScopedCache[$class] = $scoped;
   }
 }
