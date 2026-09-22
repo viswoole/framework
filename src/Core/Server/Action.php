@@ -91,7 +91,7 @@ class Action
         // 修复: 仅验存活会被 PID 复用误判——容器内 PID 回收后其他进程占号，
         // 导致 start 报「服务正在运行中」而实际服务已死。追加 cmdline 匹配
         // 本框架入口（/proc 不可用时退回仅存活校验）
-        $status = Process::kill($pid, 0) && self::isViswooleProcess($pid);
+        $status = self::isViswooleAlive($pid);
         // 如果没有运行则删除pid文件
         if (!$status) unlink($pid_file);
       }
@@ -100,18 +100,22 @@ class Action
   }
 
   /**
-   * 判断指定 PID 的进程是否为本框架服务进程
+   * 判断 PID 是否为存活的本框架服务进程（信号存活 + 非僵尸态 + cmdline 匹配）
    *
-   * 读取 /proc/{pid}/cmdline 匹配 viswoole 入口关键词（NUL 分隔符归一为空格）；
-   * /proc 不可用（非 Linux / 权限受限）时保守返回 true，退回仅存活校验的旧行为
+   * 三重判定：kill 0 信号存活 → /proc/{pid}/cmdline 非空（空说明进程已退出
+   * 且父进程未 wait 的僵尸态，容器内父进程不 reap 时常见，kill 0 对僵尸恒真）
+   * → cmdline 匹配 viswoole 入口关键词（NUL 分隔符归一为空格，防 PID 复用
+   * 误判）；/proc 不可用（非 Linux / 权限受限）时退回仅存活校验的旧行为
    *
    * @param int $pid 进程ID
-   * @return bool 匹配本框架进程（或无法判定时）返回 true
+   * @return bool 存活的本框架进程返回 true
    */
-  private static function isViswooleProcess(int $pid): bool
+  private static function isViswooleAlive(int $pid): bool
   {
+    if (!Process::kill($pid, 0)) return false;
     $cmdline = @file_get_contents("/proc/{$pid}/cmdline");
-    if ($cmdline === false || $cmdline === '') return true;
+    if ($cmdline === false) return true;
+    if ($cmdline === '') return false;
     return stripos(str_replace("\0", ' ', $cmdline), 'viswoole') !== false;
   }
 
@@ -128,19 +132,21 @@ class Action
   {
     if (!Process::kill($pid, SIGINT)) return false;
     // 修复: 此前发完 SIGINT 即返回，不等待 worker 退出——worker 协程阻塞时
-    // 端口仍 LISTEN、请求全部挂起，形成僵死服务
+    // 端口仍 LISTEN、请求全部挂起，形成僵死服务。
+    // 存活判定用 isViswooleAlive：master 退出后残留的僵尸态（容器内父进程
+    // 不 reap）会让 kill 0 恒真，等待空转 10s 后误报停止失败
     $waited = 0;
-    while ($waited++ < $timeout && Process::kill($pid, 0)) {
+    while ($waited++ < $timeout && self::isViswooleAlive($pid)) {
       sleep(1);
     }
-    if (Process::kill($pid, 0)) {
+    if (self::isViswooleAlive($pid)) {
       // SIGKILL 不可捕获不可忽略，防僵死兜底
       Process::kill($pid, SIGKILL);
-      usleep(300000); // 给内核回收进程留出时间
+      usleep(500000); // 给内核回收进程留出时间
     }
     $pid_file = self::getPidStore($server_name) . "/$server_name.pid";
     if (is_file($pid_file)) @unlink($pid_file);
-    return !Process::kill($pid, 0);
+    return !self::isViswooleAlive($pid);
   }
 
   /**
