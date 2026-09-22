@@ -35,6 +35,25 @@ class Middleware
    * @var array 按服务器名称分组的中间件列表
    */
   protected array $serverMiddlewares = [];
+  /**
+   * @var array<string,object> 类中间件实例缓存（键 = class:md5(params)）。
+   * 仅缓存无请求态构造依赖的实例——实例复用要求实现类无状态（见 MiddlewareInterface 契约）
+   */
+  private static array $instanceCache = [];
+  /**
+   * @var array<string,bool> 类是否含请求态构造依赖的判定缓存（反射结果）
+   */
+  private static array $requestScopedCache = [];
+  /**
+   * @var string[] 请求态类型白名单：构造注入这些类型的中间件每请求新建实例
+   * （Request/Response 由框架每请求创建并注入，实例跨请求复用会串请求）
+   */
+  private const REQUEST_SCOPED_TYPES = [
+    \Viswoole\HttpServer\RequestInterface::class,
+    \Viswoole\HttpServer\ResponseInterface::class,
+    \Viswoole\HttpServer\Request::class,
+    \Viswoole\HttpServer\Response::class,
+  ];
 
   /**
    * 注册中间件，指定 server 名称时注册到对应服务，否则注册为全局中间件
@@ -137,34 +156,95 @@ class Middleware
   /**
    * 以管道模式执行中间件链，全局→服务级→额外传入的中间件，最终调用核心处理器
    *
+   * 性能语义：类中间件解析为实例的动作从管道执行时提前到管道构建时——
+   * 无请求态构造依赖的类中间件实例进程级复用（见 {@see MiddlewareInterface}
+   * 无状态契约），仅 Request/Response 构造依赖的中间件保持每请求新建
+   *
    * @param callable $handler 核心业务处理器
    * @param array $middlewares 额外的中间件列表，支持 {@see self::checkMiddleware()} 所述全部格式
    * @return mixed 核心处理器的返回值
    */
   public function process(callable $handler, array $middlewares = []): mixed
   {
-    $middlewares = array_map(function ($middleware) {
-      return self::checkMiddleware($middleware);
-    }, $middlewares);
+    $middlewares = array_map(self::checkMiddleware(...), $middlewares);
     $serverMiddlewares = defined('SERVER_NAME')
       ? ($this->serverMiddlewares[SERVER_NAME] ?? []) : [];
     $middlewares = array_merge($this->middlewares, $serverMiddlewares, $middlewares);
-    // 创建中间件管道
+    // 解析中间件为可执行单元：类中间件在此处实例化（命中缓存则零开销），
+    // 闭包与可调用数组保持原样（执行时经 invoke 注入 handler 及请求态参数）
+    $resolved = [];
+    foreach ($middlewares as $middleware) {
+      if (is_array($middleware) && isset($middleware['class'], $middleware['params'])) {
+        $resolved[] = self::resolveClassMiddleware($middleware['class'], $middleware['params']);
+      } else {
+        $resolved[] = $middleware;
+      }
+    }
+    // 创建中间件管道（$middleware 为类实例 / 闭包 / [实例, 方法] / 函数名字符串）
     $pipeline = array_reduce(
-      array_reverse($middlewares),
-      function (Closure $carry, callable|array $middleware) {
+      array_reverse($resolved),
+      function (Closure $carry, $middleware) {
         return function () use ($middleware, $carry) {
-          // ['class' => ..., 'params' => ...] 结构的类中间件：
-          // 参数仅用于构造（语义A），经容器与自动注入合并后实例化，每请求新建实例
-          if (is_array($middleware) && isset($middleware['class'], $middleware['params'])) {
-            $instance = App::factory()->invokeClass($middleware['class'], $middleware['params']);
-            return invoke([$instance, 'process'], ['handler' => $carry]);
-          }
-          return invoke($middleware, ['handler' => $carry]);
+          // 类实例直调 process 省去容器 invoke 的参数解析层；
+          // 闭包/可调用数组保留 invoke（闭包签名含请求态参数注入）
+          return $middleware instanceof MiddlewareInterface
+            ? $middleware->process($carry)
+            : invoke($middleware, ['handler' => $carry]);
         };
       },
       $handler
     );
     return invoke($pipeline);
+  }
+
+  /**
+   * 解析类中间件实例：无请求态构造依赖的实例进程级缓存复用
+   *
+   * @param string $class 中间件类名（已断言实现 MiddlewareInterface）
+   * @param array $params 构造参数
+   * @return object 中间件实例
+   */
+  private static function resolveClassMiddleware(string $class, array $params): object
+  {
+    if (self::isRequestScoped($class)) {
+      return App::factory()->invokeClass($class, $params);
+    }
+    try {
+      $key = $class . ':' . md5(serialize($params));
+    } catch (Throwable) {
+      // 构造参数含不可序列化值（如闭包）：放弃缓存，保持每请求实例化
+      return App::factory()->invokeClass($class, $params);
+    }
+    return self::$instanceCache[$key] ??= App::factory()->invokeClass($class, $params);
+  }
+
+  /**
+   * 判断中间件类是否含请求态构造依赖（Request/Response 每请求新建，
+   * 注入这些类型的实例不可跨请求复用）；判定结果按类名缓存
+   *
+   * @param string $class 中间件类名
+   * @return bool 含请求态构造依赖返回 true
+   */
+  private static function isRequestScoped(string $class): bool
+  {
+    if (isset(self::$requestScopedCache[$class])) {
+      return self::$requestScopedCache[$class];
+    }
+    $scoped = false;
+    $constructor = (new \ReflectionClass($class))->getConstructor();
+    if ($constructor !== null) {
+      foreach ($constructor->getParameters() as $param) {
+        $type = $param->getType();
+        foreach ($type instanceof \ReflectionUnionType || $type instanceof \ReflectionIntersectionType
+          ? $type->getTypes() : [$type] as $named) {
+          if ($named instanceof \ReflectionNamedType
+            && in_array($named->getName(), self::REQUEST_SCOPED_TYPES, true)) {
+            $scoped = true;
+            break 2;
+          }
+        }
+      }
+    }
+    return self::$requestScopedCache[$class] = $scoped;
   }
 }

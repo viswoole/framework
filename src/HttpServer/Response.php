@@ -326,6 +326,43 @@ class Response implements ResponseInterface
   }
 
   /**
+   * 开启 SSE（Server-Sent Events）响应：设置 text/event-stream 头并写入首个 retry 帧
+   *
+   * 调用后通过 {@see self::sendEvent()} 持续推送事件，连接结束时调用 end()。
+   * 注意：SSE 依赖长连接与分段输出，响应缓冲受 server 配置 buffer_output_size
+   * （默认 2MB）约束，单条事件不要超出该上限。
+   *
+   * @param int $retryMs 客户端断线重连间隔（毫秒），写入首个 retry 帧
+   * @return static 支持链式调用
+   */
+  public function beginEventStream(int $retryMs = 3000): static
+  {
+    $this->setContentType('text/event-stream');
+    $this->write("retry: {$retryMs}\n\n");
+    return $this;
+  }
+
+  /**
+   * 写入一条 SSE 事件帧（自动按 SSE 规范处理多行 data 与可选 event/id 字段）
+   *
+   * @param string $data 事件数据（含换行时自动拆分为多个 data 行）
+   * @param string|null $event 事件类型（客户端 addEventListener 按 event 区分），null 时默认 message
+   * @param string|null $id 事件 ID（客户端 Last-Event-ID 断线续传依据）
+   * @return static 支持链式调用
+   */
+  public function sendEvent(string $data, ?string $event = null, ?string $id = null): static
+  {
+    $frame = '';
+    if ($id !== null) $frame .= "id: {$id}\n";
+    if ($event !== null) $frame .= "event: {$event}\n";
+    foreach (explode("\n", $data) as $line) {
+      $frame .= "data: {$line}\n";
+    }
+    $this->write($frame . "\n");
+    return $this;
+  }
+
+  /**
    * 将数据编码为 JSON 并设置为响应内容
    *
    * 先编码再设置 Content-Type，避免编码失败但已修改了标头。
