@@ -395,76 +395,23 @@ class EventTest extends TestCase
   }
 
   /**
-   * 测试 debug 模式下触发无监听者的事件输出可见线索
-   *
-   * 修复前缺陷：emit 无人监听时空循环静默返回——以旧字符串事件名（如
-   * 'CreateServerBefore'）注册监听，而框架以 FrameworkEvent 枚举触发时，
-   * 监听器从未生效且无任何线索（真实踩坑：Snowflake worker 注册静默失效）。
+   * 测试 hasListeners：注册前 false / 注册后 true / off 后 false，
+   * 枚举与字符串等价——供业务侧显式验证框架钩子注册是否生效
+   * （emit 侧不输出任何无监听提示：内置事件不监听是正常场景）
    */
-  public function testEmitWithoutListenersOutputsHintInDebugMode(): void
+  public function testHasListeners(): void
   {
-    // ⚠️ isDebug() 读 App 内部 Swoole\Table（App::setDebug 控制），
-    // 与容器中的 Config 实例无关
-    App::factory()->setDebug(true);
-    try {
-      ob_start();
-      $this->event->emit('nonExistentEvent');
-      $out = ob_get_clean();
-      static::assertStringContainsString('无监听者', $out);
-      static::assertStringContainsString('nonexistentevent', $out);
-    } finally {
-      App::factory()->setDebug(false);
-    }
-  }
+    self::assertFalse($this->event->hasListeners('verifyEvent'));
+    self::assertFalse($this->event->hasListeners(FrameworkEvent::RouterInitializing));
 
-  /**
-   * 测试非 debug 模式下无监听者触发零输出（生产零开销）
-   *
-   * @return void
-   */
-  public function testEmitWithoutListenersSilentWhenNotDebug(): void
-  {
-    App::factory()->setDebug(false);
-    ob_start();
-    $this->event->emit('nonExistentEvent');
-    $out = ob_get_clean();
-    static::assertSame('', $out);
-  }
+    $id = $this->event->on(FrameworkEvent::RouterInitializing, fn() => null);
+    self::assertTrue($this->event->hasListeners(FrameworkEvent::RouterInitializing));
+    // 字符串与枚举等价
+    self::assertTrue($this->event->hasListeners('routerinitializing'));
+    // 定向验证
+    self::assertTrue($this->event->hasListeners(FrameworkEvent::RouterInitializing, $id));
 
-  /**
-   * 测试 debug 模式下定向语法触发不存在的监听器输出可见线索
-   *
-   * @return void
-   */
-  public function testEmitTargetedMissingListenerOutputsHint(): void
-  {
-    App::factory()->setDebug(true);
-    try {
-      ob_start();
-      $this->event->emit('user.nonexistent');
-      $out = ob_get_clean();
-      static::assertStringContainsString('user.nonexistent', $out);
-    } finally {
-      App::factory()->setDebug(false);
-    }
-  }
-
-  /**
-   * 测试有监听者时即使 debug 模式也不输出提示
-   *
-   * @return void
-   */
-  public function testEmitWithListenersOutputsNothing(): void
-  {
-    App::factory()->setDebug(true);
-    try {
-      $this->event->on('hasListener', fn() => null);
-      ob_start();
-      $this->event->emit('hasListener');
-      $out = ob_get_clean();
-      static::assertStringNotContainsString('无监听者', $out);
-    } finally {
-      App::factory()->setDebug(false);
-    }
+    $this->event->off(FrameworkEvent::RouterInitializing, $id);
+    self::assertFalse($this->event->hasListeners(FrameworkEvent::RouterInitializing));
   }
 }

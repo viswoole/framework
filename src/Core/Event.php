@@ -19,7 +19,6 @@ use BackedEnum;
 use InvalidArgumentException;
 use ReflectionClass;
 use UnitEnum;
-use Viswoole\Core\Console\Output;
 
 /**
  * 事件管理器
@@ -59,32 +58,33 @@ class Event
       // 修复: explode 参数顺序应为 (分隔符, 字符串, 限制)
       [$event, $id] = explode('.', $event, 2);
       $this->callHandle($event, $id, $arguments);
-      // 修复: 定向触发不存在的监听器原先完全静默——事件名拼写错误（如以旧
-      // 字符串事件名注册，而框架以 FrameworkEvent 枚举触发）时监听器从未
-      // 生效且无任何线索，debug 模式给出提示（生产零开销）
-      if (isDebug() && !isset($this->listens[$event][$id])) {
-        Output::echo(
-          "事件 {$event}.{$id} 无监听者（请核对注册名；框架内置事件应使用 FrameworkEvent 枚举）",
-          'EVENT',
-          backtrace: 0
-        );
-      }
     } else {
       $listens = $this->listens[$event] ?? [];
-      // 修复: 无人监听时原先空循环静默返回——框架钩子事件触发无监听通常意味着
-      // 服务提供者的监听注册未生效（如以旧字符串事件名注册），debug 模式给出
-      // 可见线索（生产零开销）
-      if ($listens === [] && isDebug()) {
-        Output::echo(
-          "事件 {$event} 无监听者（请核对注册名；框架内置事件应使用 FrameworkEvent 枚举）",
-          'EVENT',
-          backtrace: 0
-        );
-      }
       foreach (array_keys($listens) as $id) {
         $this->callHandle($event, $id, $arguments);
       }
     }
+  }
+
+  /**
+   * 判断事件是否存在监听者
+   *
+   * 框架内置事件不监听是完全正常的（均为可选钩子），emit 侧不做任何提示；
+   * 注册框架钩子后建议用本方法显式验证注册是否生效——字符串事件名拼写
+   * 错误时监听器会静默失效（如写旧事件名 'CreateServerBefore' 而框架以
+   * FrameworkEvent::ServerCreating 枚举触发）
+   *
+   * @param string|UnitEnum $event 事件名称或枚举，不区分大小写
+   * @param string|null $id 监听器ID（"事件.监听器ID" 语法的 ID 部分），验证定向注册
+   * @return bool 存在监听者返回 true
+   */
+  public function hasListeners(string|UnitEnum $event, ?string $id = null): bool
+  {
+    $event = self::normalizeEventName($event);
+    if ($id !== null) {
+      return isset($this->listens[$event][$id]);
+    }
+    return isset($this->listens[$event]) && $this->listens[$event] !== [];
   }
 
   /**
