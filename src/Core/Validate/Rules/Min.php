@@ -38,16 +38,15 @@ class Min extends BaseValidateRule
   }
 
   /**
-   * 校验数值是否不低于最小值
+   * 校验数值是否不低于最小值（数值化策略与 Between 一致）
    */
   #[Override] public function validate(mixed $value): int|float
   {
     if (!is_numeric($value)) $this->error('{:name} 必须为数值类型');
-    // 修复: $min 类型已改为 int|float，根据 $min 实际类型决定转换方式，消除 is_float 死代码
-    $value = is_float($this->min) ? floatval($value) : intval($value);
-    if ($value < $this->min) {
+    $num = $value + 0;
+    if ($num < $this->min) {
       $this->error("{:name} 必须大于或等于 $this->min");
     }
-    return $value;
+    return $num;
   }
 }

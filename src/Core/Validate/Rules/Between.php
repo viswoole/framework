@@ -40,15 +40,18 @@ class Between extends BaseValidateRule
   }
 
   /**
-   * 校验数值是否在闭区间范围内，返回类型转换后的值
+   * 校验数值是否在闭区间范围内，返回数值化后的值
+   *
+   * 数值化不经边界字面量类型决定（int 保持 int、float 保持 float、
+   * 数字字符串转为数值）——修复 Between(0, 100)（整型字面量边界）时
+   * float 入参 0.5 被 intval 截断为 0 的问题
    */
   #[Override] public function validate(mixed $value): int|float
   {
     if (!is_numeric($value)) $this->error('{:name} 必须为数值类型');
-    // 修复: 类型转换应同时参考 start 和 end 的类型，任一为 float 则按 float 处理
-    $value = (is_float($this->start) || is_float($this->end)) ? floatval($value) : intval($value);
-    if ($value >= $this->start && $value <= $this->end) return $value;
+    $num = $value + 0;
+    if ($num >= $this->start && $num <= $this->end) return $num;
     // 修复: 错误信息包含实际值，便于调试定位
-    $this->error("{:name} 值 $value 必须介于 $this->start - $this->end 之间");
+    $this->error("{:name} 值 $num 必须介于 $this->start - $this->end 之间");
   }
 }

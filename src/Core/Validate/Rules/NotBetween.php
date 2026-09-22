@@ -25,16 +25,15 @@ use Override;
 class NotBetween extends Between
 {
   /**
-   * 校验数值是否不在闭区间范围内
+   * 校验数值是否不在闭区间范围内（数值化策略与 Between 一致）
    */
   #[Override] public function validate(mixed $value): int|float
   {
     if (!is_numeric($value)) $this->error('{:name} 必须为数值类型');
-    // 修复: 类型转换应同时参考 start 和 end 的类型，任一为 float 则按 float 处理（与 Between 一致）
-    $value = (is_float($this->start) || is_float($this->end)) ? floatval($value) : intval($value);
-    if ($value >= $this->start && $value <= $this->end) {
-      $this->error("{:name} 值 $value 必须不在 $this->start - $this->end 之间");
+    $num = $value + 0;
+    if ($num >= $this->start && $num <= $this->end) {
+      $this->error("{:name} 值 $num 必须不在 $this->start - $this->end 之间");
     }
-    return $value;
+    return $num;
   }
 }
