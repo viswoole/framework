@@ -102,6 +102,23 @@ class WhereRawConnectorTest extends TestCase
   }
 
   /**
+   * 旧惯例写法兼容：SQL 片段自带 AND/OR 前缀（业务存量写法）时不重复拼接，
+   * 升级框架不产生 "AND AND" 坏 SQL
+   */
+  public function testLegacyRawWithAndPrefixStillWorks(): void
+  {
+    $capture = $this->makeCaptureChannel();
+    $this->runQuietly(fn () => $capture->table('users')
+      ->where('status', 1)
+      ->whereRaw('AND (expire_time IS NULL OR expire_time > NOW())')
+      ->value('id'));
+
+    $sql = $this->buildSql($capture->capturedOptions);
+    self::assertStringContainsString('AND (expire_time IS NULL OR expire_time > NOW())', $sql);
+    self::assertStringNotContainsString('AND AND', $sql);
+  }
+
+  /**
    * whereRaw 显式指定 OR 连接符时应按 OR 拼接
    */
   public function testWhereRawExplicitOrConnector(): void

@@ -401,7 +401,12 @@ class SqlBuilder
     if ($where instanceof Raw) {
       $this->params = array_merge($this->params, $where->bindings);
       // Raw 条件同样携带连接符（默认 AND）——否则与普通条件混用时生成缺失
-      // AND/OR 的坏 SQL；首条件的前导连接符由 parseWhere 统一剥离
+      // AND/OR 的坏 SQL；首条件的前导连接符由 parseWhere 统一剥离。
+      // 宽容兼容旧惯例写法：SQL 片段自带 AND/OR 前缀时不再重复拼接
+      $sql = ltrim($where->sql);
+      if (preg_match('/^(AND|OR)\s/i', $sql) === 1) {
+        return $sql;
+      }
       return "$where->connector $where->sql";
     } elseif ($where instanceof WhereGroup) {
       return $this->parseWhereGroup($where);
