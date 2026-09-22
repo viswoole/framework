@@ -135,23 +135,56 @@ class BuiltinTypeValidate
   /**
    * 校验整数类型，数字字符串自动转为整数（含科学计数法）
    *
+   * 超出 int64 可表示范围的数字字符串（如恶意/异常雪花 ID 入参）直接拒绝，
+   * 不做 (int) 钳制——强转发生在自定义验证规则之前，静默钳制会导致业务侧
+   * 「超范围拒绝」类规则被整体绕过
+   *
    * @param mixed $value 待校验的值
    * @return int 校验通过的整数值
-   * @throws ValidateException 类型不匹配时抛出
+   * @throws ValidateException 类型不匹配或数值超出 int 可表示范围时抛出
    */
   public static function int(mixed $value): int
   {
     if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
       // 修复: 纯整数字符串必须 (int) 直转——经 float 中转时超出 2^53 的
-      // 大整数（如雪花 ID）会发生精度丢失（末几位被舍入指向错误记录）
+      // 大整数（如雪花 ID）会发生精度丢失（末几位被舍入指向错误记录）；
+      // 强转前校验 int64 范围——(int) 对超范围字符串会静默钳制为
+      // PHP_INT_MAX / PHP_INT_MIN
+      if (!self::isWithinIntRange($value)) {
+        throw new ValidateException("数字 {$value} 超出 int 可表示范围");
+      }
       $value = (int)$value;
     } elseif (is_numeric($value) && !is_int($value)) {
       // 非整型数字串（如科学计数法 '1e5'）才经 float 中转，
-      // 确保 intval() 截断科学计数法的问题不复现
-      $value = (int)(float)$value;
+      // 确保 intval() 截断科学计数法的问题不复现；
+      // float 中转后校验可表示性——超出 int 范围的浮点强转同样会静默钳制
+      $float = (float)$value;
+      if ($float >= (float)PHP_INT_MAX || $float <= (float)PHP_INT_MIN) {
+        throw new ValidateException("数字 {$value} 超出 int 可表示范围");
+      }
+      $value = (int)$float;
     }
     if (!is_int($value)) self::unifiedExceptionHandling('int', $value);
     return $value;
+  }
+
+  /**
+   * 判断整数字符串是否在 int64 可表示范围内（含边界，支持前导零与负号）
+   *
+   * 同长度下逐字符比较等价于数值比较（无前导零时），
+   * 避免 bcmath 依赖；负界比正界多一位（PHP_INT_MIN = -9223372036854775808）
+   *
+   * @param string $num 已通过 /^-?\d+$/ 校验的整数字符串
+   * @return bool 在 int64 范围内返回 true
+   */
+  private static function isWithinIntRange(string $num): bool
+  {
+    $negative = $num[0] === '-';
+    $digits = ltrim($negative ? substr($num, 1) : $num, '0');
+    if ($digits === '') return true; // '0' / '-0' / 全零
+    $limit = $negative ? '9223372036854775808' : '9223372036854775807';
+    if (strlen($digits) !== strlen($limit)) return strlen($digits) < strlen($limit);
+    return strcmp($digits, $limit) <= 0;
   }
 
   /**
