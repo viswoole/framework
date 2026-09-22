@@ -15,6 +15,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Tests\Database;
 
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Viswoole\Core\App;
 use Viswoole\Database\Collection;
@@ -160,6 +161,42 @@ class ExplicitPkInsertTest extends TestCase
     $row = $collection->first();
     self::assertInstanceOf(DataSet::class, $row);
     self::assertSame('9', $row['id']);
+  }
+
+  /**
+   * autoWritePk 开启但生成方法可见性不足（protected）时应抛出明确的
+   * InvalidArgumentException——而非魔术转发链深处晦涩的 RuntimeException
+   * （harden 批 1 中危 M1：method_exists 不分可见性，private/protected
+   * 方法经 Model::__call → Query::__call 转发抛晦涩异常）
+   */
+  public function testProtectedAutoWritePkThrowsClearError(): void
+  {
+    $fake = new FakeChannel(1);
+    $this->makeManager($fake);
+
+    try {
+      ProtectedAutoWritePkModel::create(['name' => 'x']);
+      self::fail('protected autoWritePk 未被拦截');
+    } catch (InvalidArgumentException $e) {
+      self::assertStringContainsString('autoWritePk', $e->getMessage());
+      self::assertStringContainsString(ProtectedAutoWritePkModel::class, $e->getMessage());
+    }
+  }
+}
+
+/**
+ * 测试用模型：autoWritePk 生成方法可见性不足（protected——框架外部作用域
+ * 不可调用，等价于未定义）
+ */
+class ProtectedAutoWritePkModel extends Model
+{
+  protected string $table = 'users';
+  protected string $pk = 'id';
+  protected bool $autoWritePk = true;
+
+  protected function autoWritePk(): int
+  {
+    return 1;
   }
 }
 

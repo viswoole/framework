@@ -349,14 +349,14 @@ class Query extends BaseQuery
             );
           }
         }
-        // 自动写入主键：模型须定义 autoWritePk() 方法生成主键值（如雪花 ID）
-        // 修复: 原守卫 property_exists 恒真（基类已声明 $autoWritePk 属性），
-        // 开关开启但模型未定义生成方法时会经魔术转发抛出晦涩的 RuntimeException，
-        // 现给出明确错误
+        // 自动写入主键：模型须定义 autoWritePk() 方法生成主键值（如雪花 ID）。
+        // 可见性判定与获取器同语义：get_class_methods 从模型外部作用域调用仅
+        // 返回 public 方法——method_exists 不分可见性，protected/private 的
+        // 生成方法经魔术转发抛晦涩 RuntimeException（harden 批 1 中危 M1）
         if ($this->autoWritePk) {
-          if (!method_exists($this->model, 'autoWritePk')) {
+          if (!in_array('autoWritePk', get_class_methods($this->model), true)) {
             throw new InvalidArgumentException(
-              '模型 ' . get_class($this->model) . ' 开启了 $autoWritePk 但未定义 autoWritePk() 方法，无法自动生成主键'
+              '模型 ' . get_class($this->model) . ' 开启了 $autoWritePk 但未定义 public 的 autoWritePk() 方法，无法自动生成主键'
             );
           }
           if ($isMoreWrite) {
