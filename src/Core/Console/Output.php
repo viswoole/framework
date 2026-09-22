@@ -182,17 +182,35 @@ class Output
   /**
    * 静态方法调用代理，支持以日志级别名作为方法名直接调用 echo
    *
-   * @param string $name 日志级别名称
-   * @param array $arguments [0=>消息内容, 1=>回溯层级]
+   * 兼容三类调用形态：
+   * ```
+   * Output::debug($msg);                          // 标签=DEBUG，回溯层级默认 2
+   * Output::debug($msg, 0);                       // 第 2 位 int = 回溯层级（旧契约）
+   * Output::debug($msg, 'ACCESSOR', backtrace: 0); // 第 2 位 string = 自定义标签
+   * ```
+   *
+   * @param string $name 日志级别名称（LABEL_COLOR 键，大小写不敏感）
+   * @param array $arguments [0=>消息内容]；第 2 位 int=回溯层级 / string=自定义标签；
+   *   亦支持命名参数 label / backtrace
    * @throws Exception 日志级别不存在时抛出
    */
   public static function __callStatic(string $name, array $arguments)
   {
     $name = strtoupper($name);
-    if (array_key_exists($name, self::LABEL_COLOR)) {
-      self::echo($arguments[0] ?? '', $name, backtrace: $arguments[1] ?? 2);
-    } else {
+    if (!array_key_exists($name, self::LABEL_COLOR)) {
       throw new Exception("Call to undefined method $name");
     }
+    // 修复: 此前第 2 位被硬编码为回溯层级——string 标签经 $arguments[1] 传入
+    // echo 第 4 参抛 TypeError（__callStatic 转发契约不支持自定义标签），且
+    // 命名参数 backtrace 被静默丢弃。现按参数类型分流并支持 label/backtrace 命名参数
+    $label = $name;
+    $backtrace = $arguments['backtrace'] ?? 2;
+    $second = $arguments[1] ?? $arguments['label'] ?? null;
+    if (is_int($second)) {
+      $backtrace = $second;
+    } elseif (is_string($second)) {
+      $label = $second;
+    }
+    self::echo($arguments[0] ?? '', $label, backtrace: $backtrace);
   }
 }
