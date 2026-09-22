@@ -41,16 +41,17 @@ class ArrayItem extends BaseValidateRule
   }
 
   /**
-   * 逐元素执行类型校验，返回校验后的数组
+   * 逐元素执行类型校验，返回校验后的数组（保留原始键名）
    */
   #[Override] public function validate(mixed $value): array
   {
     if (!is_array($value)) $this->error('{:name} 必须为数组');
     $array = [];
-    foreach ($value as $item) {
+    foreach ($value as $key => $item) {
       try {
-        // 修复: 原代码未将校验结果存入数组，导致始终返回空数组
-        $array[] = Validate::check($item, $this->types);
+        // 修复: 保留原始关联键名——此前 $array[] 重建会丢掉 {"goodsId":"123"}
+        // 之类映射参数的键名，使映射退化为索引列表
+        $array[$key] = Validate::check($item, $this->types);
       } catch (ValidateException $e) {
         $this->error($e->getMessage());
       }
