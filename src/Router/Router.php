@@ -239,8 +239,16 @@ class Router extends Collector
           $pathMatched = true;
         }
       } else {
-        // 按段数定位动态路由分组
+        // 按段数定位动态路由分组；
+        // 修复: 变量正则允许跨段（含 /）时，规则段数与请求 URL 段数不同，
+        // 按段数取桶会失配——其余动态分组作为回退候选追加在同段数桶之后，
+        // 同段桶保持优先遍历（常规命中路径零额外开销）
         $routes = $this->routeTable->dynamicBucket(substr_count($candPath, '/'));
+        foreach ($this->routeTable->dynamicBucketsAll() as $bucket) {
+          foreach ($bucket as $regex => $methodMap) {
+            $routes[$regex] ??= $methodMap;
+          }
+        }
         // 遍历正则匹配路由（使用原始大小写路径，保留动态参数值大小写）
         foreach (array_keys($routes) as $regex) {
           if (!preg_match($regex, $candPath, $matches)) continue;

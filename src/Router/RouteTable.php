@@ -42,6 +42,11 @@ final class RouteTable
    *      按路径段数分组（segment_N），第一层键为正则，值为 [请求方法 => 路由引用链路]
    */
   private array $dynamicRoute = [];
+  /**
+   * @var array<string,array<string,array<string,string>>>|null 全部动态路由分组的合并视图缓存
+   *      （段数回退匹配用；insert 时失效重建）
+   */
+  private ?array $allDynamicCache = null;
 
   /**
    * @param Config $config 框架配置实例（读取 router.case_sensitive 控制正则大小写语义）
@@ -60,7 +65,9 @@ final class RouteTable
    */
   public function insert(string $path, string $routeIndex, BaseRoute $route): void
   {
+    // 动态路由变更后合并视图缓存失效，下次回退匹配时重建
     if (RouterTool::isVariable($path)) {
+      $this->allDynamicCache = null;
       $urlSegments = explode('/', $path);
       $urlSegments = array_filter($urlSegments, function ($value) {
         return $value !== '';
@@ -92,6 +99,20 @@ final class RouteTable
   public function dynamicBucket(int $segmentCount): array
   {
     return $this->dynamicRoute['segment_' . $segmentCount] ?? [];
+  }
+
+  /**
+   * 查询全部动态路由分组（跨段正则的段数回退匹配用）
+   *
+   * 变量正则允许跨段（含 /）时，规则段数与请求 URL 段数不同，
+   * dispatch 按段数取桶会失配——其余分组作为回退候选遍历。
+   * 惰性缓存合并视图：注册完成后仅构建一次，dispatch 回退匹配零重复拼装
+   *
+   * @return array<string,array<string,array<string,string>>> [segment_N => [正则 => [请求方法 => 路由引用链路]]]
+   */
+  public function dynamicBucketsAll(): array
+  {
+    return $this->allDynamicCache ??= $this->dynamicRoute;
   }
 
   /**
