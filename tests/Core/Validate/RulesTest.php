@@ -295,14 +295,18 @@ class RulesTest extends TestCase
   }
 
   /**
-   * 测试 Length 规则 - 仅指定最小长度
+   * 测试 Length 规则 - 仅指定 min 时作为固定长度校验
    *
    * @return void
    */
   public function testLengthWithOnlyMin(): void
   {
     $rule = new Length(3);
-    static::assertEquals('hello', $rule->validate('hello'));
+    static::assertEquals('abc', $rule->validate('abc'));
+    static::assertEquals([1, 2, 3], $rule->validate([1, 2, 3]));
+    // 长度不等于 min 时应失败
+    $this->expectException(ValidateException::class);
+    $rule->validate('hello');
   }
 
   /**

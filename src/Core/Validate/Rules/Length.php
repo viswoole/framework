@@ -26,7 +26,7 @@ use Viswoole\Core\Validate\BaseValidateRule;
 class Length extends BaseValidateRule
 {
   /**
-   * @param int $min 最小长度（含）
+   * @param int $min 最小长度（含）；不传 max 时作为固定长度校验
    * @param int|null $max 最大长度（含），为 null 时不限制上界
    * @param string $message 校验失败提示信息
    */
@@ -53,11 +53,13 @@ class Length extends BaseValidateRule
     } else {
       $this->error('{:name} 长度不符合要求');
     }
-    if ($len < $this->min || ($this->max !== null && $len > $this->max)) {
-      $message = is_null($this->max)
-        ? "{:name} 长度必须为$this->min"
-        : "{:name} 长度必须在 $this->min 到 $this->max 之间";
-      $this->error($message);
+    if ($this->max === null) {
+      // 未传 max 时，min 作为固定长度校验（很少出现只限制最小长度的场景）
+      if ($len !== $this->min) {
+        $this->error("{:name} 长度必须为 $this->min");
+      }
+    } elseif ($len < $this->min || $len > $this->max) {
+      $this->error("{:name} 长度必须在 $this->min 到 $this->max 之间");
     }
     return $value;
   }
