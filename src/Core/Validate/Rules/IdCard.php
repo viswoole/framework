@@ -20,7 +20,7 @@ use Override;
 use Viswoole\Core\Validate\BaseValidateRule;
 
 /**
- * 身份证号验证规则，支持 15 位和 18 位格式，18 位含校验位算法验证
+ * 身份证号验证规则，仅支持 18 位格式，含校验位算法验证
  */
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class IdCard extends BaseValidateRule
@@ -29,11 +29,6 @@ class IdCard extends BaseValidateRule
    * 18位身份证正则（含校验位 [0-9Xx]）
    */
   private const string PATTERN_18 = '/^[1-9]\d{5}(18|19|([23]\d))\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}[0-9Xx]$/';
-
-  /**
-   * 15位身份证正则（旧版，无校验位）
-   */
-  private const string PATTERN_15 = '/^[1-9]\d{5}\d{2}((0[1-9])|(10|11|12))(([0-2][1-9])|10|20|30|31)\d{3}$/';
 
   /**
    * 校验码加权因子，对应前17位的位置权重
@@ -61,15 +56,12 @@ class IdCard extends BaseValidateRule
     if (!is_string($value)) $this->error('{:name} 必须为字符串类型');
 
     // 先用正则验证基本格式
-    $is18 = preg_match(self::PATTERN_18, $value);
-    $is15 = preg_match(self::PATTERN_15, $value);
-
-    if (!$is18 && !$is15) {
+    if (!preg_match(self::PATTERN_18, $value)) {
       $this->error();
     }
 
-    // 修复: 18位身份证增加校验位验证
-    if ($is18 && !$this->verifyCheckCode($value)) {
+    // 校验位验证
+    if (!$this->verifyCheckCode($value)) {
       $this->error();
     }
 
