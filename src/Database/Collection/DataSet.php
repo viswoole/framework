@@ -18,7 +18,9 @@ namespace Viswoole\Database\Collection;
 use ArrayObject;
 use Override;
 use RuntimeException;
+use Viswoole\Database\BaseQuery;
 use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\Model\Query;
 
 /**
  * 单行数据集，键为字段名，值为字段值
@@ -39,10 +41,10 @@ class DataSet extends BaseCollection
   /**
    * 构建单行数据集，保存原始数据快照用于变更追踪
    *
-   * @param \Viswoole\Database\BaseQuery|\Viswoole\Database\Model\Query $query 查询对象
+   * @param BaseQuery|Query $query 查询对象
    * @param array $data 行数据
    */
-  public function __construct(\Viswoole\Database\BaseQuery|\Viswoole\Database\Model\Query $query, array $data)
+  public function __construct(BaseQuery|Query $query, array $data)
   {
     parent::__construct($query, $data);
     $this->original = $data;
@@ -56,7 +58,8 @@ class DataSet extends BaseCollection
    * @throws RuntimeException 缺少主键字段时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  #[Override] public function delete(bool $real = false): int
+  #[Override]
+  public function delete(bool $real = false): int
   {
     $pk = $this->query->getPrimaryKey();
     if (isset($this[$pk])) {
