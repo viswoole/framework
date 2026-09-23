@@ -23,10 +23,12 @@ use Swoole\Table;
 use Throwable;
 use Viswoole\Core\Config;
 use Viswoole\Core\Console\Output;
+use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Transaction\XaJournal;
 use Viswoole\Log\LogManager;
+use function invoke;
 
 /**
  * 数据库通道管理器
@@ -49,6 +51,10 @@ class DbManager
    * 调试信息保存到日志文件
    */
   const int DEBUG_SAVE_LOGGER = 2;
+  /**
+   * 查询监听器连续失败熔断阈值：连续失败达到该次数后本进程内停用监听器
+   */
+  const int LISTENER_MAX_FAILURES = 3;
   public readonly string $defaultChannel;
   /**
    * @var array<string,Channel> 已注册的数据库通道，键名为通道小写名称
@@ -58,6 +64,19 @@ class DbManager
    * @var Table 跨进程共享的调试配置表
    */
   private Table $table;
+  /**
+   * @var Closure|string|array|null 全局查询监听器（database.listen 配置，仅此一处注册），
+   *                               每条查询执行后经容器 DI 调用；null 表示未配置
+   */
+  private Closure|string|array|null $listener;
+  /**
+   * @var int 监听器连续失败计数，调用成功时归零
+   */
+  private int $listenerFailureCount = 0;
+  /**
+   * @var bool 监听器是否已因连续失败熔断（本进程内停用，进程重启后自动恢复）
+   */
+  private bool $listenerDisabled = false;
 
   /**
    * 初始化数据库管理器，注册通道并配置调试模式
@@ -92,6 +111,20 @@ class DbManager
     if (!is_int($save)) {
       $save = self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER;
     }
+    // 全局查询监听器：仅支持 database.listen 配置注册（每进程构造时独立应用，
+    // 时机天然正确）；仅校验形态——[类名, 动态方法] 需容器实例化后才能调用，
+    // 设置时无法判定可调用性
+    $listener = $config->get('database.listen');
+    if ($listener !== null
+      && !is_string($listener)
+      && !is_array($listener)
+      && !$listener instanceof Closure
+    ) {
+      throw new InvalidArgumentException(
+        'database.listen 配置错误，必须是闭包、函数名、类名::静态方法名 或 [类名/对象, 方法名] 形式'
+      );
+    }
+    $this->listener = $listener;
     $this->table->set('config', [
       'debug' => $debug ? 1 : 0,
       'save' => $save,
@@ -128,6 +161,8 @@ class DbManager
       throw new DbException($name . '数据库通道配置错误，通道类需继承' . Channel::class, -1);
     }
     $this->channels[strtolower($name)] = $channel;
+    // 回写通道名：RunInfo 依据它感知查询所属通道
+    $channel->name = strtolower($name);
   }
 
   /**
@@ -155,9 +190,10 @@ class DbManager
   }
 
   /**
-   * 根据当前调试配置保存查询运行信息
+   * 根据当前调试配置保存查询运行信息，并触发全局查询监听器
    *
-   * 仅在调试模式开启时生效，按配置的保存方式输出到控制台和/或日志文件。
+   * 调试输出仅在调试模式开启时生效，按配置的保存方式输出到控制台和/或日志文件；
+   * 监听器独立于调试模式，每条查询都会触发（未配置时零开销）。
    *
    * @param RunInfo $debugInfo 查询运行信息
    */
@@ -176,6 +212,29 @@ class DbManager
         $this->logManager->sql(
           $log,
           ['sql' => $sql, 'cache' => $debugInfo->cache, 'time' => $debugInfo->time]
+        );
+      }
+    }
+    // 监听器属于旁路诊断，异常不向业务传播；RunInfo 按位置注入首参，
+    // 其余参数由容器按类型解析（依赖注入）。
+    // 熔断：连续失败达到阈值后本进程内永久停用（配置注册的监听器是确定性代码，
+    // 连续异常基本为代码缺陷或依赖不可用，继续重试只会徒增每条查询的异常开销
+    // 与 error 日志噪音）；进程重启/reload 后自动恢复。
+    if ($this->listener === null || $this->listenerDisabled) return;
+    try {
+      invoke($this->listener, [$debugInfo]);
+      // 成功即归零：偶发失败不累积，仅连续失败才熔断
+      $this->listenerFailureCount = 0;
+    } catch (Throwable $e) {
+      $this->listenerFailureCount++;
+      $this->logManager->error(
+        '数据库查询监听器执行失败：' . $e->getMessage(),
+        ['exception' => $e::class]
+      );
+      if ($this->listenerFailureCount >= self::LISTENER_MAX_FAILURES) {
+        $this->listenerDisabled = true;
+        $this->logManager->error(
+          '数据库查询监听器连续失败 ' . self::LISTENER_MAX_FAILURES . ' 次，本进程内已停用'
         );
       }
     }
@@ -347,7 +406,42 @@ class DbManager
    */
   public function query(string|Raw $sql, array $bindings = [], bool $master = false): array
   {
-    return $this->channel()->query($sql, $bindings, $master);
+    $channel = $this->channel();
+    $start = microtime(true);
+    $result = $channel->query($sql, $bindings, $master);
+    // 原生查询同样记录运行信息并触发监听器，覆盖范围与查询构建器一致
+    $this->recordNativeRunInfo($channel, $sql, $start);
+    return $result;
+  }
+
+  /**
+   * 为原生查询构建 RunInfo 并触发调试输出与监听器
+   *
+   * 原生路径不经过查询构建器的 setRunInfo，在此补齐等价信息：
+   * SQL/耗时/通道名/读写路由（路由由 PDO 通道执行时写入协程上下文）。
+   *
+   * @param Channel $channel 执行查询的通道
+   * @param string|Raw $sql 已执行的 SQL
+   * @param float $start 查询开始时间（微秒）
+   */
+  private function recordNativeRunInfo(Channel $channel, string|Raw $sql, float $start): void
+  {
+    $end = microtime(true);
+    $interval = $end - $start;
+    $time = [
+      'start_time' => $start,
+      'end_time' => $end,
+      'cost_time_s' => round($interval, 6),
+      'cost_time_ms' => round($interval * 1000),
+    ];
+    if (!$sql instanceof Raw) $sql = new Raw($sql);
+    $this->saveDebugInfo(new RunInfo(
+      $sql,
+      false,
+      $time,
+      $channel->name,
+      (string)Context::get('$_db_query_route_' . $channel->name, '')
+    ));
   }
 
   /**
@@ -401,7 +495,11 @@ class DbManager
   public function execute(string|Raw $sql, array $bindings = [], false|string $getId = false
   ): int|string
   {
-    $result = $this->channel()->execute($sql, $bindings, $getId);
+    $channel = $this->channel();
+    $start = microtime(true);
+    $result = $channel->execute($sql, $bindings, $getId);
+    // 原生写入同样记录运行信息并触发监听器，覆盖范围与查询构建器一致
+    $this->recordNativeRunInfo($channel, $sql, $start);
     if ($result instanceof PDOStatement || $result instanceof PDOStatementProxy) {
       $count = $result->rowCount();
       $result->closeCursor();

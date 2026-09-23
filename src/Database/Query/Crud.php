@@ -22,6 +22,7 @@ use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
+use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
 use Viswoole\Database\Exception\DataNotFoundException;
@@ -205,7 +206,7 @@ trait Crud
   }
 
   /**
-   * 记录查询运行信息并保存调试日志
+   * 记录查询运行信息并保存调试日志、触发查询监听器
    *
    * @param float $start 查询开始时间（微秒）
    * @param Raw $raw 执行的SQL表达式
@@ -225,7 +226,15 @@ trait Crud
       'cost_time_s' => $executionTime,
       'cost_time_ms' => $executionTimeMilliseconds
     ];
-    $this->lastQuery = new RunInfo($raw, $this->options->cache, $time);
+    // 读写路由由 PDO 通道在执行时写入协程上下文（按通道名隔离），非 PDO 通道为空串
+    $route = (string)Context::get('$_db_query_route_' . $this->channel->name, '');
+    $this->lastQuery = new RunInfo(
+      $raw,
+      $this->options->cache,
+      $time,
+      $this->channel->name,
+      $route
+    );
     // 保存
     Db::saveDebugInfo($this->lastQuery);
   }

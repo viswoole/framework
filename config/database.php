@@ -15,6 +15,13 @@ return [
   'debug' => env('app_debug', true),
   // 调试信息保存方式，1 保存到控制台，2 保存到日志文件，3 同时保存到控制台和日志文件
   'info_save_manner' => Db::DEBUG_SAVE_CONSOLE | Db::DEBUG_SAVE_LOGGER,
+  // 全局查询监听器（仅支持在此配置注册，全局唯一，未配置零开销）：
+  // 每条 SQL 执行后触发，经容器依赖注入调用，支持闭包、函数名、'类名::静态方法名'、[类名/对象, 方法名] 形态（非静态方法须用数组形态）
+  // 'listen' => function (Viswoole\Database\Query\RunInfo $info): void {
+  //   if ($info->time['cost_time_ms'] >= 500) {
+  //     // 告警/记录慢查询
+  //   }
+  // },
   // XA 两阶段提交事务配置（Db::startXaTransaction 跨通道原子提交）
   'xa' => [
     // 是否开启自动恢复

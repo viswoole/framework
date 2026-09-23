@@ -33,6 +33,12 @@ use Viswoole\Database\Query\Options;
 abstract class Channel
 {
   /**
+   * 通道名称，由 DbManager::addChannel 注册时回写；
+   * 空串表示未注册的裸通道（直接实例化、未纳入 DbManager 管理）
+   */
+  public string $name = '';
+
+  /**
    * 查询语句的首关键字列表（以这些关键字开头的 SQL 视为查询语句）
    */
   private const array QUERY_STATEMENTS = [
