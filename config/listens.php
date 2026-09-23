@@ -6,7 +6,9 @@
 declare(strict_types=1);
 
 use Viswoole\Core\Facade\Event;
+use Viswoole\Core\FrameworkEvent;
 
-Event::on('AppInitialized', function () {
-  echo_log('应用初始化完成');
-}, 1);
+// 注册事件监听
+Event::on(FrameworkEvent::AppInitialized, function () {
+  // 应用初始化完成
+});
