@@ -18,6 +18,8 @@ namespace Viswoole\Log\Drives;
 use Override;
 use Swoole\Server;
 use Swoole\Timer;
+use Viswoole\Core\Common\Filesystem;
+use Viswoole\Core\Exception\FilesystemException;
 use Viswoole\Core\Facade\Event;
 use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Server\ServerEventHook;
@@ -176,7 +178,18 @@ class File extends Drive
       if ($logString === false) {
         $logString = '{"error":"log encoding failed"}';
       }
-      $logDir = $this->getLogDir($level);
+      // 目录创建失败时降级处理而非抛出异常：save() 的调用方之一是 Recorder::__destruct()，
+      // 析构函数中的未捕获异常会变成无法捕获的致命错误杀死 worker，日志写入失败不应致命
+      try {
+        $logDir = $this->getLogDir($level);
+      } catch (FilesystemException $e) {
+        // 附带驱动、级别与根目录上下文，一条告警即可定位问题来源与失败原因
+        trigger_error(
+          "文件日志驱动写入日志失败（level={$level}, log_dir={$this->log_dir}）：{$e->getMessage()}",
+          E_USER_WARNING
+        );
+        continue;
+      }
       // 获取日志文件夹下所有日志文件
       $logFiles = glob("$logDir/*.log");
       // 修复：查找已有日志文件的最大编号，避免使用 count 导致文件被删除后编号回退覆盖已有日志
@@ -228,14 +241,15 @@ class File extends Drive
    *
    * @param string $level 日志级别名称
    * @return string 日志文件存储目录的绝对路径
+   * @throws FilesystemException 目录创建失败时抛出
    */
   protected function getLogDir(string $level): string
   {
     $date = date('Ymd');
     $logDir = rtrim($this->log_dir, '/');
     $logDir .= "/$date/$level";
-    // 创建目录（如果不存在）
-    if (!is_dir($logDir)) mkdir($logDir, 0755, true);
+    // 创建目录（如果不存在），此前静默忽略 mkdir 结果会吞掉真实失败，现统一走竞态安全方法
+    Filesystem::ensureDirectory($logDir);
     return $logDir;
   }
 }

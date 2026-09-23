@@ -23,7 +23,9 @@ use Swoole\Coroutine\System;
 use Throwable;
 use Viswoole\Cache\Driver;
 use Viswoole\Cache\Exception\CacheErrorException;
+use Viswoole\Core\Common\Filesystem;
 use Viswoole\Core\Coroutine;
+use Viswoole\Core\Exception\FilesystemException;
 
 /**
  * 基于文件系统的缓存驱动，将缓存数据以序列化形式写入磁盘文件
@@ -60,7 +62,8 @@ class File extends Driver
     string $tag_prefix = 'tag:',
     string $tag_store = 'TAG_STORE',
     int    $expire = 0
-  ) {
+  )
+  {
     $this->storage = rtrim($storage, '/');
     parent::__construct($prefix, $tag_prefix, $tag_store, $expire);
   }
@@ -68,7 +71,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function inc(string $key, int $step = 1): false|int
+  #[Override]
+  public function inc(string $key, int $step = 1): false|int
   {
     $data = $this->get($key);
     if (is_float($data) || is_int($data)) {
@@ -83,7 +87,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function get(string $key, mixed $default = null): mixed
+  #[Override]
+  public function get(string $key, mixed $default = null): mixed
   {
     return $this->getRaw($key) ?? $default;
   }
@@ -132,11 +137,11 @@ class File extends Driver
     // 先整体归一化校验： ".. /" 或 "/.." 等 mix 形式在此即被拦截；
     // 反斜杠在 Windows 下是路径分隔符，统一拒绝防止绕过正斜杠分段检查
     if (str_contains($key, '\\')) {
-      throw new InvalidArgumentException("非法的缓存键（禁止反斜杠）：{$key}");
+      throw new InvalidArgumentException("非法的缓存键（禁止反斜杠）：$key");
     }
     foreach (explode('/', $key) as $segment) {
       if ($segment === '..') {
-        throw new InvalidArgumentException("非法的缓存键（禁止路径穿越）：{$key}");
+        throw new InvalidArgumentException("非法的缓存键（禁止路径穿越）：$key");
       }
     }
     return $this->dir() . $key;
@@ -156,11 +161,16 @@ class File extends Driver
     } else {
       $dir = $this->storage . DIRECTORY_SEPARATOR . $dir;
     }
-    // 创建目录（如果不存在）
-    if (!is_dir($dir)) {
-      if (!@mkdir($dir, 0755, true)) {
-        throw new CacheErrorException('创建缓存目录失败：' . $dir);
-      }
+    // 创建目录（如果不存在），竞态安全的目录创建逻辑见 Filesystem::ensureDirectory
+    try {
+      Filesystem::ensureDirectory($dir);
+    } catch (FilesystemException $e) {
+      // 转换为缓存模块异常，保持 dir() 对外抛出的异常类型契约不变；
+      // 附带驱动与存储根目录上下文，一条异常消息即可定位问题来源与底层失败原因
+      throw new CacheErrorException(
+        "文件缓存驱动创建缓存目录失败（storage={$this->storage}）：{$e->getMessage()}",
+        previous: $e
+      );
     }
     return str_ends_with($dir, DIRECTORY_SEPARATOR) ? $dir : $dir . DIRECTORY_SEPARATOR;
   }
@@ -187,12 +197,14 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function set(
-    string       $key,
-    mixed        $value,
+  #[Override]
+  public function set(
+    string            $key,
+    mixed             $value,
     DateTime|int|null $expire = null,
-    bool         $NX = false
-  ): bool {
+    bool              $NX = false
+  ): bool
+  {
     return $this->setRaw($key, $value, $expire, $NX);
   }
 
@@ -208,11 +220,12 @@ class File extends Driver
    * @return bool 写入成功返回 true
    */
   protected function setRaw(
-    string       $key,
-    mixed        $value,
+    string            $key,
+    mixed             $value,
     DateTime|int|null $expire = null,
-    bool         $NX = false
-  ): bool {
+    bool              $NX = false
+  ): bool
+  {
     $filename = $this->filename($key);
     $data = $this->serialize($value);
     $expire = $expire === null ? $this->expire : $this->formatExpireTime($expire);
@@ -279,7 +292,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function dec(string $key, int $step = 1): false|int
+  #[Override]
+  public function dec(string $key, int $step = 1): false|int
   {
     $data = $this->get($key);
     if (is_float($data) || is_int($data)) {
@@ -294,7 +308,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function pull(string $key): mixed
+  #[Override]
+  public function pull(string $key): mixed
   {
     $result = $this->get($key, false);
 
@@ -305,7 +320,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function delete(array|string $keys): false|int
+  #[Override]
+  public function delete(array|string $keys): false|int
   {
     if (is_string($keys)) $keys = [$keys];
     $number = 0;
@@ -320,7 +336,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function has(string $key): bool
+  #[Override]
+  public function has(string $key): bool
   {
     return $this->getRaw($key) !== null;
   }
@@ -328,7 +345,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function clear(): bool
+  #[Override]
+  public function clear(): bool
   {
     return $this->rmdir($this->dir());
   }
@@ -358,13 +376,15 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function lock(
+  #[Override]
+  public function lock(
     string    $scene,
     int       $expire = 10,
     bool      $autoUnlock = false,
     int       $retry = 5,
     float|int $sleep = 0.2
-  ): string {
+  ): string
+  {
     $expire = $expire <= 0 ? null : time() + $expire;
 
     if ($retry <= 0) $retry = 1;
@@ -441,7 +461,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function close(): void
+  #[Override]
+  public function close(): void
   {
     foreach ($this->lockList as $lockId => $lockInfo) {
       if ($lockInfo['autoUnlock']) $this->unlock($lockId);
@@ -451,7 +472,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function unlock(string $id): bool
+  #[Override]
+  public function unlock(string $id): bool
   {
     if (empty($this->lockList)) return false;
     if (!isset($this->lockList[$id])) return false;
@@ -483,7 +505,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function connect(): File
+  #[Override]
+  public function connect(): File
   {
     return $this;
   }
@@ -491,10 +514,12 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function sAddArray(
+  #[Override]
+  public function sAddArray(
     string       $key,
     array|string $values,
-  ): false|int {
+  ): false|int
+  {
     if (is_string($values)) $values = [$values];
 
     $oldArray = $this->getArray($key);
@@ -515,7 +540,8 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function getArray(string $key): array|false
+  #[Override]
+  public function getArray(string $key): array|false
   {
     // 修复问题#4：原实现 get($key, []) 永远返回数组不会返回 false，
     // 改为缓存不存在时返回 false，与接口声明 array|false 一致
@@ -527,10 +553,12 @@ class File extends Driver
   /**
    * @inheritDoc
    */
-  #[Override] public function sRemoveArray(
+  #[Override]
+  public function sRemoveArray(
     string       $key,
     array|string $values,
-  ): false|int {
+  ): false|int
+  {
     $array = $this->getArray($key);
     if (empty($array)) return 0;
     if (is_string($values)) $values = [$values];

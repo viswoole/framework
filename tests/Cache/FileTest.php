@@ -18,6 +18,7 @@ namespace Viswoole\Tests\Cache;
 use PHPUnit\Framework\TestCase;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Driver\File;
+use Viswoole\Cache\Exception\CacheErrorException;
 
 /**
  * 文件缓存测试
@@ -25,6 +26,34 @@ use Viswoole\Cache\Driver\File;
 class FileTest extends TestCase
 {
   protected CacheDriverInterface $cache;
+
+  /**
+   * 测试缓存目录创建失败时抛出携带完整上下文的异常
+   *
+   * 异常消息应包含驱动标识、存储根目录与底层真实错误，便于定位问题；
+   * 异常类型须为 CacheErrorException（dir() 的对外异常契约）
+   *
+   * @return void
+   */
+  public function testDirCreationFailureThrowsWithContext()
+  {
+    // 用同名文件占用存储根目录路径，使目录创建必定失败
+    $storage = sys_get_temp_dir() . '/viswoole_cache_file_test_' . uniqid();
+    touch($storage);
+    $cache = new File(storage: $storage);
+
+    try {
+      $cache->set('test', 1);
+      static::fail('预期抛出 CacheErrorException');
+    } catch (CacheErrorException $e) {
+      static::assertStringContainsString('文件缓存驱动创建缓存目录失败', $e->getMessage());
+      static::assertStringContainsString("storage={$storage}", $e->getMessage());
+      static::assertStringContainsString('mkdir():', $e->getMessage());
+      static::assertInstanceOf(\Viswoole\Core\Exception\FilesystemException::class, $e->getPrevious());
+    } finally {
+      unlink($storage);
+    }
+  }
 
   /**
    * 测试写入缓存数据
