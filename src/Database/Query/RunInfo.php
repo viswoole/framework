@@ -29,9 +29,9 @@ readonly class RunInfo
    */
   public Raw $sql;
   /**
-   * @var bool|array{tag:string,expire:int} 缓存策略，false 表示未启用缓存
+   * @var false|array{key:string,store:string|null,tag:string|null,expire:int} 缓存策略，false 表示未启用缓存
    */
-  public bool|array $cache;
+  public false|array $cache;
   /**
    * @var array{start_time:float,end_time:float,cost_time_s:float,cost_time_ms:float} 执行耗时统计
    */
@@ -39,13 +39,13 @@ readonly class RunInfo
 
   /**
    * @param Raw $sql 已执行的 SQL 语句
-   * @param bool|array $cache 缓存策略，false 表示未启用
+   * @param false|array $cache 缓存策略，false 表示未启用
    * @param array $time 执行耗时统计，包含 start_time / end_time / cost_time_s / cost_time_ms
    */
   public function __construct(
-    Raw        $sql,
-    bool|array $cache,
-    array      $time
+    Raw         $sql,
+    false|array $cache,
+    array       $time
   )
   {
     $this->sql = $sql;
