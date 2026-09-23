@@ -16,8 +16,9 @@ declare(strict_types=1);
 namespace Viswoole\Database\Model;
 
 use InvalidArgumentException;
-use Viswoole\Database\Collection;
+use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Entity;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model;
 use Viswoole\Database\Raw;
@@ -30,7 +31,7 @@ use Viswoole\Database\Raw;
  * 1. 以主表键集合查询中间表（可经 wherePivot() 追加绑定条件），
  *    构建 主表键 => [关联键 => 中间表行] 映射；
  * 2. 以去重后的关联键集合查询关联模型（可经 handle() 追加条件），
- *    再按中间表映射组装出各主表键的 Collection，每条关联数据
+ *    再按中间表映射组装出各主表键的集合，每条关联数据
  *    附带 PIVOT_KEY 键保存对应的中间表行（可读取绑定时间等扩展字段）。
  * 写路径由 InteractsWithPivot 提供：attach() 新增绑定、detach() 解除绑定。
  *
@@ -75,7 +76,8 @@ class BelongsToMany extends RelationQuery
    * 查询多对多关联数据，构建主表键到关联集合的映射
    *
    * @param array $data 主表查询结果（仅读取其中的 localKey 列）
-   * @return array<mixed,Collection> 主表键 => 关联数据集合
+   * @return array<mixed,BaseCollection> 主表键 => 关联数据集合
+   * @throws InvalidArgumentException 实体关联模型行数据水合失败时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function query(array $data): array
@@ -147,11 +149,12 @@ class BelongsToMany extends RelationQuery
   }
 
   /**
-   * 按中间表映射组装 主表键 => Collection 映射
+   * 按中间表映射组装 主表键 => 集合 映射
    *
    * @param array<array<mixed,array>> $pivotMap 中间表映射
    * @param array<mixed,array> $relatedMap 关联模型行映射
-   * @return array<mixed,Collection> 主表键 => 关联数据集合
+   * @return array<mixed,BaseCollection> 主表键 => 关联数据集合
+   * @throws InvalidArgumentException 实体关联模型行数据水合失败时抛出
    * @throws DbException
    */
   private function assembleKeyMap(array $pivotMap, array $relatedMap): array
@@ -164,11 +167,12 @@ class BelongsToMany extends RelationQuery
         // 数组按值拷贝：同一关联行被多个主行共享时，各自的 pivot 数据互不影响
         $row = $relatedMap[$related];
         $row[self::PIVOT_KEY] = $pivotRow;
+        // 行数据经关联模型的水合工厂出口包装（实体关联模型返回实体，pivot 存入附加数据）
         if (!isset($keyMapData[$local])) {
-          $keyMapData[$local] = new Collection($this->relationModel->query, []);
+          $keyMapData[$local] = $this->relationModel->query->newRowsCollection();
         }
         $keyMapData[$local]->append(
-          new DataSet($this->relationModel->query->newQuery(), $row)
+          $this->relationModel->query->newRowSet($row)
         );
       }
     }
@@ -180,14 +184,17 @@ class BelongsToMany extends RelationQuery
    *
    * 新增绑定请使用 attach()。
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param array $data 关联表数据
    * @param array $columns 仅允许写入的列名
-   * @return DataSet 永不返回
+   * @return DataSet|Entity 永不返回
    * @throws InvalidArgumentException 始终抛出
    */
   #[\Override]
-  public function create(int|string|DataSet $parent, array $data, array $columns = []): DataSet
+  public function create(
+    int|string|DataSet|Entity $parent,
+    array                     $data, array $columns = []
+  ): DataSet|Entity
   {
     throw new InvalidArgumentException('多对多关联不支持 create()，请使用 attach() 新增绑定');
   }
@@ -197,13 +204,13 @@ class BelongsToMany extends RelationQuery
    *
    * 解除绑定请使用 detach()。
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param bool $real 是否硬删除
    * @return int|Raw 永不返回
    * @throws InvalidArgumentException 始终抛出
    */
   #[\Override]
-  public function delete(int|string|DataSet $parent, bool $real = false): int|Raw
+  public function delete(int|string|DataSet|Entity $parent, bool $real = false): int|Raw
   {
     throw new InvalidArgumentException('多对多关联不支持 delete()，请使用 detach() 解除绑定');
   }

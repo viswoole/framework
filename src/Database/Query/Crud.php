@@ -19,12 +19,15 @@ use Generator;
 use InvalidArgumentException;
 use PDO;
 use PDOStatement;
+use RuntimeException;
 use Swoole\Database\PDOStatementProxy;
 use Viswoole\Cache\Facade\Cache;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Collection;
+use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Entity;
 use Viswoole\Database\Exception\DataNotFoundException;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
@@ -122,25 +125,25 @@ trait Crud
    * 执行查询（select 的别名方法）
    *
    * @param bool $allowEmpty 是否允许空结果
-   * @return Collection|Raw 查询结果集合
+   * @return BaseCollection|Raw 查询结果集合（模型查询为 Collection，实体查询为 EntityCollection）
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws DbException 数据库操作失败时抛出
    * @see self::select()
    */
-  public function get(bool $allowEmpty = true): Collection|Raw
+  public function get(bool $allowEmpty = true): BaseCollection|Raw
   {
     return $this->select($allowEmpty);
   }
 
   /**
-   * 执行查询并返回 Collection 集合
+   * 执行查询并返回集合
    *
    * @param bool $allowEmpty 是否允许空结果，为 false 且结果为空时抛出异常
-   * @return Collection|Raw 查询结果集合
+   * @return BaseCollection|Raw 查询结果集合（模型查询为 Collection，实体查询为 EntityCollection）
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function select(bool $allowEmpty = true): Collection|Raw
+  public function select(bool $allowEmpty = true): BaseCollection|Raw
   {
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
@@ -255,11 +258,14 @@ trait Crud
    *
    * @param array $data 关联数组数据
    * @return string|int|Raw 自增主键值
-   * @throws InvalidArgumentException $data非关联数组时抛出
+   * @throws InvalidArgumentException $data非关联数组或为空时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function insertGetId(array $data): string|int|Raw
   {
+    // 与 insert() 对齐的空数据守卫：空数组会生成 INSERT INTO t () VALUES ()，
+    // MySQL 下静默插入全默认值记录（垃圾数据），必须在此拦截
+    if (empty($data)) throw new InvalidArgumentException('要写入数据不能为空');
     if (!Arr::isAssociativeArray($data)) {
       throw new InvalidArgumentException('要写入的数据格式必须是关联数组');
     }
@@ -287,6 +293,7 @@ trait Crud
    *
    * @param string $column 列名，默认 '*'
    * @return int|Raw 记录总数
+   * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function count(string $column = '*'): int|Raw
@@ -317,7 +324,7 @@ trait Crud
       );
     }
     // 聚合表达式含函数语法，无法作为普通标识符 quote，经 Raw 显式构建
-    $this->options->columns[] = Db::raw("{$fn}({$column}) AS {$type}");
+    $this->options->columns[] = Db::raw("$fn($column) AS $type");
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     return $result[0][$type];
@@ -349,6 +356,7 @@ trait Crud
    *
    * @param string $column 列名
    * @return string|int|float|Raw 最小值
+   * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function min(string $column): string|int|float|Raw
@@ -362,6 +370,7 @@ trait Crud
    *
    * @param string $column 列名
    * @return string|int|float|Raw 最大值
+   * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function max(string $column): string|int|float|Raw
@@ -375,6 +384,7 @@ trait Crud
    *
    * @param string $column 列名
    * @return float|int|Raw 平均值
+   * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function avg(string $column): float|int|Raw
@@ -388,6 +398,7 @@ trait Crud
    *
    * @param string $column 列名
    * @return float|int|Raw 总和
+   * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function sum(string $column): float|int|Raw
@@ -397,14 +408,16 @@ trait Crud
   }
 
   /**
-   * 查询单条记录（first 的别名方法）
+   * 查询单条记录
    *
    * @param bool $allowEmpty 是否允许空结果
-   * @return DataSet|Raw 单行数据集
+   * @return DataSet|Entity|Raw|null 单行数据集（实体查询返回 Entity，空结果返回 null）
    * @throws DataNotFoundException 查询为空且不允许空时抛出
+   * @throws InvalidArgumentException 实体查询水合失败（行数据与属性类型不匹配）时抛出
+   * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function first(bool $allowEmpty = true): DataSet|Raw
+  public function first(bool $allowEmpty = true): DataSet|Entity|Raw|null
   {
     return $this->find(null, $allowEmpty);
   }
@@ -412,25 +425,34 @@ trait Crud
   /**
    * 按主键查询单条记录，自动添加 LIMIT 1
    *
-   * 与 select() 不同，find() 返回 DataSet 对象，可直接修改字段值并调用 save() 持久化。
+   * 与 select() 不同，find() 返回单行数据载体（模型为 DataSet、实体查询为实体），
+   * 可直接修改字段值并调用 save() 持久化；空结果且允许空时返回 null。
    *
    * @param int|string|null $value 主键值，为 null 时需配合 where 条件
    * @param bool $allowEmpty 是否允许空结果，为 false 且结果为空时抛出异常
-   * @return DataSet|Raw 单行数据集
+   * @return DataSet|Entity|Raw|null 单行数据集（实体查询返回 Entity），
+   *   空结果且允许空时返回 null
    * @throws DataNotFoundException 查询为空且不允许空时抛出
+   * @throws InvalidArgumentException 实体查询水合失败（行数据与属性类型不匹配）时抛出
+   * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function find(int|string|null $value = null, bool $allowEmpty = true): DataSet|Raw
+  public function find(int|string|null $value = null, bool $allowEmpty = true): DataSet|Entity|Raw|null
   {
     $this->limit(1);
     // 修复: 使用严格比较 === null 判断，避免主键值为 0 时被 empty() 误判为空导致无法查询
     if ($value !== null) $this->where($this->options->pk, $value);
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
-    if (empty($result) && !$allowEmpty) {
-      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+    // 空结果返回 null 而非空 DataSet：空 DataSet 是无主键的"死对象"，
+    // 对其 save()/delete() 只能抛异常，语义上未命中就该是 null
+    if (empty($result)) {
+      if (!$allowEmpty) {
+        throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+      }
+      return null;
     }
-    return new DataSet($this->newQuery(), $result[0] ?? []);
+    return $this->newRowSet($result[0]);
   }
 
   /**

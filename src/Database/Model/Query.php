@@ -20,12 +20,11 @@ use Override;
 use RuntimeException;
 use Swoole\Coroutine;
 use Swoole\Coroutine\WaitGroup;
-use Throwable;
 use Viswoole\Core\Common\Arr;
 use Viswoole\Core\Common\Str;
 use Viswoole\Database\BaseQuery as BaseQuery;
-use Viswoole\Database\Collection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Entity;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Model;
@@ -245,7 +244,7 @@ class Query extends BaseQuery
     if ($this->publicMethods === []) {
       // get_class_methods 从模型外部作用域调用时只返回 public 方法
       $this->publicMethods = array_change_key_case(
-        array_flip(get_class_methods($this->model)), CASE_LOWER
+        array_flip(get_class_methods($this->model))
       );
     }
     return isset($this->publicMethods[strtolower($name)]);
@@ -281,12 +280,26 @@ class Query extends BaseQuery
   }
 
   /**
+   * 创建全新的查询实例，基于当前模型的新实例
+   *
+   * @return static 新的查询实例
+   */
+  public function newQuery(): static
+  {
+    $class = get_class($this->model);
+    $model = new $class();
+    return $model->query;
+  }
+
+  /**
    * 执行 CRUD 操作前注入模型业务逻辑（软删除过滤、时间戳写入等），查询后执行关联查询
    *
    * @param string $type 操作类型 insert|insertGetId|update|delete|select
    * @return Raw|string|array|int 查询结果
-   * @throws DbException
-   * @throws Throwable
+   * @throws InvalidArgumentException 模型开启 $autoWritePk 但未定义 public 的 autoWritePk() 方法、
+   *   或实体关联模型水合失败/中间表条件非法时抛出
+   * @throws RuntimeException 实体关联模型属性声明不支持时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   #[Override]
   protected function runCrud(string $type): Raw|string|array|int
@@ -304,6 +317,7 @@ class Query extends BaseQuery
    * 根据 CRUD 类型注入模型业务逻辑：修改器、软删除过滤、时间戳自动写入、主键自动生成
    *
    * @param string $type 操作类型
+   * @throws InvalidArgumentException 模型开启 $autoWritePk 但未定义 public 的 autoWritePk() 方法时抛出
    */
   private function handleCrud(string $type): void
   {
@@ -356,7 +370,9 @@ class Query extends BaseQuery
         if ($this->autoWritePk) {
           if (!in_array('autoWritePk', get_class_methods($this->model), true)) {
             throw new InvalidArgumentException(
-              '模型 ' . get_class($this->model) . ' 开启了 $autoWritePk 但未定义 public 的 autoWritePk() 方法，无法自动生成主键'
+              '模型 ' . get_class(
+                $this->model
+              ) . ' 开启了 $autoWritePk 但未定义 public 的 autoWritePk() 方法，无法自动生成主键'
             );
           }
           if ($isMoreWrite) {
@@ -441,8 +457,9 @@ class Query extends BaseQuery
    *
    * @param array $data 主表查询结果
    * @return array 填充关联数据后的结果
-   * @throws DbException
-   * @throws Throwable
+   * @throws InvalidArgumentException 实体关联模型水合失败或中间表条件非法时抛出
+   * @throws RuntimeException 实体关联模型属性声明不支持时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   protected function queryRelationData(array $data): array
   {
@@ -457,9 +474,14 @@ class Query extends BaseQuery
   /**
    * 协程环境：并发查询所有关联数据，各协程结果写入独立槽位
    *
+   * 仅捕获关联查询链路的框架契约异常（数据库操作、条件校验、实体水合），
+   * 引擎级错误（TypeError 等）不在此拦截，交由 Swoole 协程默认处理。
+   *
    * @param array $data 主表查询结果（只读快照，协程内不修改）
    * @return array 关联名 => 外键映射 的槽位集合
-   * @throws Throwable 任一协程查询失败时抛出首个捕获的异常
+   * @throws InvalidArgumentException 实体水合失败或中间表条件非法时抛出
+   * @throws RuntimeException 实体关联模型属性声明不支持时抛出
+   * @throws DbException 任一协程数据库操作失败时抛出首个捕获的异常
    */
   private function queryRelationsConcurrently(array $data): array
   {
@@ -475,8 +497,8 @@ class Query extends BaseQuery
       Coroutine::create(function () use ($wg, $name, $relation, $data, &$maps, &$throw) {
         try {
           $maps[$name] = $relation->query($data);
-        } catch (Throwable $e) {
-          // 捕获一切异常并记录
+        } catch (DbException|InvalidArgumentException|RuntimeException $e) {
+          // 捕获框架契约异常并记录，等待全部协程退出后统一抛出
           $throw = $e;
         } finally {
           $wg->done();
@@ -491,15 +513,15 @@ class Query extends BaseQuery
   }
 
   /**
-   * 创建一条数据并返回 DataSet
+   * 创建一条数据并返回数据集
    *
    * @param array $data 关联数组数据
    * @param array $columns 仅允许写入的列名，为空时不限制
-   * @return DataSet 包含写入数据（含主键）的 DataSet
-   * @throws InvalidArgumentException 数据非关联数组时抛出
+   * @return DataSet|Entity 包含写入数据（含主键）的数据集（实体查询返回 Entity）
+   * @throws InvalidArgumentException 数据非关联数组，或实体查询行数据水合失败时抛出
    * @throws DbException 数据库操作异常
    */
-  public function create(array $data, array $columns = []): DataSet
+  public function create(array $data, array $columns = []): DataSet|Entity
   {
     if (!Arr::isAssociativeArray($data)) {
       throw new InvalidArgumentException('Model::create() 输入数据必须是关联数组');
@@ -522,19 +544,7 @@ class Query extends BaseQuery
     // 此处同步应用后再补充主键，避免 DataSet 中的值与库中数据不一致
     $data = $this->applyMutators($data);
     $data[$this->pk] = $id;
-    return new DataSet($this->newQuery(), $data);
-  }
-
-  /**
-   * 创建全新的查询实例，基于当前模型的新实例
-   *
-   * @return static 新的查询实例
-   */
-  public function newQuery(): static
-  {
-    $class = get_class($this->model);
-    $model = new $class();
-    return $model->query;
+    return $this->newRowSet($data);
   }
 
   /**
@@ -542,15 +552,15 @@ class Query extends BaseQuery
    *
    * @param array $data 主表查询结果
    * @return array 关联名 => 外键映射 的槽位集合
-   * @throws DbException
+   * @throws InvalidArgumentException 实体水合失败或中间表条件非法时抛出
+   * @throws RuntimeException 实体关联模型属性声明不支持时抛出
+   * @throws DbException 数据库操作失败时抛出
    */
   private function queryRelationsSerially(array $data): array
   {
-    $maps = [];
-    foreach ($this->relations as $name => $relation) {
-      $maps[$name] = $relation->query($data);
-    }
-    return $maps;
+    return array_map(function ($relation) use ($data) {
+      return $relation->query($data);
+    }, $this->relations);
   }
 
   /**
@@ -574,9 +584,10 @@ class Query extends BaseQuery
           $row[$name] = $keyMap[$key];
         } else {
           // 未命中外键：一对多给空集合，一对一给空数据集
+          // （经水合工厂出口构建，实体关联模型返回实体集合/实体）
           $row[$name] = $isMany
-            ? new Collection($relationQuery->newQuery(), [])
-            : new DataSet($relationQuery->newQuery(), []);
+            ? $relationQuery->newRowsCollection()
+            : $relationQuery->newRowSet([]);
         }
       });
     }

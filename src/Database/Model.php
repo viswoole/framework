@@ -99,8 +99,8 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Raw|string|int|float max(string $column) 获取最大值。
  * @method static Raw|int|float avg(string $column) 获取平均值。
  * @method static Raw|int|float sum(string $column) 获取总和。
- * @method static DataSet|Raw find(string|int|null $value = null, bool $allowEmpty = true) 查询单条记录
- * @method static DataSet|Raw first(bool $allowEmpty = true) 查询单条记录
+ * @method static DataSet|Entity|Raw|null find(string|int|null $value = null, bool $allowEmpty = true) 查询单条记录（空结果且允许空时返回 null）
+ * @method static DataSet|Entity|Raw|null first(bool $allowEmpty = true) 查询单条记录（空结果且允许空时返回 null）
  * @method static Collection|Raw select(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static Collection|Raw get(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static array|Raw getArray() 执行查询，并以数组方式返回查询结果

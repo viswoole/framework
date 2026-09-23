@@ -16,6 +16,9 @@ declare(strict_types=1);
 namespace Viswoole\Database;
 
 use InvalidArgumentException;
+use Viswoole\Database\Collection\BaseCollection;
+use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Entity;
 use Viswoole\Database\Query\Crud;
 use Viswoole\Database\Query\Join;
 use Viswoole\Database\Query\Options;
@@ -459,5 +462,34 @@ class BaseQuery
   public function newQuery(): static
   {
     return new static($this->channel, $this->options->table, $this->options->pk);
+  }
+
+  /**
+   * 行级水合出口：把单行数据包装为本查询的行数据载体
+   *
+   * 默认包装为 DataSet；模型查询（Model\Query）与实体查询（EntityQuery）
+   * 均基于此出口承接行数据（关联合并、create、find 等路径），
+   * 实体查询覆写为返回实体实例。public 供关联查询跨类调用。
+   *
+   * @param array<string,mixed> $row 行数据
+   * @return DataSet|Entity 单行数据载体
+   */
+  public function newRowSet(array $row): DataSet|Entity
+  {
+    return new DataSet($this->newQuery(), $row);
+  }
+
+  /**
+   * 集合级水合出口：把行数据列表包装为本查询的多行载体
+   *
+   * 默认包装为 Collection；实体查询（EntityQuery）覆写为返回 EntityCollection。
+   * public 供关联查询（RelationQuery/BelongsToMany）跨类调用。
+   *
+   * @param array<int,mixed> $rows 行数据列表（实体路径也可传入已水合的实体）
+   * @return BaseCollection 多行数据载体
+   */
+  public function newRowsCollection(array $rows = []): BaseCollection
+  {
+    return new Collection($this->newQuery(), $rows);
   }
 }

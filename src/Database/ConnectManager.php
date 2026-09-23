@@ -100,6 +100,8 @@ class ConnectManager
    * @param string $type 连接类型 read|write；仅非事务路径生效，
    *                     事务内新取连接一律强制 write（见下）
    * @return mixed 数据库连接实例
+   * @throws DbException 通道不支持 XA 事务，或事务开启（BEGIN/XA START）、
+   *                     保存点补齐失败时抛出
    */
   public function pop(Channel $channel, string $type): mixed
   {
@@ -189,143 +191,6 @@ class ConnectManager
   private static function savepointName(int $level): string
   {
     return 'viswoole_sp_' . $level;
-  }
-
-  /**
-   * 开启 XA 两阶段提交事务（首层）
-   *
-   * 与 start() 的 BEGIN 路径互斥：XA START 必须是事务首条语句，
-   * 普通事务进行中调用将抛出异常（无法中途升级）；XA 事务内再次调用
-   * 视为嵌套层，等价于 start()（内层走 SAVEPOINT）。
-   * 用户需自行保证所有参与通道的数据库支持 XA 事务。
-   *
-   * @param XaJournal $journal 提交意图日志（崩溃恢复依据）
-   * @throws DbException 普通事务进行中调用时抛出
-   */
-  public function startXa(XaJournal $journal): void
-  {
-    if ($this->transactionDepth > 0) {
-      if ($this->xaContext !== null) {
-        $this->start();
-        return;
-      }
-      throw new DbException(
-        '普通事务进行中无法开启 XA 事务（XA START 必须是事务首条语句，无法中途升级），'
-        . '请在外层使用 startXaTransaction 开启或将本操作移出当前事务'
-      );
-    }
-    $this->xaContext = XaContext::create($journal);
-    $this->transactionDepth = 1;
-  }
-
-  /**
-   * 开启事务（支持嵌套）
-   *
-   * 首层开启真实事务（连接被 pop 时才真正 BEGIN）；
-   * 嵌套层在所有已加入事务的连接上声明保存点，使内层可独立回滚。
-   * 调用方需按后开先关（LIFO）顺序收尾各层。
-   */
-  public function start(): void
-  {
-    $level = $this->transactionDepth + 1;
-    if ($level > 1) {
-      // 先声明保存点再提升层级计数：保存点创建失败（如连接失效）时
-      // 层级计数不至错乱；残余保存点无害（该层未成功开启，不会被引用）
-      $sql = 'SAVEPOINT ' . self::savepointName($level);
-      foreach ($this->connections as $item) {
-        $this->executeSavepointSql($item['connect'], $sql);
-      }
-    }
-    $this->transactionDepth = $level;
-  }
-
-  /**
-   * 提交当前最内层事务
-   *
-   * 嵌套层提交仅释放该层保存点，数据仍处于最外层事务保护中；
-   * 首层提交才真正落库，并释放所有事务连接。
-   * 内层释放保存点失败时异常向外抛（层级已在 finally 回退），
-   * 失效连接留在事务池中，由外层收尾或析构时 forcePut 兜底回收。
-   */
-  public function commit(): void
-  {
-    if ($this->transactionDepth === 0) return;
-    if ($this->transactionDepth > 1) {
-      $sql = 'RELEASE SAVEPOINT ' . self::savepointName($this->transactionDepth);
-      try {
-        foreach ($this->connections as $item) {
-          $this->executeSavepointSql($item['connect'], $sql);
-        }
-      } finally {
-        // 中途异常也必须回退层级，避免后续 commit/rollBack 作用于错误层级
-        $this->transactionDepth--;
-      }
-      return;
-    }
-    // 首层：真实提交。使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
-    if ($this->xaContext !== null) {
-      // XA 首层：两阶段协议（XA END → journal → XA PREPARE → XA COMMIT），
-      // 失败语义见 XaCoordinator；prepared 分支事务由服务端持有，
-      // 连接可安全归还（forcePut 依据分支状态决定是否需要显式 XA ROLLBACK）
-      try {
-        XaCoordinator::commit($this->xaContext, $this->xaBranches());
-      } finally {
-        $this->close();
-      }
-      return;
-    }
-    try {
-      $array = $this->connections;
-      foreach ($array as $key => $item) {
-        $item['connect']->commit();
-        unset($this->connections[$key]);
-        // 事务释放路径必须强制归还：此时事务标志尚未重置，
-        // 走 put() 会落入"仅标记非活跃"分支导致连接滞留
-        $this->forcePut($item['channel'], $item['connect']);
-      }
-    } finally {
-      $this->close();
-    }
-  }
-
-  /**
-   * 收集当前 XA 事务全部分支（连接与 xid 配对）
-   *
-   * @return array<int,array{connect:object,xid:string}> 分支列表
-   */
-  private function xaBranches(): array
-  {
-    if ($this->xaContext === null) return [];
-    $branches = [];
-    foreach ($this->connections as $item) {
-      $connect = $item['connect'];
-      // is_object 而非 instanceof object：object 是保留类型名而非类名，
-      // instanceof 对恒定返回 false
-      if (!is_object($connect)) continue;
-      $xid = $this->xaContext->branchXidOf($connect);
-      if ($xid !== null) {
-        $branches[] = ['connect' => $connect, 'xid' => $xid];
-      }
-    }
-    return $branches;
-  }
-
-  /**
-   * 关闭事务，归还所有连接并重置事务状态
-   */
-  protected function close(): void
-  {
-    // 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
-    $array = $this->connections;
-    foreach ($array as $key => $item) {
-      unset($this->connections[$key]);
-      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
-      // （forcePut 依赖 xaContext 判定 XA 分支状态，必须在重置之前执行）
-      $this->forcePut($item['channel'], $item['connect']);
-    }
-    $this->transactionDepth = 0;
-    $this->connections = [];
-    $this->xaContext = null;
   }
 
   /**
@@ -447,6 +312,143 @@ class ConnectManager
         $item['connect']->rollBack();
         unset($this->connections[$key]);
         // 强制归还：见 commit() 中说明，避免落入事务标记分支
+        $this->forcePut($item['channel'], $item['connect']);
+      }
+    } finally {
+      $this->close();
+    }
+  }
+
+  /**
+   * 收集当前 XA 事务全部分支（连接与 xid 配对）
+   *
+   * @return array<int,array{connect:object,xid:string}> 分支列表
+   */
+  private function xaBranches(): array
+  {
+    if ($this->xaContext === null) return [];
+    $branches = [];
+    foreach ($this->connections as $item) {
+      $connect = $item['connect'];
+      // is_object 而非 instanceof object：object 是保留类型名而非类名，
+      // instanceof 对恒定返回 false
+      if (!is_object($connect)) continue;
+      $xid = $this->xaContext->branchXidOf($connect);
+      if ($xid !== null) {
+        $branches[] = ['connect' => $connect, 'xid' => $xid];
+      }
+    }
+    return $branches;
+  }
+
+  /**
+   * 关闭事务，归还所有连接并重置事务状态
+   */
+  protected function close(): void
+  {
+    // 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
+    $array = $this->connections;
+    foreach ($array as $key => $item) {
+      unset($this->connections[$key]);
+      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
+      // （forcePut 依赖 xaContext 判定 XA 分支状态，必须在重置之前执行）
+      $this->forcePut($item['channel'], $item['connect']);
+    }
+    $this->transactionDepth = 0;
+    $this->connections = [];
+    $this->xaContext = null;
+  }
+
+  /**
+   * 开启 XA 两阶段提交事务（首层）
+   *
+   * 与 start() 的 BEGIN 路径互斥：XA START 必须是事务首条语句，
+   * 普通事务进行中调用将抛出异常（无法中途升级）；XA 事务内再次调用
+   * 视为嵌套层，等价于 start()（内层走 SAVEPOINT）。
+   * 用户需自行保证所有参与通道的数据库支持 XA 事务。
+   *
+   * @param XaJournal $journal 提交意图日志（崩溃恢复依据）
+   * @throws DbException 普通事务进行中调用时抛出
+   */
+  public function startXa(XaJournal $journal): void
+  {
+    if ($this->transactionDepth > 0) {
+      if ($this->xaContext !== null) {
+        $this->start();
+        return;
+      }
+      throw new DbException(
+        '普通事务进行中无法开启 XA 事务（XA START 必须是事务首条语句，无法中途升级），'
+        . '请在外层使用 startXaTransaction 开启或将本操作移出当前事务'
+      );
+    }
+    $this->xaContext = XaContext::create($journal);
+    $this->transactionDepth = 1;
+  }
+
+  /**
+   * 开启事务（支持嵌套）
+   *
+   * 首层开启真实事务（连接被 pop 时才真正 BEGIN）；
+   * 嵌套层在所有已加入事务的连接上声明保存点，使内层可独立回滚。
+   * 调用方需按后开先关（LIFO）顺序收尾各层。
+   */
+  public function start(): void
+  {
+    $level = $this->transactionDepth + 1;
+    if ($level > 1) {
+      // 先声明保存点再提升层级计数：保存点创建失败（如连接失效）时
+      // 层级计数不至错乱；残余保存点无害（该层未成功开启，不会被引用）
+      $sql = 'SAVEPOINT ' . self::savepointName($level);
+      foreach ($this->connections as $item) {
+        $this->executeSavepointSql($item['connect'], $sql);
+      }
+    }
+    $this->transactionDepth = $level;
+  }
+
+  /**
+   * 提交当前最内层事务
+   *
+   * 嵌套层提交仅释放该层保存点，数据仍处于最外层事务保护中；
+   * 首层提交才真正落库，并释放所有事务连接。
+   * 内层释放保存点失败时异常向外抛（层级已在 finally 回退），
+   * 失效连接留在事务池中，由外层收尾或析构时 forcePut 兜底回收。
+   */
+  public function commit(): void
+  {
+    if ($this->transactionDepth === 0) return;
+    if ($this->transactionDepth > 1) {
+      $sql = 'RELEASE SAVEPOINT ' . self::savepointName($this->transactionDepth);
+      try {
+        foreach ($this->connections as $item) {
+          $this->executeSavepointSql($item['connect'], $sql);
+        }
+      } finally {
+        // 中途异常也必须回退层级，避免后续 commit/rollBack 作用于错误层级
+        $this->transactionDepth--;
+      }
+      return;
+    }
+    // 首层：真实提交。使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
+    if ($this->xaContext !== null) {
+      // XA 首层：两阶段协议（XA END → journal → XA PREPARE → XA COMMIT），
+      // 失败语义见 XaCoordinator；prepared 分支事务由服务端持有，
+      // 连接可安全归还（forcePut 依据分支状态决定是否需要显式 XA ROLLBACK）
+      try {
+        XaCoordinator::commit($this->xaContext, $this->xaBranches());
+      } finally {
+        $this->close();
+      }
+      return;
+    }
+    try {
+      $array = $this->connections;
+      foreach ($array as $key => $item) {
+        $item['connect']->commit();
+        unset($this->connections[$key]);
+        // 事务释放路径必须强制归还：此时事务标志尚未重置，
+        // 走 put() 会落入"仅标记非活跃"分支导致连接滞留
         $this->forcePut($item['channel'], $item['connect']);
       }
     } finally {

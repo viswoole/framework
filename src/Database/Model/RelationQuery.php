@@ -16,8 +16,9 @@ declare(strict_types=1);
 namespace Viswoole\Database\Model;
 
 use InvalidArgumentException;
-use Viswoole\Database\Collection;
+use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Entity;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Model;
 use Viswoole\Database\Raw;
@@ -61,7 +62,8 @@ class RelationQuery
    * 避免协程间相互覆盖已填充的关联字段。
    *
    * @param array $data 主表查询结果（仅读取其中的 localKey 列）
-   * @return array<mixed,DataSet|Collection> 外键值 => 关联数据（一对一为 DataSet，一对多为 Collection）
+   * @return array<mixed,DataSet|BaseCollection|Entity> 外键值 => 关联数据（一对一为 DataSet/Entity，一对多为 Collection/EntityCollection）
+   * @throws InvalidArgumentException 实体关联模型行数据水合失败时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function query(array $data): array
@@ -82,28 +84,18 @@ class RelationQuery
     $keyMapData = [];
     foreach ($list as $row) {
       $key = $row[$this->foreignKey];
+      // 行数据经关联模型的水合工厂出口包装（实体关联模型返回实体）
       if ($this->many) {
-        $row = new DataSet(
-          $this->relationModel->query->newQuery(),
-          $row
-        );
+        $rowSet = $this->relationModel->query->newRowSet($row);
         if (array_key_exists($key, $keyMapData)) {
-          /**
-           * @var Collection $collection
-           */
-          $collection = $keyMapData[$key];
-          $collection->append($row);
+          $keyMapData[$key]->append($rowSet);
         } else {
-          $collection = new Collection($this->relationModel->query, [$row]);
-          $keyMapData[$key] = $collection;
+          $keyMapData[$key] = $this->relationModel->query->newRowsCollection([$rowSet]);
         }
       } else {
         // 如果是一对一关联，则只保留一条数据，多余数据丢弃
         if (array_key_exists($key, $keyMapData)) continue;
-        $keyMapData[$key] = new DataSet(
-          $this->relationModel->query->newQuery(),
-          $row
-        );
+        $keyMapData[$key] = $this->relationModel->query->newRowSet($row);
       }
     }
     return $keyMapData;
@@ -135,14 +127,14 @@ class RelationQuery
    * (new UserModel())->articles()->create($user, ['title' => '标题']);
    * ```
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param array $data 关联表数据（关联数组）
    * @param array $columns 仅允许写入的列名，为空时不限制
-   * @return DataSet 含主键的写入结果
+   * @return DataSet|Entity 含主键的写入结果（实体关联模型返回 Entity）
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function create(int|string|DataSet $parent, array $data, array $columns = []): DataSet
+  public function create(int|string|DataSet|Entity $parent, array $data, array $columns = []): DataSet|Entity
   {
     // 先按白名单过滤，再强制写入外键：外键由框架持有，
     // 必须在过滤之后写入，否则会被白名单意外滤掉导致关联悬空
@@ -159,12 +151,26 @@ class RelationQuery
    * 统一处理标量键值与主表行数据集两种父级入参形态，
    * 供关联写入（create/delete/attach/detach）复用。
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @return int|string 主表键值
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
    */
-  protected function resolveParentKey(int|string|DataSet $parent): int|string
+  protected function resolveParentKey(int|string|DataSet|Entity $parent): int|string
   {
+    if ($parent instanceof Entity) {
+      $key = $parent->getValue($this->localKey);
+      if ($key === null) {
+        throw new InvalidArgumentException(
+          '主表实体中缺少关联键(' . $this->localKey . ')，无法执行关联写入'
+        );
+      }
+      if (!is_int($key) && !is_string($key)) {
+        throw new InvalidArgumentException(
+          '主表实体的关联键(' . $this->localKey . ')必须是 int|string，实际为 ' . get_debug_type($key)
+        );
+      }
+      return $key;
+    }
     if ($parent instanceof DataSet) {
       $key = $parent[$this->localKey] ?? null;
       if ($key === null) {
@@ -189,13 +195,13 @@ class RelationQuery
    * (new UserModel())->articles()->delete(1, true);
    * ```
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param bool $real 是否硬删除，仅关联模型启用软删除时有效
    * @return int|Raw 受影响的记录数
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function delete(int|string|DataSet $parent, bool $real = false): int|Raw
+  public function delete(int|string|DataSet|Entity $parent, bool $real = false): int|Raw
   {
     return $this->relationModel->query
       ->where($this->foreignKey, '=', $this->resolveParentKey($parent))

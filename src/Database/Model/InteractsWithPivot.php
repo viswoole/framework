@@ -17,6 +17,7 @@ namespace Viswoole\Database\Model;
 
 use InvalidArgumentException;
 use Viswoole\Database\Collection\DataSet;
+use Viswoole\Database\Entity;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Model;
@@ -35,7 +36,7 @@ use Viswoole\Database\Raw;
  * @property-read Model $pivotModel 中间表模型实例
  * @property-read string $foreignPivotKey 中间表指向当前模型的外键名
  * @property-read string $relatedPivotKey 中间表指向关联模型的外键名
- * @method int|string resolveParentKey(int|string|DataSet $parent) 解析主表键值（定义于 RelationQuery）
+ * @method int|string resolveParentKey(int|string|DataSet|Entity $parent) 解析主表键值（定义于 RelationQuery）
  *
  * @see BelongsToMany
  */
@@ -65,7 +66,6 @@ trait InteractsWithPivot
    * @param string|int|float|array|null $value 比较值，为 null 时 $operator 作为值
    * @param string $connector 条件连接符 AND|OR，默认 AND
    * @return static 支持链式调用
-   * @throws InvalidArgumentException 运算符或连接符无效时抛出（由 Query::where() 校验）
    */
   public function wherePivot(
     string                      $column,
@@ -92,7 +92,7 @@ trait InteractsWithPivot
    * $user->roles()->attach($user, 10);
    * ```
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param array|int|string $related 关联键或关联键数组
    * @param array $pivotData 附加的中间表字段，为空时不附加
    * @return int 实际新增的绑定数
@@ -102,9 +102,9 @@ trait InteractsWithPivot
    * 需依赖中间表 (foreign,related) 唯一索引兜底，否则可能产生重复绑定
    */
   public function attach(
-    int|string|DataSet $parent,
-    array|int|string   $related,
-    array              $pivotData = []
+    int|string|DataSet|Entity $parent,
+    array|int|string          $related,
+    array                     $pivotData = []
   ): int
   {
     $parentKey = $this->resolveParentKey($parent);
@@ -153,15 +153,15 @@ trait InteractsWithPivot
    * $user->roles()->detach(1);
    * ```
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param array|int|string|null $related 关联键或关联键数组，为 null 时解除全部绑定
    * @return int 实际删除的绑定数
    * @throws InvalidArgumentException 数据集中缺少主表键时抛出
    * @throws DbException 数据库操作异常
    */
   public function detach(
-    int|string|DataSet    $parent,
-    array|int|string|null $related = null
+    int|string|DataSet|Entity $parent,
+    array|int|string|null     $related = null
   ): int
   {
     $parentKey = $this->resolveParentKey($parent);
@@ -189,7 +189,7 @@ trait InteractsWithPivot
    * // ['attached' => [20], 'detached' => [11]]
    * ```
    *
-   * @param int|string|DataSet $parent 主表键值或主表行数据集
+   * @param int|string|DataSet|Entity $parent 主表键值、主表行数据集或主表实体
    * @param array|int|string $related 目标关联键或关联键数组
    * @param array $pivotData 附加到新增绑定的中间表字段
    * @return array{attached:array<int,int|string>,detached:array<int,int|string>} 新增与移除的关联键列表
@@ -197,9 +197,9 @@ trait InteractsWithPivot
    * @throws DbException 数据库操作异常
    */
   public function sync(
-    int|string|DataSet $parent,
-    array|int|string   $related,
-    array              $pivotData = []
+    int|string|DataSet|Entity $parent,
+    array|int|string          $related,
+    array                     $pivotData = []
   ): array
   {
     $parentKey = $this->resolveParentKey($parent);
@@ -254,9 +254,11 @@ trait InteractsWithPivot
   /**
    * 将已记录的中间表条件应用到查询实例
    *
-   * 运算符白名单与连接符校验由 Query::where() 内部完成。
+   * 运算符白名单与连接符校验在 Query::where() 内部完成，
+   * 非法运算符或连接符会在此处抛出。
    *
    * @param Query $query 中间表查询实例
+   * @throws InvalidArgumentException 运算符或连接符无效时抛出（由 Query::where() 校验）
    */
   protected function applyPivotWheres(Query $query): void
   {

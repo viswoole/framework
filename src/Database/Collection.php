@@ -265,6 +265,7 @@ class Collection extends BaseCollection
    *
    * @param mixed $value DataSet 对象或关联数组
    * @param bool $autoWrite 传入数组且为 true 时，自动写入数据库
+   * @throws InvalidArgumentException 值既非数组也非 DataSet 对象时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function append(mixed $value, bool $autoWrite = false): void
@@ -360,6 +361,7 @@ class Collection extends BaseCollection
    *
    * @param array $data 要更新的键值对
    * @return int 成功更新的记录数
+   * @throws RuntimeException 存在缺少主键字段的行时抛出
    * @throws DbException 数据库操作失败时抛出
    */
   public function update(array $data): int
