@@ -60,6 +60,8 @@ use Viswoole\Database\Model\Query;
  * - 不支持 readonly 属性：水合与 save() 需要对属性赋值；
  * - 写入规则：save() 对已持久化实体做快照对比增量 UPDATE，对新实体
  *   做整体 INSERT（主键留空时回填自增值）；未初始化属性不参与写入；
+ *   声明默认值且值仍等于默认值的属性同样不参与 INSERT，交由数据库
+ *   列默认值生效；
  * - toArray() 输出列名键数组（蛇形），枚举转回退值、日期对象格式化
  *   为 'Y-m-d H:i:s'，并沿用 $hidden 过滤与 get{Field}Attr 获取器；
  * - 静态调用经 Model::__callStatic 转发到 EntityQuery，链式条件与
@@ -279,6 +281,10 @@ abstract class Entity extends Model implements JsonSerializable
   /**
    * 新实体的插入落库
    *
+   * 声明默认值且值仍等于默认值的属性不参与写入（视为未显式赋值，
+   * 交由数据库列默认值生效），与「未初始化属性不参与写入」约定对齐，
+   * 避免如 string 空串默认值误写 DATETIME 列触发严格模式错误。
+   *
    * @param array<string,mixed> $row 脱水后的行数据
    * @return bool 插入成功返回 true
    * @throws InvalidArgumentException 实体无任何属性值时抛出
@@ -286,6 +292,14 @@ abstract class Entity extends Model implements JsonSerializable
    */
   private function insertNew(array $row): bool
   {
+    // 声明默认值且值仍等于默认值的列过滤：与脱水归一化后的默认值
+    // 严格比较（元数据构建时已预脱水，枚举/日期默认值可直接比较）
+    foreach (EntityHydrator::metasByColumn(static::class) as $meta) {
+      if (!$meta->hasDeclaredDefault) continue;
+      if (array_key_exists($meta->column, $row) && $row[$meta->column] === $meta->declaredDefault) {
+        unset($row[$meta->column]);
+      }
+    }
     // 空数据守卫：无任何非 null 属性值的实体不允许落库——
     // 空数据（或仅有声明默认值的可空列）会生成只有 NULL 列的 INSERT，
     // MySQL 下会静默插入一条全默认值记录（垃圾数据），必须在此拦截

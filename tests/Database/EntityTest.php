@@ -193,8 +193,9 @@ class EntityTest extends TestCase
     $entity = new UserEntity(['user_name' => 'alice', 'age' => 20, 'status' => UserStatus::Active]);
     self::assertTrue($entity->save(), '新实体保存应返回 true');
     self::assertSame(7, $entity->id, '自增主键应回填并强转为属性类型');
-    // 主键未初始化不参与写入；声明默认值的可空属性显式写入 NULL
-    self::assertSame(['alice', 20, 1, null, null], $fake->calls[0]['bindings'], '写入绑定应为脱水后的属性值');
+    // 主键未初始化不参与写入；声明默认值（含 = null）的属性不参与 INSERT，
+    // 交由数据库列默认值生效
+    self::assertSame(['alice', 20, 1], $fake->calls[0]['bindings'], '写入绑定应为脱水后的属性值');
 
     // 已落库：无变更时再次 save 不应产生 SQL
     $calls = count($fake->calls);
@@ -228,6 +229,49 @@ class EntityTest extends TestCase
     $entity->age = 20;
     self::assertTrue($entity->save(), '基于最新库内状态改回 20 属于真实变更');
     self::assertSame([20], $fake->calls[1]['bindings'], '第二次 UPDATE 仅包含变更列');
+  }
+
+  /**
+   * 声明默认值的属性不参与 INSERT：值仍等于默认值时跳过（交由数据库
+   * 列默认值生效），显式赋值不等于默认值时正常写入
+   *
+   * 复现缺陷场景：string 空串默认值承载 DATETIME 列，旧行为会把空串
+   * 写入 DATETIME NOT NULL 列触发 MySQL 严格模式错误
+   */
+  public function testSaveSkipsPropertiesAtDeclaredDefaults(): void
+  {
+    $fake = new FakeChannel(1);
+    $this->makeManager($fake);
+
+    // 仅赋值 user_name：pay_time 空串、age 0、is_top false、state 枚举
+    // Draft、remark/create_time null 等声明默认值均不参与 INSERT
+    $entity = new DefaultedEntity(['user_name' => 'alice']);
+    self::assertTrue($entity->save(), '仅赋值部分字段应可正常插入');
+    self::assertSame(['alice'], $fake->calls[0]['bindings'], '等于声明默认值的列不应写入 INSERT');
+
+    // 显式赋值不等于默认值时正常写入
+    $explicit = new DefaultedEntity(['user_name' => 'bob', 'pay_time' => '2026-09-27 10:00:00']);
+    self::assertTrue($explicit->save());
+    self::assertSame(
+      ['bob', '2026-09-27 10:00:00'],
+      $fake->calls[1]['bindings'],
+      '显式赋值不等于默认值的列应正常写入'
+    );
+
+    // 显式赋值等于默认值：无法与"未赋值"区分，统一按不写入处理（固化边界语义）
+    $atDefault = new DefaultedEntity(['user_name' => 'carol', 'age' => 0]);
+    self::assertTrue($atDefault->save());
+    self::assertSame(['carol'], $fake->calls[2]['bindings'], '显式赋值等于默认值时同样跳过写入');
+
+    // 显式赋枚举/bool 非默认值：经 coerce 水合与脱水回退值正常写入，
+    // 锁定枚举默认值预脱水（KIND_ENUM 分支）不被破坏的回归
+    $explicitEnum = new DefaultedEntity([
+      'user_name' => 'dave',
+      'state' => DefaultedStatus::Published,
+      'is_top' => true,
+    ]);
+    self::assertTrue($explicitEnum->save());
+    self::assertSame(['dave', true, 1], $fake->calls[3]['bindings'], '枚举/bool 显式赋值应脱水写入');
   }
 
   /**
@@ -587,6 +631,34 @@ class ReadonlyFieldEntity extends Entity
   protected string $table = 'users';
 
   public readonly string $userName;
+}
+
+/**
+ * 测试用实体：多形态声明默认值夹具（pay_time 模拟 string 空串
+ * 承载 DATETIME 列的缺陷场景；state/isTop 锁定枚举与 bool 默认值
+ * 经预脱水严格比较的过滤回归）
+ */
+class DefaultedEntity extends Entity
+{
+  protected string $table = 'defaults';
+
+  public int $id;
+  public string $userName;
+  public string $payTime = '';
+  public int $age = 0;
+  public bool $isTop = false;
+  public DefaultedStatus $state = DefaultedStatus::Draft;
+  public ?string $remark = null;
+  public ?DateTimeImmutable $createTime = null;
+}
+
+/**
+ * 默认值枚举（测试夹具）：Draft 预脱水为 0，验证枚举默认值过滤
+ */
+enum DefaultedStatus: int
+{
+  case Draft = 0;
+  case Published = 1;
 }
 
 /**

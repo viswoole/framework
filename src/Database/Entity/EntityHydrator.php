@@ -151,6 +151,9 @@ final class EntityHydrator
         )
       );
     }
+    // 默认值须先 hasDefaultValue() 判定，getDefaultValue() 在无默认值时会抛异常
+    $hasDefault = $prop->hasDefaultValue();
+    $rawDefault = $hasDefault ? $prop->getDefaultValue() : null;
     $type = $prop->getType();
     if ($type === null) {
       return new PropertyMeta(
@@ -158,7 +161,10 @@ final class EntityHydrator
         Str::camelCaseToSnakeCase($prop->getName()),
         $prop,
         PropertyMeta::KIND_MIXED,
-        true
+        true,
+        null,
+        $hasDefault,
+        $rawDefault
       );
     }
     if (!$type instanceof ReflectionNamedType) {
@@ -176,7 +182,9 @@ final class EntityHydrator
       $prop,
       $kind,
       $type->allowsNull(),
-      $targetClass
+      $targetClass,
+      $hasDefault,
+      $rawDefault
     );
   }
 
