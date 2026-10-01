@@ -105,4 +105,18 @@ interface ConnectionPoolInterface
    * @return mixed 连接池配置
    */
   public function getConfig(): mixed;
+
+  /**
+   * 当前借出未归还的连接数（监控观测用）
+   *
+   * @return int 借出数
+   */
+  public function borrowed(): int;
+
+  /**
+   * 连接池最大容量（监控观测用）
+   *
+   * @return int 容量上限
+   */
+  public function maxSize(): int;
 }

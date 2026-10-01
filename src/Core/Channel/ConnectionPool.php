@@ -65,6 +65,16 @@ abstract class ConnectionPool implements ConnectionPoolInterface
    */
   private int $connectionCount = 0;
   /**
+   * @var int 当前借出未归还的连接数
+   *
+   * pop 成功借出时自增、put 归还时自减（协程非抢占式调度，检查与自增
+   * 之间无协程切换点，无需加锁）。仅用于监控观测（连接池水位），
+   * 不参与容量判定——容量仍以 connectionCount 为准。
+   * 注意：绕过池的一次性短连接（shouldBypassPool）同样计入借出数，
+   * 归还时对应自减，保证与真实下游连接占用一致。
+   */
+  private int $borrowedCount = 0;
+  /**
    * @var int 创建本池的进程 PID（fork 感知锚点）
    *
    * 池对象常在服务启动前（App 初始化，master 进程）创建：fork 后 worker 中的
@@ -172,6 +182,9 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     if ($this->createdPid === getmypid()) return;
     $this->pool = new Channel($this->max_size);
     $this->connectionCount = 0;
+    // 借出计数随池一并归零：本进程快照中的父进程借出数对新池无意义，
+    // 不归零会导致 fork 后监控水位永久虚高（父进程 bypass 短连接借出跨 fork 是真实场景）
+    $this->borrowedCount = 0;
     $this->createdPid = (int)getmypid();
   }
 
@@ -267,6 +280,10 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     if ($this->pool === null) {
       throw new RuntimeException('连接池已关闭');
     }
+    // 归还即释放一次借出占用：无论后续走哪个分支（fork 感知关闭/绕过池
+    // 关闭/正常入池/坏连接丢弃），借出计数都必须自减，max(0,..) 防御
+    // 多余的 put 调用把计数打穿为负
+    $this->borrowedCount = max(0, $this->borrowedCount - 1);
     // fork 感知：传入的连接若来自池创建进程（旧进程），fd 已被 fork 共享、
     // 会话状态不可靠，必须关闭而非入池——否则会污染 fork 后的新池。
     // （典型场景：master 阶段借出的连接跨越 fork 后在 worker 中归还）
@@ -342,7 +359,13 @@ abstract class ConnectionPool implements ConnectionPoolInterface
     $this->ensureOwnProcess();
     // 一次性短连接场景（server 模式非 worker / CLI 非协程）：直接建连返回，
     // 不与池交互，由调用方 put 时显式关闭
-    if ($this->shouldBypassPool()) return $this->createConnection();
+    if ($this->shouldBypassPool()) {
+      $connection = $this->createConnection();
+      // 建连成功后才计入借出数（put 时对应自减）：若建连抛异常，
+      // 调用方拿不到连接、不会触发 put 归还，先自增会造成计数永久虚高
+      $this->borrowedCount++;
+      return $connection;
+    }
     // 非阻塞获取池内闲置连接：
     // 不可用 pop(0) —— Swoole 6.x 中超时 0 与 -1 同为"永久等待"，空池 pop(0) 会挂死协程。
     // 改用 length() 预检：协程非抢占式调度，检查与 pop 之间无切换点，
@@ -377,7 +400,29 @@ abstract class ConnectionPool implements ConnectionPoolInterface
         throw new RuntimeException('新创建的连接不可用');
       }
     }
+    // 成功借出：计数自增（put 归还时对应自减）
+    $this->borrowedCount++;
     return $connection;
+  }
+
+  /**
+   * 当前借出未归还的连接数（监控观测用）
+   *
+   * @return int 借出数
+   */
+  public function borrowed(): int
+  {
+    return $this->borrowedCount;
+  }
+
+  /**
+   * 连接池最大容量（监控观测用）
+   *
+   * @return int 容量上限
+   */
+  public function maxSize(): int
+  {
+    return $this->max_size;
   }
 
   /**

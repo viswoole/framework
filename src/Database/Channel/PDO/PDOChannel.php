@@ -116,6 +116,33 @@ class PDOChannel extends Channel
   }
 
   /**
+   * 汇总本通道全部连接池的水位统计（监控观测用）
+   *
+   * 单库与读写分离（多池）统一聚合：容量/借出取各池之和，空闲与等待
+   * 取各池 Swoole Channel 实时统计之和。仅反映【当前进程】的池状态
+   * （连接池为进程私有），多进程部署时调用方需自行按进程聚合。
+   *
+   * @return array{max_size:int,borrowed:int,idle:int,waiting:int}
+   *   - max_size: 连接池容量上限之和
+   *   - borrowed: 当前借出未归还的连接数之和（含一次性短连接在途数）
+   *   - idle:     池内闲置连接数之和
+   *   - waiting:  正在等待借出连接的协程数之和
+   */
+  public function poolStats(): array
+  {
+    $pools = is_array($this->pool) ? array_merge(...array_values($this->pool)) : [$this->pool];
+    $stats = ['max_size' => 0, 'borrowed' => 0, 'idle' => 0, 'waiting' => 0];
+    foreach ($pools as $pool) {
+      $stats['max_size'] += $pool->maxSize();
+      $stats['borrowed'] += $pool->borrowed();
+      $channelStats = $pool->stats();
+      $stats['idle'] += (int)($channelStats['queue_num'] ?? 0);
+      $stats['waiting'] += (int)($channelStats['consumer_num'] ?? 0);
+    }
+    return $stats;
+  }
+
+  /**
    * 创建多个连接池
    *
    * @param array $hosts
