@@ -32,7 +32,8 @@ final class PropertyMeta
    * 类型种类：int|float|string|bool|array|datetime|enum|mixed
    *
    * - int/float/string/bool：执行严格强转
-   * - array/mixed：原样透传（适用于 JSON 列）
+   * - array：JSON 列编解码（水合解码 / 落库编码，序列化输出保留数组）
+   * - mixed：原样透传
    * - datetime：字符串/时间戳 → 目标日期时间对象
    * - enum：标量 → 回退枚举实例
    */

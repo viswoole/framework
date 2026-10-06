@@ -15,6 +15,7 @@ use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\DbManager;
 use Viswoole\Database\Entity;
 use Viswoole\Database\Entity\EntityCollection;
+use Viswoole\Database\Entity\EntityHydrator;
 use Viswoole\Database\Exception\DataNotFoundException;
 use Viswoole\Database\Model;
 
@@ -122,6 +123,65 @@ class EntityTest extends TestCase
     $this->expectException(InvalidArgumentException::class);
     $this->expectExceptionMessage('不允许为空');
     new UserEntity(['id' => 1, 'user_name' => 'alice', 'age' => 20, 'status' => null]);
+  }
+
+  /**
+   * JSON 列水合：PDO 返回的 JSON 字符串应解码为 array（而非字符串直赋
+   * 类型化属性导致 TypeError）
+   */
+  public function testHydrationDecodesJsonColumnString(): void
+  {
+    $entity = new JsonColumnEntity([
+      'id' => 1,
+      'payload' => '{"remark":"审查验证"}',
+    ]);
+
+    self::assertSame(['remark' => '审查验证'], $entity->payload, 'JSON 字符串应解码为 array');
+  }
+
+  /**
+   * JSON 列水合：驱动已解码为数组的值应原样透传
+   */
+  public function testHydrationAcceptsArrayForJsonColumn(): void
+  {
+    $entity = new JsonColumnEntity(['id' => 1, 'payload' => ['k' => 'v']]);
+
+    self::assertSame(['k' => 'v'], $entity->payload, '数组应原样透传');
+  }
+
+  /**
+   * JSON 列水合：非 JSON 字符串应抛出清晰异常（类型不匹配）
+   */
+  public function testHydrationRejectsInvalidJsonString(): void
+  {
+    $this->expectException(InvalidArgumentException::class);
+    $this->expectExceptionMessage('无法将值');
+    new JsonColumnEntity(['id' => 1, 'payload' => 'not-json']);
+  }
+
+  /**
+   * 落库脱水与序列化输出路径分离：array 属性在 save 落库方向应编码为
+   * JSON 字符串（数据库绑定），在 toArray 序列化方向应保留数组结构
+   * （避免 JSON 响应双重编码）
+   */
+  public function testDehydrateAndSerializeDivergeForArrayProperty(): void
+  {
+    $entity = new JsonColumnEntity(['id' => 1, 'payload' => ['k' => '值']]);
+    $meta = EntityHydrator::metaByProperty(JsonColumnEntity::class, 'payload');
+
+    self::assertNotNull($meta);
+    // 落库方向：编码为 JSON 字符串供数据库绑定
+    self::assertSame(
+      '{"k":"值"}',
+      EntityHydrator::dehydrate($meta, $entity->payload),
+      '落库脱水应编码为 JSON 字符串'
+    );
+    // 序列化方向：保留数组结构，由 json_encode 原生编码
+    self::assertSame(
+      ['k' => '值'],
+      $entity->toArray()['payload'],
+      'toArray 应保留数组结构避免双重编码'
+    );
   }
 
   /**
@@ -609,6 +669,17 @@ class UserEntity extends Entity
   {
     return $this->hasMany(ArticleEntity::class, 'user_id', 'id');
   }
+}
+
+/**
+ * 测试用实体：JSON 列夹具（payload 声明为 array，验证 JSON 字符串水合与脱水编码）
+ */
+class JsonColumnEntity extends Entity
+{
+  protected string $table = 'users';
+
+  public int $id;
+  public ?array $payload = null;
 }
 
 /**

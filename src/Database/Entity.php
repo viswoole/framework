@@ -191,18 +191,23 @@ abstract class Entity extends Model implements JsonSerializable
   }
 
   /**
-   * 将属性值脱水为列名键数组（仅包含已初始化的属性）
+   * 将属性值转换为列名键数组（仅包含已初始化的属性）
    *
-   * 附加数据不参与脱水：关联结果与 pivot 不应写入业务表。
+   * 附加数据不参与转换：关联结果与 pivot 不应写入业务表。
    *
-   * @return array<string,mixed> 列名 => 可绑定数据库的标量值
+   * @param bool $forDatabase 是否面向数据库绑定：true 时 array 属性编码为
+   *   JSON 字符串（save 落库/快照基准）；false 时保留数组结构（toArray 序列化输出）
+   * @return array<string,mixed> 列名 => 转换后的值
    */
-  private function dehydrate(): array
+  private function dehydrate(bool $forDatabase = true): array
   {
     $row = [];
     foreach (EntityHydrator::metasByColumn(static::class) as $meta) {
       if (!$meta->prop->isInitialized($this)) continue;
-      $row[$meta->column] = EntityHydrator::dehydrate($meta, $meta->prop->getValue($this));
+      $value = $meta->prop->getValue($this);
+      $row[$meta->column] = $forDatabase
+        ? EntityHydrator::dehydrate($meta, $value)
+        : EntityHydrator::serialize($meta, $value);
     }
     return $row;
   }
@@ -401,7 +406,8 @@ abstract class Entity extends Model implements JsonSerializable
   /**
    * 将实体转换为列名键数组
    *
-   * 属性值脱水为可序列化标量（枚举 → 回退值、日期对象 → 'Y-m-d H:i:s'），
+   * 属性值转换为序列化安全的值（枚举 → 回退值、日期对象 → 'Y-m-d H:i:s'；
+   * array 属性保留数组结构，由 json_encode 原生编码避免双重编码），
    * 附加数据（关联结果等）一并输出并递归转换；沿用 $hidden 隐藏过滤
    * 与 get{Field}Attr 获取器约定。
    *
@@ -414,7 +420,9 @@ abstract class Entity extends Model implements JsonSerializable
   {
     $array = [];
     // 附加键不与字段键冲突：属性列名与附加键（关联名）天然不重叠
-    $rows = $this->dehydrate() + $this->extras;
+    // 序列化输出路径：array 属性保留数组结构（forDatabase=false），
+    // 与 save 落库路径（编码为 JSON 字符串）区分，避免 JSON 响应双重编码
+    $rows = $this->dehydrate(false) + $this->extras;
     foreach ($rows as $key => $value) {
       if ($hidden && in_array($key, $this->hidden, true)) continue;
       if ($value instanceof BaseCollection) {

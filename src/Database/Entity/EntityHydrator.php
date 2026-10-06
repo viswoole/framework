@@ -20,6 +20,7 @@ use DateTime;
 use DateTimeImmutable;
 use DateTimeInterface;
 use InvalidArgumentException;
+use JsonException;
 use ReflectionClass;
 use ReflectionNamedType;
 use ReflectionProperty;
@@ -36,7 +37,9 @@ use Viswoole\Database\Entity;
  * - coerce()：数据库行值 → 属性类型值（水合），如 '1' → true、
  *   '2026-01-01 00:00:00' → DateTimeImmutable、标量 → 回退枚举；
  * - dehydrate()：属性类型值 → 可绑定数据库的标量（脱水），
- *   如枚举 → 回退值、日期对象 → 'Y-m-d H:i:s' 字符串。
+ *   如枚举 → 回退值、日期对象 → 'Y-m-d H:i:s' 字符串、array → JSON 字符串；
+ * - serialize()：属性类型值 → 序列化安全的值（toArray 输出方向），
+ *   与 dehydrate 的区别是 array 保留数组结构不编码。
  *
  * 元数据按实体类缓存一次，协程环境下复用，零重复反射开销。
  *
@@ -207,7 +210,7 @@ final class EntityHydrator
         'float' => [PropertyMeta::KIND_FLOAT, null],
         'string' => [PropertyMeta::KIND_STRING, null],
         'bool' => [PropertyMeta::KIND_BOOL, null],
-        // array/mixed：原样透传（JSON 列等场景）
+        // array：JSON 列编解码（读解码/写编码）；mixed：原样透传
         'array' => [PropertyMeta::KIND_ARRAY, null],
         'mixed' => [PropertyMeta::KIND_MIXED, null],
         default => throw new RuntimeException(
@@ -284,7 +287,9 @@ final class EntityHydrator
       PropertyMeta::KIND_BOOL => self::coerceBool($meta, $value),
       PropertyMeta::KIND_DATETIME => self::coerceDatetime($meta, $value),
       PropertyMeta::KIND_ENUM => self::coerceEnum($meta, $value),
-      // array/mixed：原样透传（JSON 列等场景）
+      // array：JSON 列场景（PDO 将 JSON 列返回为字符串，需解码为 array）
+      PropertyMeta::KIND_ARRAY => self::coerceArray($meta, $value),
+      // mixed：原样透传（任意形态由业务自定）
       default => $value,
     };
   }
@@ -439,15 +444,71 @@ final class EntityHydrator
   }
 
   /**
-   * 将属性值转换为可绑定数据库的标量（脱水方向）
+   * 强转为 array：接受数组与 JSON 对象字符串（JSON 列水合）
    *
-   * 枚举取回退值、日期对象格式化为 'Y-m-d H:i:s'，其余标量原样返回。
+   * MySQL/SQLite 的 JSON 列经 PDO 返回的是原始 JSON 字符串，而声明为
+   * array 的类型化属性无法直接承接字符串（TypeError），此处统一解码。
+   *
+   * @param PropertyMeta $meta 属性元数据
+   * @param mixed $value 数据库行值
+   * @return array 解码后的数组（数组原样透传）
+   * @throws InvalidArgumentException 值不是数组且不是合法 JSON 对象/数组字符串时抛出
+   */
+  private static function coerceArray(PropertyMeta $meta, mixed $value): array
+  {
+    if (is_array($value)) return $value;
+    if (is_string($value) && $value !== '') {
+      // JSON_THROW_ON_ERROR：捕获解码异常并将原因附入错误信息，
+      // 避免语法错误/深度超限被静默吞掉后只报笼统的类型不匹配
+      try {
+        $decoded = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        if (is_array($decoded)) return $decoded;
+      } catch (JsonException $e) {
+        throw self::coerceError($meta, $value, "JSON 解析失败：{$e->getMessage()}");
+      }
+    }
+    throw self::coerceError($meta, $value);
+  }
+
+  /**
+   * 将属性值转换为可绑定数据库的标量（落库脱水方向）
+   *
+   * 枚举取回退值、日期对象格式化为 'Y-m-d H:i:s' 字符串、array 编码为
+   * JSON 字符串（JSON 列写方向，与 coerce 读方向对称），其余标量原样返回。
+   *
+   * 面向 API 序列化输出（toArray/jsonSerialize）时请改用
+   * {@see serialize()}，避免 array 属性在 JSON 响应中被双重编码。
    *
    * @param PropertyMeta $meta 属性元数据
    * @param mixed $value 属性值
    * @return mixed 可绑定数据库的标量值
+   * @throws InvalidArgumentException array 属性值不是数组时抛出
+   * @throws RuntimeException JSON 编码失败时抛出
    */
   public static function dehydrate(PropertyMeta $meta, mixed $value): mixed
+  {
+    $serialized = self::serialize($meta, $value);
+    // 仅落库路径编码 array；序列化路径（serialize）保留数组结构
+    if ($serialized !== null && $meta->kind === PropertyMeta::KIND_ARRAY) {
+      return self::dehydrateArray($meta, $serialized);
+    }
+    return $serialized;
+  }
+
+  /**
+   * 将属性值转换为序列化安全的值（toArray/jsonSerialize 输出方向）
+   *
+   * 枚举取回退值、日期对象格式化为 'Y-m-d H:i:s'，其余原样返回；
+   * array 属性保留数组结构（json_encode 原生支持嵌套数组，无需预编码）。
+   *
+   * 与 {@see dehydrate()} 的区别：dehydrate 面向数据库绑定（array 编码为
+   * JSON 字符串），serialize 面向 API 序列化输出（array 保持数组）。
+   *
+   * @param PropertyMeta $meta 属性元数据
+   * @param mixed $value 属性值
+   * @return mixed 序列化安全的值
+   */
+  public static function serialize(PropertyMeta $meta, mixed $value): mixed
   {
     if ($value === null) return null;
     return match ($meta->kind) {
@@ -455,5 +516,33 @@ final class EntityHydrator
       PropertyMeta::KIND_DATETIME => $value->format('Y-m-d H:i:s'),
       default => $value,
     };
+  }
+
+  /**
+   * array 属性值落库前编码为 JSON 字符串（JSON 列写方向）
+   *
+   * @param PropertyMeta $meta 属性元数据
+   * @param mixed $value 属性值
+   * @return string JSON 字符串
+   * @throws InvalidArgumentException 值不是数组时抛出
+   * @throws RuntimeException JSON 编码失败时抛出
+   */
+  private static function dehydrateArray(PropertyMeta $meta, mixed $value): string
+  {
+    if (!is_array($value)) {
+      throw self::coerceError($meta, $value);
+    }
+    try {
+      return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+      throw new RuntimeException(
+        sprintf(
+          '实体属性 %s::$%s JSON 编码失败：%s',
+          $meta->prop->getDeclaringClass()->getName(),
+          $meta->propertyName,
+          $e->getMessage()
+        )
+      );
+    }
   }
 }
