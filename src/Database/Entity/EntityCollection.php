@@ -84,7 +84,10 @@ class EntityCollection extends BaseCollection
    */
   public function first(): ?Entity
   {
-    return $this->getArrayCopy()[0] ?? null;
+    $items = $this->getArrayCopy();
+    if ($items === []) return null;
+    // array_key_first 语义：不假定键为连续 0 基整型（offsetSet 允许自定义键）
+    return $items[array_key_first($items)];
   }
 
   /**
@@ -95,7 +98,8 @@ class EntityCollection extends BaseCollection
   public function last(): ?Entity
   {
     $items = $this->getArrayCopy();
-    return $items === [] ? null : $items[count($items) - 1];
+    if ($items === []) return null;
+    return $items[array_key_last($items)];
   }
 
   /**
