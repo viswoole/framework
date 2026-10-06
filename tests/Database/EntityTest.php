@@ -9,8 +9,10 @@ use InvalidArgumentException;
 use PDO;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
+use ReflectionProperty;
 use RuntimeException;
 use Viswoole\Core\App;
+use Viswoole\Database\BaseQuery;
 use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\DbManager;
 use Viswoole\Database\Entity;
@@ -18,6 +20,7 @@ use Viswoole\Database\Entity\EntityCollection;
 use Viswoole\Database\Entity\EntityHydrator;
 use Viswoole\Database\Exception\DataNotFoundException;
 use Viswoole\Database\Model;
+use Viswoole\Database\Query\Options;
 
 /**
  * Entity 实体模型测试
@@ -489,6 +492,42 @@ class EntityTest extends TestCase
     $calls = count($fake->calls);
     self::assertFalse($entity->save(), '无变更时 save 应返回 false');
     self::assertSame($calls, count($fake->calls), '无变更时不应执行 SQL');
+  }
+
+  /**
+   * toRaw 模式下 save() 遇到 Raw 返回（SQL 未真正执行）不应重置变更基准：
+   * 恢复 toRaw 后重试保存，未落库的变更仍应被写入。
+   *
+   * 复现缺陷场景：updateDirty 未守卫 Raw 返回导致 markSynced 误重置快照，
+   * 后续 save 将变更误判为「无变更」而静默丢失
+   */
+  public function testSaveInToRawModeDoesNotResetSnapshot(): void
+  {
+    $fake = new FakeChannel(1);
+    $this->makeManager($fake);
+
+    $entity = UserEntity::fromRow([
+      'id' => 1,
+      'user_name' => 'alice',
+      'age' => 20,
+      'status' => 1,
+      'remark' => null,
+      'create_time' => '2026-01-01 00:00:00',
+    ]);
+
+    // toRaw 模式：SQL 仅构建不执行，update 返回 Raw 对象
+    $entity->query()->toRaw();
+    $entity->age = 21;
+    self::assertFalse($entity->save(), 'toRaw 模式 SQL 未执行，save 应返回 false');
+    self::assertCount(0, $fake->calls, 'toRaw 模式不应产生真实 SQL');
+
+    // 反射翻转 protected options->toRaw（toRaw() 方法只开不关），恢复正常模式
+    $options = (new ReflectionProperty(BaseQuery::class, 'options'))->getValue($entity->query());
+    /** @var Options $options */
+    $options->toRaw = false;
+
+    self::assertTrue($entity->save(), 'toRaw 失败的保存不应重置变更基准，恢复后原变更应可重写');
+    self::assertSame([21], $fake->calls[0]['bindings'], '重试的 UPDATE 应包含 toRaw 期间未落库的变更');
   }
 
   /**

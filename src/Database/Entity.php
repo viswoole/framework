@@ -369,6 +369,9 @@ abstract class Entity extends Model implements JsonSerializable
       throw new RuntimeException("保存数据失败，缺少主键字段($pkColumn)");
     }
     $count = $this->query->strict(false)->where($pkColumn, $pkValue)->update($dirty);
+    // toRaw 场景 SQL 未真正执行（返回 Raw）：不重置变更基准，保留脏数据
+    // 待恢复后重试；否则快照被误刷新，未落库的变更会静默丢失
+    if ($count instanceof Raw) return false;
     $this->markSynced();
     return $count === 1;
   }
