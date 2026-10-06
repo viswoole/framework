@@ -326,9 +326,18 @@ final class EntityHydrator
   private static function coerceError(PropertyMeta $meta, mixed $value, string $reason = ''
   ): InvalidArgumentException
   {
+    $exported = var_export($value, true);
+    // 超长原值按 UTF-8 字符截断：敏感列内容（密码/证件号）与大 JSON 串
+    // 不应整段进入异常消息（随日志泄露），保留类型轮廓即可定位问题
+    if (strlen($exported) > 50) {
+      $cut = preg_match('/^.{0,50}/us', $exported, $m) === 1
+        ? $m[0]
+        : substr($exported, 0, 50);
+      $exported = $cut . '…(长度 ' . strlen($exported) . '，已截断)';
+    }
     $detail = sprintf(
       '无法将值 %s 强转为 %s::$%s（%s 声明，列 %s）',
-      var_export($value, true),
+      $exported,
       $meta->prop->getDeclaringClass()->getName(),
       $meta->propertyName,
       $meta->kind . ($meta->targetClass ? '<' . $meta->targetClass . '>' : ''),
