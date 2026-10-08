@@ -254,6 +254,17 @@ trait Crud
   }
 
   /**
+   * 判断是否不存在满足条件的数据（exists() 的取反快捷方法）
+   *
+   * @return bool 不存在返回 true
+   * @throws DbException 数据库操作失败时抛出
+   */
+  public function doesntExist(): bool
+  {
+    return !$this->exists();
+  }
+
+  /**
    * 判断是否存在满足条件的数据
    *
    * 生成 SELECT 1 ... LIMIT 1 只取一行单列，命中即真，比 count() 全表计数高效。
@@ -281,17 +292,6 @@ trait Crud
   }
 
   /**
-   * 判断是否不存在满足条件的数据（exists() 的取反快捷方法）
-   *
-   * @return bool 不存在返回 true
-   * @throws DbException 数据库操作失败时抛出
-   */
-  public function doesntExist(): bool
-  {
-    return !$this->exists();
-  }
-
-  /**
    * 插入数据并返回自增主键值
    *
    * @param array $data 关联数组数据
@@ -309,21 +309,6 @@ trait Crud
     }
     $this->options->data = $data;
     return $this->runCrud('insertGetId');
-  }
-
-  /**
-   * 更新记录
-   *
-   * @param array<string,mixed|Raw> $data 键值对，键为列名，值为新值（支持 Raw 表达式）
-   * @return int|Raw 受影响的记录数
-   * @throws InvalidArgumentException 数据为空时抛出
-   * @throws DbException 数据库操作失败时抛出
-   */
-  public function update(array $data): int|Raw
-  {
-    if (empty($data)) throw new InvalidArgumentException('要更新的数据不能为空');
-    $this->options->data = $data;
-    return $this->runCrud('update');
   }
 
   /**
@@ -349,6 +334,58 @@ trait Crud
   }
 
   /**
+   * increment/decrement 统一实现：列名经白名单校验后内插表达式，增量走参数绑定
+   *
+   * @param string $column 列名
+   * @param string $operator 算术运算符 +|-
+   * @param int|float $amount 增/减量
+   * @param array<string,mixed|Raw> $extra 同时写入的其他字段
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 列名包含非法字符、或 extra 中包含自增列名时抛出
+   * @throws DbException 数据库操作失败时抛出
+   */
+  private function incrementOrDecrement(
+    string    $column,
+    string    $operator,
+    int|float $amount,
+    array     $extra
+  ): int|Raw
+  {
+    // 表达式中的列名无法走 quote（Raw 原样拼接），与 aggregateQueries 同等白名单校验
+    $column = trim($column);
+    if (!preg_match('/^[A-Za-z0-9_.]+$/', $column)) {
+      throw new InvalidArgumentException(
+        "无效的自增字段：{$column}（仅允许字母、数字、下划线与点号）"
+      );
+    }
+    // extra 同名键会整体覆盖自增表达式，原子语义静默丢失，显式拦截
+    if (array_key_exists($column, $extra)) {
+      throw new InvalidArgumentException(
+        "increment/decrement 的 extra 数据不能包含自增列 $column"
+      );
+    }
+    // 增量为占位符绑定参数，占位符位于 SET 子句，先于 WHERE 参数入列
+    return $this->update(
+      array_merge([$column => new Raw("$column $operator ?", [$amount])], $extra)
+    );
+  }
+
+  /**
+   * 更新记录
+   *
+   * @param array<string,mixed|Raw> $data 键值对，键为列名，值为新值（支持 Raw 表达式）
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 数据为空时抛出
+   * @throws DbException 数据库操作失败时抛出
+   */
+  public function update(array $data): int|Raw
+  {
+    if (empty($data)) throw new InvalidArgumentException('要更新的数据不能为空');
+    $this->options->data = $data;
+    return $this->runCrud('update');
+  }
+
+  /**
    * 字段原子自减（生成 col = col - ?），可同时写入其他字段
    *
    * @param string $column 列名
@@ -361,42 +398,6 @@ trait Crud
   public function decrement(string $column, int|float $amount = 1, array $extra = []): int|Raw
   {
     return $this->incrementOrDecrement($column, '-', $amount, $extra);
-  }
-
-  /**
-   * increment/decrement 统一实现：列名经白名单校验后内插表达式，增量走参数绑定
-   *
-   * @param string $column 列名
-   * @param string $operator 算术运算符 +|-
-   * @param int|float $amount 增/减量
-   * @param array<string,mixed|Raw> $extra 同时写入的其他字段
-   * @return int|Raw 受影响的记录数
-   * @throws InvalidArgumentException 列名包含非法字符、或 extra 中包含自增列名时抛出
-   * @throws DbException 数据库操作失败时抛出
-   */
-  private function incrementOrDecrement(
-    string   $column,
-    string   $operator,
-    int|float $amount,
-    array    $extra
-  ): int|Raw {
-    // 表达式中的列名无法走 quote（Raw 原样拼接），与 aggregateQueries 同等白名单校验
-    $column = trim($column);
-    if (!preg_match('/^[A-Za-z0-9_.]+$/', $column)) {
-      throw new InvalidArgumentException(
-        "无效的自增字段：{$column}（仅允许字母、数字、下划线与点号）"
-      );
-    }
-    // extra 同名键会整体覆盖自增表达式，原子语义静默丢失，显式拦截
-    if (array_key_exists($column, $extra)) {
-      throw new InvalidArgumentException(
-        "increment/decrement 的 extra 数据不能包含自增列 {$column}"
-      );
-    }
-    // 增量为占位符绑定参数，占位符位于 SET 子句，先于 WHERE 参数入列
-    return $this->update(
-      array_merge([$column => new Raw("$column $operator ?", [$amount])], $extra)
-    );
   }
 
   /**
