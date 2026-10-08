@@ -15,8 +15,10 @@ declare (strict_types=1);
 namespace Viswoole\Database\Model;
 
 use Closure;
+use Generator;
 use InvalidArgumentException;
 use Override;
+use ReflectionMethod;
 use RuntimeException;
 use Swoole\Coroutine;
 use Swoole\Coroutine\WaitGroup;
@@ -89,6 +91,12 @@ class Query extends BaseQuery
       if (!method_exists($this->model, $key)) {
         $class = get_class($this->model);
         throw new InvalidArgumentException("$class::$key() 方法不存在");
+      }
+      // method_exists 不区分可见性：非 public 关联方法在外部调用会抛引擎 Error，
+      // 而并发水合路径仅捕获契约异常——这里提前校验并抛出可预期的契约异常
+      if (!(new ReflectionMethod($this->model, $key))->isPublic()) {
+        $class = get_class($this->model);
+        throw new InvalidArgumentException("$class::$key() 必须是 public 方法才能用于关联查询");
       }
       /**
        * @var RelationQuery $instance 关联查询实例
@@ -167,16 +175,19 @@ class Query extends BaseQuery
   {
     // 未启动软删除功能
     if (!$this->enableSoftDelete) return 0;
+    // 在克隆的局部查询上操作：restore 的条件不应写入并残留到复用实例
+    // （抛出条件缺失异常的路径不经过 runCrud 的 finally reset，会污染共享实例）
+    $query = clone $this;
     // 指定主键
-    if (!empty($id)) $this->where($this->pk, $id);
+    if (!empty($id)) $query->where($query->pk, $id);
     // 没有条件
-    if (empty($this->options->where)) {
+    if (empty($query->options->where)) {
       throw new InvalidArgumentException(
         'Model::restore() 必须指定要恢复记录的主键值或设置where条件'
       );
     }
-    return $this->update([
-      $this->softDeleteFieldName => $this->softDeleteFieldDefaultValue
+    return $query->update([
+      $query->softDeleteFieldName => $query->softDeleteFieldDefaultValue
     ]);
   }
 
@@ -305,12 +316,64 @@ class Query extends BaseQuery
   protected function runCrud(string $type): Raw|string|array|int
   {
     $this->handleCrud($type);
-    $result = parent::runCrud($type);
-    if ($result instanceof Raw) return $result;
-    if ($type === 'select' && !empty($this->relations)) {
-      $result = $this->queryRelationData($result);
+    try {
+      $result = parent::runCrud($type);
+      if ($result instanceof Raw) return $result;
+      if ($type === 'select' && !empty($this->relations)) {
+        $result = $this->queryRelationData($result);
+      }
+      return $result;
+    } finally {
+      // 关联注册属于"一次查询"的状态：随本次执行被消费（或异常终止）后必须清空。
+      // 注意不能在 reset() 里清——runCrud 内部 finally 的 reset() 先于关联查询执行，
+      // 过早清空会导致 with() 永远不生效
+      $this->relations = [];
     }
-    return $result;
+  }
+
+  /**
+   * 返回 update 语句会自动注入的附加字段（自动更新时间），供集合层同步内存实体
+   *
+   * 与 handleCrud 的 update 分支注入逻辑保持一致：仅在开启自动更新时间
+   * （autoWriteTimestamp 为 2 或 3）且用户数据未显式携带该字段时注入。
+   *
+   * @param array<string,mixed> $data 即将写入的用户数据（判断是否已显式携带注入字段）
+   * @return array<string,mixed> 字段名 => 写入值；未启用或已显式携带时为空数组
+   */
+  public function resolveAutoWriteFields(array $data): array
+  {
+    if (!in_array($this->autoWriteTimestamp, [2, 3], true)) return [];
+    if (array_key_exists($this->updateTimeFieldName, $data)) return [];
+    return [$this->updateTimeFieldName => $this->_getTime($this->updateTimeFormatType)];
+  }
+
+  /**
+   * 分段查询：生成器终结（耗尽/中断/GC）时清空已注册关联
+   *
+   * chunk 不经过 runCrud，注册的关联既不会被消费也不会被 runCrud 的
+   * finally 清空——为与「关联单次消费」契约保持一致，在生成器终结时清空
+   */
+  #[Override]
+  public function chunk(int $size): Generator
+  {
+    try {
+      yield from parent::chunk($size);
+    } finally {
+      $this->relations = [];
+    }
+  }
+
+  /**
+   * 游标查询：生成器终结（耗尽/中断/GC）时清空已注册关联（理由同 chunk）
+   */
+  #[Override]
+  public function cursor(): Generator
+  {
+    try {
+      yield from parent::cursor();
+    } finally {
+      $this->relations = [];
+    }
   }
 
   /**
@@ -544,9 +607,10 @@ class Query extends BaseQuery
     } else {
       $id = $this->insertGetId($filteredData);
     }
-    // 返回值与实际写入保持一致：insertGetId 内部已对写入数据应用修改器，
-    // 此处同步应用后再补充主键，避免 DataSet 中的值与库中数据不一致
-    $data = $this->applyMutators($data);
+    // 返回值与实际写入保持一致：基于白名单过滤后的数据构建（insertGetId 内部
+    // 已对写入数据应用修改器，此处同步应用后再补充主键），
+    // 避免 DataSet 携带未落库的字段误导调用方
+    $data = $this->applyMutators($filteredData);
     $data[$this->pk] = $id;
     return $this->newRowSet($data);
   }

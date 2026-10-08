@@ -117,10 +117,12 @@ trait InteractsWithPivot
       ->where($this->foreignPivotKey, '=', $parentKey)
       ->whereIn($this->relatedPivotKey, $relatedList)
       ->getArray();
-    $existingKeys = array_column($existingRows, $this->relatedPivotKey);
+    // 关联键统一按字符串比较：PDO 模拟预处理（MySQL 默认）下 int 列返回 string，
+    // 开发者传 int 而库值为 string 时严格比较恒 false，幂等检查失效导致重复绑定
+    $existingKeys = array_map('strval', array_column($existingRows, $this->relatedPivotKey));
     $newRows = [];
     foreach ($relatedList as $relatedKey) {
-      if (in_array($relatedKey, $existingKeys, true)) continue;
+      if (in_array((string)$relatedKey, $existingKeys, true)) continue;
       $newRows[] = array_merge(
         [$this->foreignPivotKey => $parentKey, $this->relatedPivotKey => $relatedKey],
         $pivotData

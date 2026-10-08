@@ -83,7 +83,10 @@ class RelationQuery
     $list = $query->getArray();
     $keyMapData = [];
     foreach ($list as $row) {
-      $key = $row[$this->foreignKey];
+      $key = $row[$this->foreignKey] ?? null;
+      // 与 Query::mergeRelationData 的 null 防护保持一致：外键为 null（如 handle
+      // 回调中 columns() 未选择外键列）时跳过该行，避免 null 键错乱聚合关联数据
+      if ($key === null) continue;
       // 行数据经关联模型的水合工厂出口包装（实体关联模型返回实体）
       if ($this->many) {
         $rowSet = $this->relationModel->query->newRowSet($row);

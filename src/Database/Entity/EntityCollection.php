@@ -169,8 +169,18 @@ class EntityCollection extends BaseCollection
     // toRaw 场景 SQL 未真正执行：不做返回值换算，也不同步内存实体
     if ($result instanceof Raw) return 0;
     // 同步已落库数据到内存实体并重置变更基准
-    $this->each(static function (Entity $entity) use ($data) {
+    $autoFields = $query->resolveAutoWriteFields($data);
+    $this->each(static function (Entity $entity) use ($query, $data, $autoFields) {
       foreach ($data as $column => $value) {
+        // Raw 表达式（原子自增等）与写路径 applyRowMutators 同约定跳过修改器，
+        // 且 SQL 端计算结果无法在内存中还原，留待下次查询水合
+        if ($value instanceof Raw) continue;
+        // 与落库路径（handleCrud → applyMutators）一致地应用修改器，
+        // 否则库存值已转换（如哈希）而内存仍存原始值，增量对比与输出全部错乱
+        $entity->setValue($column, $query->withSetAttr($column, $value));
+      }
+      // 框架注入字段（自动更新时间等）不经修改器，直接同步内存
+      foreach ($autoFields as $column => $value) {
         $entity->setValue($column, $value);
       }
       $entity->markSynced();
