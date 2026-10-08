@@ -16,6 +16,7 @@ declare(strict_types=1);
 namespace Viswoole\Database\Channel\PDO;
 
 use Exception;
+use InvalidArgumentException;
 use Override;
 use PDO;
 use PDO\Mysql;
@@ -93,6 +94,7 @@ class PDOPool extends ConnectionPool
       $options['options'] = $this->PDOConfig->options;
       if ($this->PDOConfig->type === DriverType::MYSQL) {
         $this->applyMysqlTimezone($options['options']);
+        $this->assertBufferedQuery($options['options']);
       }
     }
     return new PDOProxy(...$options);
@@ -149,6 +151,30 @@ class PDOPool extends ConnectionPool
         throw new Exception('Unsupported Database Driver:' . $driver->value);
     }
     return $dsn;
+  }
+
+  /**
+   * 拒绝非缓冲查询模式（MYSQL_ATTR_USE_BUFFERED_QUERY = false）
+   *
+   * 框架的连接归还契约是"execute 在 finally 中先归还连接，调用方之后才 fetch"：
+   * 缓冲模式下结果集已由 mysqlnd 拉至客户端内存，归还后 fetch 为纯本地操作；
+   * 非缓冲模式下归还时服务端游标仍未关闭，其他协程借到同连接会触发
+   * Commands out of sync 协议错乱——该选项与连接池根本不兼容，入口直接拒绝
+   *
+   * @param array $options 用户配置的 PDO 选项
+   * @throws InvalidArgumentException 配置了非缓冲查询时抛出
+   */
+  private function assertBufferedQuery(array $options): void
+  {
+    // PHP 8.5 起 PDO::MYSQL_ATTR_USE_BUFFERED_QUERY 弃用，改用驱动常量
+    $key = Mysql::ATTR_USE_BUFFERED_QUERY;
+    // 宽松真值判定而非 === false：0 等 falsy 值传给 PDO 同样等效关闭缓冲，
+    // 严格比较会被其绕过校验
+    if (array_key_exists($key, $options) && !$options[$key]) {
+      throw new InvalidArgumentException(
+        '不支持 PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => false：非缓冲查询与连接池的连接归还契约不兼容，请使用默认缓冲模式'
+      );
+    }
   }
 
   /**

@@ -346,17 +346,23 @@ class ConnectManager
    */
   protected function close(): void
   {
-    // 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
-    $array = $this->connections;
-    foreach ($array as $key => $item) {
-      unset($this->connections[$key]);
-      // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
-      // （forcePut 依赖 xaContext 判定 XA 分支状态，必须在重置之前执行）
-      $this->forcePut($item['channel'], $item['connect']);
+    try {
+      // 归还所有尚未释放的连接到连接池，避免 commit/rollBack 中途异常导致连接泄漏
+      $array = $this->connections;
+      foreach ($array as $key => $item) {
+        unset($this->connections[$key]);
+        // 强制归还：见 commit() 中说明，此时不能走 put() 的事务标记分支
+        // （forcePut 依赖 xaContext 判定 XA 分支状态，必须在重置之前执行）
+        $this->forcePut($item['channel'], $item['connect']);
+      }
+    } finally {
+      // 即使 forcePut 中途异常（如归还可以池化连接时池已关闭），
+      // 也必须重置事务状态：残留的 connections/depth 会让后续事务
+      // 复用已失效的连接，xaContext 残留则会污染下一次 XA 分支判定
+      $this->transactionDepth = 0;
+      $this->connections = [];
+      $this->xaContext = null;
     }
-    $this->transactionDepth = 0;
-    $this->connections = [];
-    $this->xaContext = null;
   }
 
   /**

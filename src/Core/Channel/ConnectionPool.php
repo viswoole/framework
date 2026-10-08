@@ -311,20 +311,34 @@ abstract class ConnectionPool implements ConnectionPoolInterface
       return;
     }
     // 判断返回连接是否为NULL 和 连接是否可用 可用则归还连接
-    if ($connection !== null && $this->connectionDetection($connection)) {
-      // 归还的连接本就计入 connectionCount，队列容量理论上必然足够；
-      // push 仍带兜底超时而非永久等待，防御计数与队列瞬时错配导致协程死锁
-      $result = $this->pool->push($connection, self::CHANNEL_FALLBACK_TIMEOUT);
-      if ($result === false) throw new ConnectionPoolException(
-        self::ERROR_MESSAGE[$this->pool->errCode],
-        $this->pool->errCode
-      );
-    } else {
-      // 不可用连接：显式关闭并核减总连接数（原实现直接丢弃导致计数泄漏、
-      // 底层连接未关闭），再按容量缺口补建新连接填补
-      if ($connection !== null) $this->closeConnection($connection);
-      $this->connectionCount--;
-      $this->make();
+    try {
+      if ($connection !== null && $this->connectionDetection($connection)) {
+        // 归还的连接本就计入 connectionCount，队列容量理论上必然足够；
+        // push 仍带兜底超时而非永久等待，防御计数与队列瞬时错配导致协程死锁
+        $result = $this->pool->push($connection, self::CHANNEL_FALLBACK_TIMEOUT);
+        if ($result === false) {
+          // 入池超时：连接已无法归池，必须显式关闭并核减计数——否则连接
+          // 静默丢失且计数虚占，病态场景下池容量会缓慢缩水且无观测点；
+          // 抛出异常交给下方统一吞错（保护调用方 finally 中的原始业务异常）
+          $this->closeConnection($connection);
+          $this->connectionCount--;
+          throw new ConnectionPoolException(
+            self::ERROR_MESSAGE[$this->pool->errCode],
+            $this->pool->errCode
+          );
+        }
+      } else {
+        // 不可用连接：显式关闭并核减总连接数（原实现直接丢弃导致计数泄漏、
+        // 底层连接未关闭），再按容量缺口补建新连接填补
+        if ($connection !== null) $this->closeConnection($connection);
+        $this->connectionCount--;
+        $this->make();
+      }
+    } catch (Throwable) {
+      // 与上方 fork-aware / bypass 分支同语义：put 通常在调用方 finally 中执行，
+      // 建连失败（DB 故障）或入池超时抛出的异常会从 finally 传播并覆盖调用方
+      // 的真实业务异常——归还属兜底清理，失败仅意味着池需要后续重建（下次
+      // pop 时 ensureOwnProcess/make 兜底），此处吞错以保护原异常
     }
   }
 

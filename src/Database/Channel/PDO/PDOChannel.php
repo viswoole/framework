@@ -99,6 +99,10 @@ class PDOChannel extends Channel
       array_walk($writes, function (&$item) {
         $item = trim($item);
       });
+      // 空列表会在轮询取模时触发 DivisionByZeroError，构造时给出明确指引
+      if ($reads === [] || $writes === []) {
+        throw new InvalidArgumentException('读写分离配置的 read/write 主机列表不能为空');
+      }
       $readPools = $this->createPools($reads, $config);
       $writePools = $this->createPools($writes, $config);
       $this->pool = [
@@ -278,12 +282,14 @@ class PDOChannel extends Channel
   protected function getPool(string $type): PDOPool
   {
     if (is_array($this->pool)) {
-      // 获取上一次写入的连接池索引
-      $index = Context::get('$_pdo_write_pool_index');
+      // 获取上一次写入的连接池索引（键按通道隔离，见 contextKey）
+      $index = Context::get($this->contextKey('$_pdo_write_pool_index_'));
       // 如果有索引，则继续使用
       if (!is_null($index)) {
         $type = 'write';
         $pools = $this->pool[$type];
+        // 防御取模：粘滞索引可能来自配置变更前的残留，越界直接访问会 Fatal
+        $index = $index % count($pools);
       } else {
         $pools = $this->pool[$type];
         // 获取全局共享索引
@@ -292,7 +298,7 @@ class PDOChannel extends Channel
         $index = $index % count($pools);
         // 如果是写操作并且开启sticky，则通过协程上下文设置索引，在下一次读写操作时，使用相同连接池
         if ($type === 'write' && $this->sticky) {
-          Context::set('$_pdo_write_pool_index', $index);
+          Context::set($this->contextKey('$_pdo_write_pool_index_'), $index);
         }
         $this->table->set('index', [$type => $index + 1]);
       }
@@ -314,7 +320,23 @@ class PDOChannel extends Channel
    */
   private function setCurrentPoolIndex(string $type, int $index): void
   {
-    Context::set('$_pdo_current_index', ['type' => $type, 'index' => $index]);
+    Context::set($this->contextKey('$_pdo_current_index_'), ['type' => $type, 'index' => $index]);
+  }
+
+  /**
+   * 构建按通道隔离的协程上下文键
+   *
+   * 读写分离的粘滞/借出索引存于协程上下文：同一协程内先后使用多个读写分离
+   * 通道时，若键仅按固定字符串命名会跨通道污染（读操作被误路由写池、池索引
+   * 越界）。已注册通道按名称隔离；裸通道（未注册 DbManager、无名称）退化为
+   * 对象 ID 隔离
+   *
+   * @param string $prefix 键前缀
+   * @return string 完整上下文键
+   */
+  private function contextKey(string $prefix): string
+  {
+    return $prefix . ($this->name !== '' ? $this->name : spl_object_id($this));
   }
 
   /**
@@ -364,7 +386,7 @@ class PDOChannel extends Channel
    */
   private function getCurrentPoolIndex(): ?array
   {
-    return Context::get('$_pdo_current_index');
+    return Context::get($this->contextKey('$_pdo_current_index_'));
   }
 
   /**
@@ -372,6 +394,6 @@ class PDOChannel extends Channel
    */
   private function removeCurrentPoolIndex(): void
   {
-    Context::remove('$_pdo_current_index');
+    Context::remove($this->contextKey('$_pdo_current_index_'));
   }
 }
