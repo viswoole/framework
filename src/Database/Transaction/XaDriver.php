@@ -40,14 +40,15 @@ final class XaDriver
    *
    * @param object $connect 底层连接（PDO/PDOProxy/mysqli/MysqliProxy）
    * @param string $sql XA 语句
+   * @return int 受影响行数（journal 的 UPDATE 依赖它判定行是否仍存在；
+   *             PDO exec 返回 false 时按 0 处理，语义上等价于"未命中任何行"）
    * @throws DbException 驱动不支持或执行失败时抛出（原始异常作为 previous）
    */
-  public static function execute(object $connect, string $sql): void
+  public static function execute(object $connect, string $sql): int
   {
     try {
       if ($connect instanceof PDO || $connect instanceof PDOProxy) {
-        $connect->exec($sql);
-        return;
+        return (int)$connect->exec($sql);
       }
       /** @noinspection PhpComposerExtensionStubsInspection */
       if ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
@@ -55,11 +56,12 @@ final class XaDriver
           // 拼入服务器错误码与文本：提交/恢复路径依赖 XAER_NOTA 判定幂等达成，
           // 缺失会使 isNotExists 的消息匹配失效
           throw new DbException(
-            "XA 语句执行失败（errno:{$connect->errno}）：{$connect->error}；SQL：{$sql}",
+            "XA 语句执行失败（errno:{$connect->errno}）：{$connect->error}；SQL：$sql",
             $connect->errno
           );
         }
-        return;
+        /** @noinspection PhpComposerExtensionStubsInspection */
+        return $connect->affected_rows;
       }
       throw new RuntimeException(
         'XA 事务仅支持 PDO/mysqli 系驱动连接，收到 ' . get_debug_type($connect)
@@ -86,7 +88,7 @@ final class XaDriver
     if ($connect instanceof PDO || $connect instanceof PDOProxy) {
       $statement = $connect->query($sql);
       if ($statement === false) {
-        throw new DbException("XA 查询执行失败：{$sql}");
+        throw new DbException("XA 查询执行失败：$sql");
       }
       return $statement->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -95,7 +97,7 @@ final class XaDriver
       $result = $connect->query($sql);
       if ($result === false) {
         throw new DbException(
-          "XA 查询执行失败（errno:{$connect->errno}）：{$connect->error}；SQL：{$sql}",
+          "XA 查询执行失败（errno:{$connect->errno}）：{$connect->error}；SQL：$sql",
           $connect->errno
         );
       }
@@ -164,6 +166,6 @@ final class XaDriver
   {
     // MySQL 错误码 1397 = XAER_NOTA（XAE04，未知 xid）；旧实现误写为 1390
     // （实为 ER_PS_MANY_PARAM，与 XA 无关），导致错误码判定恒 false
-    return str_contains($e->getMessage(), 'XAER_NOTA') || (int)$e->getCode() === 1397;
+    return str_contains($e->getMessage(), 'XAER_NOTA') || $e->getCode() === 1397;
   }
 }

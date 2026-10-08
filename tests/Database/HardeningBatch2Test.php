@@ -6,6 +6,8 @@ namespace Viswoole\Tests\Database;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
+use Swoole\Coroutine;
+use Swoole\Coroutine\Channel;
 use Viswoole\Core\App;
 use Viswoole\Database\DbManager;
 use Viswoole\Database\Entity;
@@ -13,6 +15,7 @@ use Viswoole\Database\Entity\EntityCollection;
 use Viswoole\Database\Facade\Db as DbFacade;
 use Viswoole\Database\Model;
 use Viswoole\Database\Model\BelongsToMany;
+use function Swoole\Coroutine\run;
 
 /**
  * 批次 2（模型与实体层）加固回归测试
@@ -202,6 +205,52 @@ class HardeningBatch2Test extends TestCase
       $rows = $query->getArray();
       self::assertArrayNotHasKey('books', $rows[0], 'chunk 终结后复用实例不应再携带旧关联');
     });
+  }
+
+  // ---------------------------------------------------------------- B2-04
+
+  /**
+   * 协程数达 max_cor_num 上限时关联并发查询不得永久阻塞
+   *
+   * Coroutine::create 超限返回 false 且闭包不执行（wg->done() 永不调用）：
+   * 修复前 $wg->wait() 会永久阻塞挂死请求。修复后该关联降级为串行查询，
+   * 结果正常填充。用阻塞在 Channel 上的占位协程打满配额（同步 I/O 协程
+   * 在 create 内执行完毕不占名额，无法靠普通查询触发），压 max_cor_num=2：
+   * run 主协程 + 占位协程 = 2，关联查询的 create 必然超限。
+   *
+   * 注：Swoole 6.x 已不在 create 时强制 max_cor_num 配额（实测 6.2.1 超限
+   * 仍创建成功），本用例在 6.x 走正常并发路径、在 5.x 强制走串行降级路径，
+   * 两个版本下均断言查询完成且关联填充正确
+   */
+  public function testRelationQueryDegradesToSerialWhenCoroutineQuotaExhausted(): void
+  {
+    Coroutine::set(['max_cor_num' => 2]);
+    try {
+      run(function () {
+        $blocker = new Channel();
+        // 占住第 2 个协程名额：后续 Coroutine::create 达到 max_cor_num 上限
+        Coroutine::create(function () use ($blocker) {
+          $blocker->pop();
+        });
+        try {
+          $this->runQuietly(function () {
+            $rows = (new H2UserModel())->query->with(['books'])->getArray();
+            self::assertNotEmpty($rows, '主表数据应正常返回');
+            self::assertArrayHasKey(
+              'books',
+              $rows[0],
+              '协程配额打满时关联查询应降级串行完成而非永久阻塞'
+            );
+          });
+        } finally {
+          // 释放占位协程，保证 run() 正常退出
+          $blocker->push(1);
+        }
+      });
+    } finally {
+      // 恢复进程级协程配额，避免污染后续用例
+      Coroutine::set(['max_cor_num' => 100000]);
+    }
   }
 }
 

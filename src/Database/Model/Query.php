@@ -561,7 +561,7 @@ class Query extends BaseQuery
       if ($throw) break;
       $wg->add();
       // $data 按值捕获（协程内不修改主数据），结果仅写入自己的槽位
-      Coroutine::create(function () use ($wg, $name, $relation, $data, &$maps, &$throw) {
+      $task = function () use ($wg, $name, $relation, $data, &$maps, &$throw) {
         try {
           $maps[$name] = $relation->query($data);
         } catch (DbException|InvalidArgumentException|RuntimeException $e) {
@@ -570,7 +570,14 @@ class Query extends BaseQuery
         } finally {
           $wg->done();
         }
-      });
+      };
+      // Coroutine::create 在协程数达 Swoole max_cor_num 上限时返回 false 且闭包
+      // 不执行：done() 永不调用，wait() 将永久阻塞。创建失败时同步执行同一任务
+      // 兜底（等价串行查询，异常语义与协程路径完全一致）。
+      // 注：Swoole 6.x 已不在 create 时强制该配额，守卫仅对 5.x 生效
+      if (Coroutine::create($task) === false) {
+        $task();
+      }
     }
     //挂起当前协程，等待所有任务完成后恢复
     $wg->wait();

@@ -20,7 +20,7 @@ use Viswoole\Core\App;
 use Viswoole\Database\Channel;
 use Viswoole\Database\Channel\PDO\DriverType;
 use Viswoole\Database\Channel\PDO\PDOChannel;
-use Viswoole\Database\DbException;
+use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\DbManager;
 use function echo_log;
 
@@ -39,6 +39,12 @@ use function echo_log;
  * 触发时机：每个 worker 进程启动时（DbService 注册的 workerStart 钩子）。
  * 幂等性：终结语句以 xid 寻址，已终结的 xid 返回 XAER_NOTA 被容忍，
  * 多 worker / 多实例并发恢复与手动重跑均安全。
+ *
+ * 活性判定：prepare_start 行仅代表"提交尚未确立"，行仍可能被活跃协调者持有。
+ * 处置需同时满足：超过 created_at 冷却期、且心跳停跳（协调者关键阶段心跳刷新
+ * 超过 TTL，见 XaJournal::heartbeat）——防止慢 PREPARE/网络重试停顿中的活跃
+ * 事务被误删恢复依据或误回滚分支。处置前还会重读行状态，行已翻转为 prepared
+ * 时按提交意图终结（收敛"读取旧行后协调者复活确立意图"的竞态窗口）。
  */
 final class XaRecovery
 {
@@ -52,8 +58,21 @@ final class XaRecovery
    * 下次恢复（行仍在且已过冷却期）才安全收敛。
    * prepared 行无此竞态：对其未决分支补 XA COMMIT 与 commit() 的
    * 正常路径幂等重合，可即时处置。
+   *
+   * 冷却期是心跳判定的兜底：无心跳信息（旧表未迁移、协调者尚未首次刷新）的
+   * 行仅按冷却期判定；有心跳的行还要求心跳停跳（HEARTBEAT_TTL_SECONDS）。
    */
   private const int PREPARE_START_GRACE_SECONDS = 60;
+
+  /**
+   * journal 行心跳停跳判定阈值（秒）
+   *
+   * 协调者在每个分支的 PREPARE/COMMIT 前刷新心跳（XaJournal::heartbeat），
+   * 心跳距今超过该阈值即认定协调者已死（presumed dead）：正常提交路径的
+   * 关键阶段间隔为单条语句往返，远小于该值；协调者崩溃后心跳自然停跳。
+   * 与 PREPARE_START_GRACE_SECONDS 一致取 60s，兼顾误杀率与悬挂时长。
+   */
+  private const int HEARTBEAT_TTL_SECONDS = 60;
 
   /**
    * 执行崩溃恢复（journal 为空时仅一次探测查询，常规启动开销可忽略）
@@ -68,7 +87,7 @@ final class XaRecovery
     $journal = XaJournal::fromConfig();
     $rows = $journal->all();
     if ($rows === []) return;
-    /** @var array<string,array{state:int,branches:string[],created_at:string,blocked?:bool}> $rows */
+    /** @var array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null,blocked?:bool}> $rows */
     // 过滤前的全量行（供 recoverXid 区分"被 --xid 过滤跳过"与"确实无记录"）
     $allRows = $rows;
     // xid 过滤：仅保留命中的行（其余行与其分支保持原样）
@@ -81,19 +100,42 @@ final class XaRecovery
         return;
       }
     }
-    // 过滤冷却期内的 prepare_start 行：不处置、不删除，留待下次恢复
+    // 过滤不满足处置条件的 prepare_start 行：不处置、不删除，留待下次恢复。
+    // 处置条件 = 超过 created_at 冷却期 且 心跳已停跳（无心跳信息时仅按冷却期）
     foreach ($rows as $gtrid => $row) {
-      if (
-        $row['state'] === XaJournal::STATE_PREPARE_START
-        && !self::isBeyondGrace($row['created_at'])
-      ) {
+      if ($row['state'] !== XaJournal::STATE_PREPARE_START) continue;
+      if (self::isBeyondGrace($row['created_at']) && !self::isHeartbeatAlive($row['heartbeat_at'] ?? null)) {
+        continue;
+      }
+      echo_log(
+        "XA 恢复：journal 行（gtrid: {$gtrid}）处于冷却期内或心跳仍活跃，跳过待下次恢复",
+        'XA',
+        backtrace: 0
+      );
+      unset($rows[$gtrid]);
+    }
+    // 处置前重读 prepare_start 行状态：all() 读取与处置之间协调者可能已恢复并
+    // 确立提交意图（心跳停跳判定通过后行又翻转为 prepared），按最新意图终结，
+    // 将"误按回滚意图处置活跃事务"的竞态窗口压缩到重读-执行的毫秒级间隙
+    foreach ($rows as $gtrid => $row) {
+      if ($row['state'] !== XaJournal::STATE_PREPARE_START) continue;
+      try {
+        $state = $journal->stateOf($gtrid);
+      } catch (Throwable $e) {
         echo_log(
-          "XA 恢复：journal 行（gtrid: {$gtrid}）处于冷却期内，跳过待下次恢复",
+          "XA 恢复：journal 行状态重读失败，保留待下次恢复（gtrid: {$gtrid}，{$e->getMessage()}）",
           'XA',
           backtrace: 0
         );
-        unset($rows[$gtrid]);
+        $rows[$gtrid]['blocked'] = true;
+        continue;
       }
+      if ($state === null) {
+        // 行已被并发恢复任务删除：本轮不处置、结束时不重复删行
+        unset($rows[$gtrid]);
+        continue;
+      }
+      if ($state !== $row['state']) $rows[$gtrid]['state'] = $state;
     }
     if ($dryRun) {
       // 先输出基于 journal 意图的处置计划，随后扫描各通道报告实际未决分支
@@ -166,15 +208,31 @@ final class XaRecovery
   }
 
   /**
+   * 判断 journal 行心跳是否仍活跃（协调者最近在关键阶段刷新过）
+   *
+   * @param string|null $heartbeatAt 行心跳时间（null = 旧表未迁移或协调者尚未
+   *                                 首次刷新——无心跳信息，仅按冷却期判定）
+   * @return bool 仍活跃返回 true（该行本轮不处置）；解析失败按停跳处理
+   *              （与冷却期解析失败策略一致：宁可误判停跳进入重读核对，不无限搁置）
+   */
+  private static function isHeartbeatAlive(?string $heartbeatAt): bool
+  {
+    if ($heartbeatAt === null) return false;
+    $timestamp = strtotime($heartbeatAt);
+    if ($timestamp === false) return false;
+    return (time() - $timestamp) < self::HEARTBEAT_TTL_SECONDS;
+  }
+
+  /**
    * 恢复单个通道上的未决分支
    *
    * 通道不可用（连接失败或数据库不支持 XA）时阻塞全部行：
    * 无法确认该通道不存在未决分支前删除 journal 行，可能留下永久未决事务。
    *
    * @param Channel $channel 数据库通道
-   * @param array<string,array{state:int,branches:string[],blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
+   * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null,blocked?:bool}> $rows journal 行（引用更新 blocked 标记与重读后的 state）
    * @param bool $dryRun true 时仅报告未决分支与计划动作，不执行终结语句
-   * @param array<string,array{state:int,branches:string[],created_at:string}> $allRows 过滤前的全量 journal 行（区分"被过滤跳过"与"无记录"）
+   * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null}> $allRows 过滤前的全量 journal 行（区分"被过滤跳过"与"无记录"）
    */
   private static function recoverChannel(Channel $channel, array &$rows, bool $dryRun = false, array $allRows = []): void
   {
@@ -209,9 +267,9 @@ final class XaRecovery
    *
    * @param object $connect 通道连接（终结语句以 xid 寻址，可用任意连接执行）
    * @param string $xid 未决分支 xid
-   * @param array<string,array{state:int,branches:string[],blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
+   * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null,blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
    * @param bool $dryRun true 时仅输出计划动作，不执行终结语句
-   * @param array<string,array{state:int,branches:string[],created_at:string}> $allRows 过滤前的全量 journal 行
+   * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null}> $allRows 过滤前的全量 journal 行
    */
   private static function recoverXid(
     object $connect,

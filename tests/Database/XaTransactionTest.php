@@ -166,9 +166,16 @@ class XaTransactionTest extends TestCase
     self::assertNotNull($this->firstSqlMatching($channelA->log, '/^XA ROLLBACK /'));
     self::assertNull($this->firstSqlMatching($channelB->log, '/^XA PREPARE /'));
     self::assertNotNull($this->firstSqlMatching($channelB->log, '/^XA ROLLBACK /'));
-    // journal 行被清理（回滚后不再需要恢复）
+    // journal 行被清理（回滚后不再需要恢复）。
+    // 心跳 UPDATE（SET heartbeat_at）属 PREPARE 阶段的合法写入，
+    // 提交意图标记（SET state = 2）才是"进入提交意图阶段"的判据
     $journalSql = implode(';', $journalChannel->log);
-    self::assertStringNotContainsString('UPDATE', $journalSql, '未进入提交意图阶段');
+    self::assertStringContainsString('heartbeat_at', $journalSql, 'PREPARE 前应刷新 journal 心跳');
+    self::assertStringNotContainsString(
+      'SET state = ' . XaJournal::STATE_PREPARED,
+      $journalSql,
+      'PREPARE 失败不得确立提交意图'
+    );
     self::assertStringContainsString('DELETE FROM', $journalSql);
   }
 
@@ -573,6 +580,9 @@ class XaTransactionTest extends TestCase
     $journalChannel = new XaRecordingChannel();
     $channelA = new XaRecordingChannel();
     $channelB = new XaRecordingChannel();
+    // journal 行为 prepared（恢复任务按提交意图终结分支的模拟前提，
+    // XAER_NOTA 容忍前的 stateOf 二义性核对依赖它）
+    $journalChannel->selectRows = [['state' => XaJournal::STATE_PREPARED]];
     // 注入：第二分支（索引 1）的 XA COMMIT 得到 XAER_NOTA
     // （模拟恢复任务已抢先按 journal prepared 意图终结该分支）
     XaCoordinator::$faultInjector = function (string $stage, int $branchIndex): void {
@@ -847,6 +857,438 @@ class XaTransactionTest extends TestCase
     }
   }
 
+  /**
+   * 场景26（B4-01）：提交协议在每分支 PREPARE/COMMIT 前刷新 journal 心跳——
+   * PREPARE 阶段 2 次 + COMMIT 阶段 2 次，且意图确立（state=2）前后各 2 次
+   */
+  public function testCommitProtocolRefreshesHeartbeatBeforePrepareAndCommit(): void
+  {
+    $journalChannel = new XaRecordingChannel();
+    $channelA = new XaRecordingChannel();
+    $channelB = new XaRecordingChannel();
+    run(function () use ($journalChannel, $channelA, $channelB): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal($journalChannel, 'jt'));
+      $manager->pop($channelA, 'write');
+      $manager->pop($channelB, 'write');
+      $manager->commit();
+    });
+    $journalSql = implode(';', $journalChannel->log);
+    $hbCount = substr_count($journalSql, 'SET heartbeat_at = NOW(3)');
+    self::assertSame(4, $hbCount, '两分支应在 PREPARE/COMMIT 关键阶段前各刷新一次心跳');
+    $intentPos = strpos($journalSql, 'SET state = ' . XaJournal::STATE_PREPARED);
+    self::assertNotFalse($intentPos, '提交意图应确立');
+    self::assertSame(
+      2,
+      substr_count(substr($journalSql, 0, $intentPos), 'SET heartbeat_at = NOW(3)'),
+      'PREPARE 阶段的心跳刷新应发生在意图确立之前'
+    );
+    self::assertSame(
+      2,
+      substr_count(substr($journalSql, $intentPos), 'SET heartbeat_at = NOW(3)'),
+      'COMMIT 阶段的心跳刷新应发生在意图确立之后'
+    );
+    self::assertStringContainsString('DELETE FROM', $journalSql, '正常提交后 journal 行应清理');
+  }
+
+  /**
+   * 场景27（B4-01）：markPrepared 更新 0 行（提交意图行已被恢复任务删除）时
+   * 立即中止提交并全体回滚——此时未执行任何 XA COMMIT，回滚安全；
+   * 若继续推进会导致分支悬挂或被静默误回滚
+   */
+  public function testCommitAbortsWhenCommitIntentRowMissing(): void
+  {
+    $journalChannel = new class extends XaRecordingChannel {
+      #[Override]
+      public function pop(string $type): PDO
+      {
+        // 显式声明构造器：匿名类继承父类 promoted 属性在 PHP 8.5 下会退化为
+        // 动态属性（Deprecated 且子作用域不可见），必须自声明方可访问
+        return new class ($this) extends XaRecordingConnection {
+          public function __construct(private readonly XaRecordingChannel $owner)
+          {
+            // 转发给父类构造器（由其初始化 sqlite::memory: 与父级私有 owner）
+            parent::__construct($owner);
+          }
+
+          #[Override]
+          public function exec(string $statement): int|false
+          {
+            $this->owner->log[] = $statement;
+            // markPrepared 的 UPDATE 模拟"行已被恢复任务删除"：未命中任何行
+            if (str_contains($statement, 'SET state = ' . XaJournal::STATE_PREPARED)) {
+              return 0;
+            }
+            return 1;
+          }
+        };
+      }
+    };
+    $channelA = new XaRecordingChannel();
+    $channelB = new XaRecordingChannel();
+    $thrown = null;
+    run(function () use ($journalChannel, $channelA, $channelB, &$thrown): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal($journalChannel, 'jt'));
+      $manager->pop($channelA, 'write');
+      $manager->pop($channelB, 'write');
+      try {
+        $manager->commit();
+        self::fail('提交意图行丢失应中止提交并抛出异常');
+      } catch (DbException $e) {
+        $thrown = $e;
+      }
+    });
+    self::assertNotNull($thrown, '提交意图行丢失必须抛出异常');
+    self::assertStringContainsString('已全体回滚', $thrown->getMessage());
+    foreach ([$channelA, $channelB] as $channel) {
+      self::assertNull(
+        $this->firstSqlMatching($channel->log, '/^XA COMMIT /'),
+        '意图丢失后不得执行任何 XA COMMIT'
+      );
+      self::assertNotNull(
+        $this->firstSqlMatching($channel->log, '/^XA ROLLBACK /'),
+        '中止提交应全体回滚'
+      );
+    }
+  }
+
+  /**
+   * 场景28（B4-01）：XA COMMIT 得到 XAER_NOTA 但 journal 行仍为 prepare_start
+   * （恢复任务按回滚意图终结了该分支）——不得容忍为"提交达成"，必须抛出，
+   * 否则调用方带着已回滚的数据继续执行造成静默数据错乱
+   */
+  public function testCommitRejectsNotExistsWhenRowStillPrepareStart(): void
+  {
+    $journalChannel = new XaRecordingChannel();
+    // XAER_NOTA 容忍前的 stateOf 二义性核对返回 prepare_start
+    $journalChannel->selectRows = [['state' => XaJournal::STATE_PREPARE_START]];
+    $channelA = new XaRecordingChannel();
+    XaCoordinator::$faultInjector = function (string $stage, int $branchIndex): void {
+      if ($stage === 'commit' && $branchIndex === 0) {
+        throw new RuntimeException('SQLSTATE[HY000] [1390] XAER_NOTA: Unknown XID');
+      }
+    };
+    $thrown = null;
+    run(function () use ($journalChannel, $channelA, &$thrown): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal($journalChannel, 'jt'));
+      $manager->pop($channelA, 'write');
+      try {
+        $manager->commit();
+        self::fail('分支被按回滚意图终结时不得容忍为提交达成');
+      } catch (DbException $e) {
+        $thrown = $e;
+      }
+    });
+    self::assertNotNull($thrown, 'prepare_start 意图下的 XAER_NOTA 必须抛出');
+    self::assertStringContainsString('提交未达成', $thrown->getMessage());
+    self::assertNull($this->firstSqlMatching($channelA->log, '/^XA COMMIT /'), '被回滚的分支不得被声称已提交');
+    self::assertStringNotContainsString('DELETE FROM', implode(';', $journalChannel->log), '异常路径不得清理 journal 行');
+  }
+
+  /**
+   * 场景29（B4-01）：COMMIT 阶段心跳刷新失败（journal 不可达）——事务停留
+   * 未决并抛出，journal 行留存 prepared 意图供恢复任务补齐
+   */
+  public function testCommitHeartbeatFailureLeavesInDoubt(): void
+  {
+    $journalChannel = new class extends XaRecordingChannel {
+      /** @var int 已执行的心跳刷新次数 */
+      public int $heartbeats = 0;
+
+      #[Override]
+      public function pop(string $type): PDO
+      {
+        // 显式声明构造器：同场景27注释（PHP 8.5 匿名类 promoted 属性退化）
+        return new class ($this) extends XaRecordingConnection {
+          public function __construct(private readonly XaRecordingChannel $owner)
+          {
+            // 转发给父类构造器（由其初始化 sqlite::memory: 与父级私有 owner）
+            parent::__construct($owner);
+          }
+
+          #[Override]
+          public function exec(string $statement): int|false
+          {
+            $this->owner->log[] = $statement;
+            if (str_contains($statement, 'SET heartbeat_at = NOW(3)')) {
+              $this->owner->heartbeats++;
+              // 第 2 次心跳 = 单分支提交的 COMMIT 前刷新（第 1 次在 PREPARE 前）：
+              // 模拟 journal 在提交中途不可达
+              if ($this->owner->heartbeats === 2) {
+                throw new \PDOException('MySQL server has gone away');
+              }
+            }
+            return 1;
+          }
+        };
+      }
+    };
+    $channelA = new XaRecordingChannel();
+    $thrown = null;
+    run(function () use ($journalChannel, $channelA, &$thrown): void {
+      $manager = ConnectManager::factory();
+      $manager->startXa(new XaJournal($journalChannel, 'jt'));
+      $manager->pop($channelA, 'write');
+      try {
+        $manager->commit();
+        self::fail('COMMIT 阶段心跳刷新失败应停留未决并抛出');
+      } catch (DbException $e) {
+        $thrown = $e;
+      }
+    });
+    self::assertNotNull($thrown, '心跳刷新失败必须抛出');
+    self::assertStringContainsString('停留未决', $thrown->getMessage());
+    $journalSql = implode(';', $journalChannel->log);
+    self::assertStringContainsString(
+      'SET state = ' . XaJournal::STATE_PREPARED,
+      $journalSql,
+      '提交意图应已确立为 prepared'
+    );
+    self::assertStringNotContainsString('DELETE FROM', $journalSql, '停留未决的 journal 行必须留存');
+    self::assertNull($this->firstSqlMatching($channelA->log, '/^XA COMMIT /'), '心跳失败的分支不得继续提交');
+  }
+
+  /**
+   * 场景30（B4-01）：prepare_start 行超过冷却期但心跳仍活跃（协调者活跃，
+   * 仅关键阶段停顿较长）——不处置、不删除，留待下次恢复
+   */
+  public function testRecoverySkipsPrepareStartRowWithAliveHeartbeat(): void
+  {
+    $gtrid = 'vw' . str_repeat('5a', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelA = new XaRecordingChannel();
+    $channelA->recoverRows = ["{$gtrid}-b1"];
+    $channelA->journalState = XaJournal::STATE_PREPARE_START;
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_a' => $channelA],
+      journalRows: [[
+        'gtrid' => $gtrid,
+        'state' => XaJournal::STATE_PREPARE_START,
+        'branches' => '["' . $gtrid . '-b1"]',
+        'created_at' => '2020-01-01 00:00:00',  // 已超冷却期
+        'heartbeat_at' => date('Y-m-d H:i:s'),  // 心跳活跃：不得处置
+      ]]
+    );
+    self::assertNull(
+      $this->firstSqlMatching($channelA->log, "/^XA (COMMIT|ROLLBACK) '$gtrid-b1'/"),
+      '心跳活跃的 prepare_start 行不得被处置'
+    );
+    self::assertStringNotContainsString('DELETE FROM', implode(';', $journalChannel->log), '活跃事务的 journal 行不得被删除');
+  }
+
+  /**
+   * 场景31（B4-01）：prepare_start 行心跳已停跳（超过 TTL 且超过冷却期）——
+   * 照常按回滚意图处置并清理，心跳判定不得阻塞真死事务的收敛
+   */
+  public function testRecoveryDisposesPrepareStartRowWithDeadHeartbeat(): void
+  {
+    $gtrid = 'vw' . str_repeat('5b', 8);
+    $journalChannel = new XaRecordingChannel();
+    $channelA = new XaRecordingChannel();
+    $channelA->recoverRows = ["{$gtrid}-b1"];
+    $channelA->journalState = XaJournal::STATE_PREPARE_START;
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_a' => $channelA],
+      journalRows: [[
+        'gtrid' => $gtrid,
+        'state' => XaJournal::STATE_PREPARE_START,
+        'branches' => '["' . $gtrid . '-b1"]',
+        'created_at' => '2020-01-01 00:00:00',
+        'heartbeat_at' => '2020-01-01 00:00:00', // 心跳停跳
+      ]]
+    );
+    self::assertNotNull(
+      $this->firstSqlMatching($channelA->log, "/^XA ROLLBACK '$gtrid-b1'/"),
+      '心跳停跳的 prepare_start 行应按回滚意图处置'
+    );
+    self::assertStringContainsString('DELETE FROM', implode(';', $journalChannel->log), '处置完成后应清理 journal 行');
+  }
+
+  /**
+   * 场景32（B4-01）：处置前重读行状态发现已翻转为 prepared（协调者在恢复
+   * 读取之后确立了提交意图）——按最新意图补 XA COMMIT 而非误回滚
+   */
+  public function testRecoveryReReadsRowStateBeforeDisposal(): void
+  {
+    $gtrid = 'vw' . str_repeat('5c', 8);
+    $journalChannel = new class extends XaRecordingChannel {
+      #[Override]
+      public function pop(string $type): PDO
+      {
+        // 显式声明构造器：同场景27注释（PHP 8.5 匿名类 promoted 属性退化）
+        return new class ($this) extends XaRecordingConnection {
+          public function __construct(private readonly XaRecordingChannel $owner)
+          {
+            // 转发给父类构造器（由其初始化 sqlite::memory: 与父级私有 owner）
+            parent::__construct($owner);
+          }
+
+          #[Override]
+          public function query(
+            string $sql,
+            ?int   $fetchMode = null,
+            mixed  ...$fetchModeArgs
+          ): PDOStatement|false {
+            // stateOf 重读：返回协调者翻转后的 prepared 状态
+            if (str_contains($sql, 'SELECT state FROM')) {
+              return $this->statementFor(['state'], [['state' => XaJournal::STATE_PREPARED]]);
+            }
+            return parent::query($sql, $fetchMode, ...$fetchModeArgs);
+          }
+        };
+      }
+    };
+    $channelA = new XaRecordingChannel();
+    $channelA->recoverRows = ["{$gtrid}-b1"];
+    $channelA->journalState = XaJournal::STATE_PREPARE_START;
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_a' => $channelA],
+      journalRows: [[
+        'gtrid' => $gtrid,
+        'state' => XaJournal::STATE_PREPARE_START, // all() 读取到的旧状态
+        'branches' => '["' . $gtrid . '-b1"]',
+        'created_at' => '2020-01-01 00:00:00',
+        'heartbeat_at' => '2020-01-01 00:00:00',
+      ]]
+    );
+    self::assertNotNull(
+      $this->firstSqlMatching($channelA->log, "/^XA COMMIT '$gtrid-b1'/"),
+      '重读为 prepared 的行应按提交意图补 XA COMMIT'
+    );
+    self::assertNull(
+      $this->firstSqlMatching($channelA->log, '/^XA ROLLBACK /'),
+      '提交意图已确立的分支不得被回滚'
+    );
+  }
+
+  /**
+   * 场景33（B4-01）：处置前重读发现行已被并发恢复任务删除——本轮跳过处置
+   * 且不重复删行（幂等并发安全）
+   */
+  public function testRecoverySkipsRowDeletedByConcurrentRecovery(): void
+  {
+    $gtrid = 'vw' . str_repeat('5d', 8);
+    $journalChannel = new class extends XaRecordingChannel {
+      #[Override]
+      public function pop(string $type): PDO
+      {
+        // 显式声明构造器：同场景27注释（PHP 8.5 匿名类 promoted 属性退化）
+        return new class ($this) extends XaRecordingConnection {
+          public function __construct(private readonly XaRecordingChannel $owner)
+          {
+            // 转发给父类构造器（由其初始化 sqlite::memory: 与父级私有 owner）
+            parent::__construct($owner);
+          }
+
+          #[Override]
+          public function query(
+            string $sql,
+            ?int   $fetchMode = null,
+            mixed  ...$fetchModeArgs
+          ): PDOStatement|false {
+            // stateOf 重读：行已被并发恢复任务删除
+            if (str_contains($sql, 'SELECT state FROM')) {
+              return $this->statementFor(['state'], []);
+            }
+            return parent::query($sql, $fetchMode, ...$fetchModeArgs);
+          }
+        };
+      }
+    };
+    $channelA = new XaRecordingChannel();
+    $channelA->recoverRows = ["{$gtrid}-b1"];
+    $channelA->journalState = XaJournal::STATE_PREPARE_START;
+    $this->runRecoveryWith(
+      ['xa_journal' => $journalChannel, 'xa_a' => $channelA],
+      journalRows: [[
+        'gtrid' => $gtrid,
+        'state' => XaJournal::STATE_PREPARE_START,
+        'branches' => '["' . $gtrid . '-b1"]',
+        'created_at' => '2020-01-01 00:00:00',
+        'heartbeat_at' => '2020-01-01 00:00:00',
+      ]]
+    );
+    self::assertNull(
+      $this->firstSqlMatching($channelA->log, "/^XA (COMMIT|ROLLBACK) '$gtrid-b1'/"),
+      '行已被并发恢复处置时不得重复终结分支'
+    );
+    self::assertStringNotContainsString('DELETE FROM', implode(';', $journalChannel->log), '行已删除时不得重复删行');
+  }
+
+  /**
+   * 场景34（B4-01）：旧版本 journal 表（无 heartbeat_at 列）首次写入时
+   * 自动迁移补列——恢复任务的活性判定依赖心跳列
+   */
+  public function testJournalMigratesLegacyTableAddsHeartbeatColumn(): void
+  {
+    $table = 'mig' . uniqid(); // 独立表名：避开进程级 ensureTable 缓存的跨用例干扰
+    $journalChannel = new XaRecordingChannel();
+    $journalChannel->journalHeartbeatColumnExists = false;
+    $journal = new XaJournal($journalChannel, $table);
+    $journal->recordPrepareStart('vw' . bin2hex(random_bytes(8)), []);
+    $journalSql = implode(';', $journalChannel->log);
+    self::assertStringContainsString('information_schema.columns', $journalSql, '应探测心跳列是否存在');
+    self::assertStringContainsString('ADD COLUMN heartbeat_at', $journalSql, '旧表应自动迁移补心跳列');
+    self::assertLessThan(
+      strpos($journalSql, 'INSERT INTO'),
+      (int)strpos($journalSql, 'ALTER TABLE'),
+      '补列必须先于首次写入（否则 INSERT 因缺列失败）'
+    );
+  }
+
+  /**
+   * 场景35（review）：并发迁移竞争的败者——ALTER 得 Duplicate column 后
+   * 列存在性缓存必须失效并绕缓存重探测：列已被并发方补齐时视为迁移完成，
+   * 继续正常写入（若缓存不失效，该 worker 每次写入都重跑 ALTER 持续失败）
+   */
+  public function testMigrationRaceLoserRecoversViaReprobe(): void
+  {
+    $table = 'race' . uniqid(); // 独立表名：隔离本用例的 schema 模拟状态
+    $journalChannel = new class extends XaRecordingChannel {
+      /** @var int ALTER 尝试次数 */
+      public int $alterAttempts = 0;
+
+      #[Override]
+      public function pop(string $type): PDO
+      {
+        return new class ($this) extends XaRecordingConnection {
+          public function __construct(private readonly XaRecordingChannel $owner)
+          {
+            parent::__construct($owner);
+          }
+
+          #[Override]
+          public function exec(string $statement): int|false
+          {
+            $this->owner->log[] = $statement;
+            // 首次 ALTER 模拟并发竞争败者（MySQL 1060），此刻起并发方已补列
+            if (str_contains($statement, 'ADD COLUMN heartbeat_at')) {
+              $this->owner->alterAttempts++;
+              if ($this->owner->alterAttempts === 1) {
+                $this->owner->journalHeartbeatColumnExists = true;
+                throw new \PDOException("SQLSTATE[42S21]: Duplicate column name 'heartbeat_at'");
+              }
+            }
+            return 1;
+          }
+        };
+      }
+    };
+    $journalChannel->journalHeartbeatColumnExists = false;
+    $journal = new XaJournal($journalChannel, $table);
+    $journal->recordPrepareStart('vw' . bin2hex(random_bytes(8)), []);
+    $journalSql = implode(';', $journalChannel->log);
+    self::assertSame(1, $journalChannel->alterAttempts, 'ALTER 失败后不应重复尝试（重探测确认列已存在）');
+    self::assertStringContainsString('INSERT INTO', $journalSql, '竞争败者应视为迁移完成并继续写入');
+    self::assertLessThan(
+      (int)strpos($journalSql, 'INSERT INTO'),
+      (int)strpos($journalSql, 'ALTER TABLE'),
+      '迁移竞争应在首次写入之前收敛'
+    );
+  }
+
   /* ------------------------------------------------------------------ */
   /* 辅助方法                                                            */
   /* ------------------------------------------------------------------ */
@@ -970,6 +1412,8 @@ class XaRecordingChannel extends Channel
   public int $journalState = 2;
   /** @var bool 模拟 journal 表是否存在（tableExists 探测的返回） */
   public bool $journalTableExists = true;
+  /** @var bool 模拟 journal 表是否已含 heartbeat_at 心跳列（heartbeatColumnExists 探测的返回） */
+  public bool $journalHeartbeatColumnExists = true;
 
   #[Override]
   public function execute(
@@ -1052,6 +1496,10 @@ class XaRecordingConnection extends PDO
     if (str_contains($sql, 'information_schema.tables')) {
       return $this->statementFor(['cnt'], [['cnt' => $this->owner->journalTableExists ? 1 : 0]]);
     }
+    // journal 心跳列存在性探测（information_schema 计数）
+    if (str_contains($sql, 'information_schema.columns')) {
+      return $this->statementFor(['cnt'], [['cnt' => $this->owner->journalHeartbeatColumnExists ? 1 : 0]]);
+    }
     if (preg_match('/^\s*SELECT/i', $sql) === 1 && $this->owner->selectRows !== []) {
       $columns = array_keys($this->owner->selectRows[0]);
       return $this->statementFor($columns, $this->owner->selectRows);
@@ -1065,7 +1513,7 @@ class XaRecordingConnection extends PDO
    * @param string[] $columns 列名
    * @param array<int,array<string,mixed>> $rows 模拟行
    */
-  private function statementFor(array $columns, array $rows): PDOStatement
+  protected function statementFor(array $columns, array $rows): PDOStatement
   {
     parent::exec('DROP TABLE IF EXISTS mock_result');
     $definitions = implode(', ', array_map(fn(string $c): string => "\"$c\"", $columns));
