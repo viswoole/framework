@@ -23,6 +23,7 @@ use Viswoole\Database\Query\Join;
 use Viswoole\Database\Query\Options;
 use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Query\Where;
+use Viswoole\Database\Query\WhereGroup;
 
 /**
  * 查询构造器
@@ -63,11 +64,36 @@ class BaseQuery
   }
 
   /**
-   * 克隆时深拷贝 Options，避免多个实例共享同一 Options 对象
+   * 克隆时深拷贝 Options 及其中的 Raw 片段，避免多个实例共享同一查询状态
+   *
+   * Options 内的 where/columns/orderBy 数组可持有 Raw 对象（对象按句柄传递，
+   * 数组拷贝不复制对象），浅拷贝会让克隆体与原查询共享同一 SQL 片段——
+   * chunk 等场景还会原地改写 $raw->sql，导致跨实例污染
    */
   public function __clone(): void
   {
     $this->options = clone $this->options;
+    foreach (['where', 'columns', 'orderBy'] as $field) {
+      foreach ($this->options->$field as $index => $item) {
+        if ($item instanceof Raw) {
+          $this->options->$field[$index] = clone $item;
+        } elseif ($item instanceof WhereGroup) {
+          // WhereGroup 的 items 为标准化数组（值语义），浅克隆即完成隔离
+          $this->options->$field[$index] = clone $item;
+        }
+      }
+    }
+    foreach ($this->options->unions as $index => $union) {
+      if ($union['query'] instanceof Raw) {
+        $union['query'] = clone $union['query'];
+        $this->options->unions[$index] = $union;
+      }
+    }
+    foreach ($this->options->duplicate as $column => $value) {
+      if ($value instanceof Raw) {
+        $this->options->duplicate[$column] = clone $value;
+      }
+    }
   }
 
   /**
@@ -214,11 +240,14 @@ class BaseQuery
   /**
    * 设置 LIMIT 子句
    *
-   * @param int $limit 返回记录的最大数量
+   * @param int $limit 返回记录的最大数量，不允许为负数
    * @return static 支持链式调用
+   * @throws InvalidArgumentException limit 为负数时抛出
    */
   public function limit(int $limit): static
   {
+    // 负数会被直接内插为 "LIMIT -1"，在数据库端报语法错误且难以定位，入口直接拒绝
+    if ($limit < 0) throw new InvalidArgumentException('LIMIT 不能为负数');
     $this->options->limit = $limit;
     return $this;
   }
@@ -226,17 +255,23 @@ class BaseQuery
   /**
    * 设置 OFFSET 子句
    *
-   * @param int $offset 结果偏移量
+   * @param int $offset 结果偏移量，不允许为负数
    * @return static 支持链式调用
+   * @throws InvalidArgumentException offset 为负数时抛出
    */
   public function offset(int $offset): static
   {
+    if ($offset < 0) throw new InvalidArgumentException('OFFSET 不能为负数');
     $this->options->offset = $offset;
     return $this;
   }
 
   /**
    * 添加 UNION 子句合并另一个查询结果
+   *
+   * ⚠️ 安全边界：$query 为 string 时会被原样拼入 SQL（与 whereRaw/selectRaw 同级
+   * 的显式逃逸口），禁止将任何来自用户输入的内容传入——用户输入必须走参数绑定入口，
+   * 否则将构成 SQL 注入
    *
    * @param string|Raw $query 要合并的 SQL 语句或 Raw 对象
    * @param string $type 合并类型 UNION|UNION ALL，默认 UNION

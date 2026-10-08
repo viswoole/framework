@@ -89,6 +89,13 @@ trait Where
       $value = $operator;
       $operator = is_array($operator) ? 'IN' : '=';
     }
+    // 一元运算符不携带比较值：显式三参传值会生成 "col IS NULL ?" 坏 SQL，
+    // 在数据库端才报语法错误，这里入口直接拒绝并指引用正确的 API
+    if (in_array($operator, ['IS NULL', 'IS NOT NULL'], true) && $value !== null) {
+      throw new InvalidArgumentException(
+        "$operator 条件不接受比较值，请改用 whereNull()/whereNotNull()"
+      );
+    }
     // 显式三参调用时 operator 由调用方提供，必须校验白名单，
     // 防止非法运算符被 SqlBuilder 直接内插进 SQL 造成注入
     if (!in_array($operator, self::OPERATORS, true)) {

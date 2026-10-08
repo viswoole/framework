@@ -45,7 +45,10 @@ class WhereGroup
    */
   public function __construct(array $wheres, string $connector)
   {
-
+    // 空分组会被拼成 "AND ()" 非法 SQL，在数据库端报语法错误且难以定位，入口直接拒绝
+    if (empty($wheres)) {
+      throw new InvalidArgumentException('条件分组不能为空：空分组会生成非法的 "()" SQL 片段');
+    }
     $this->items = self::parsing($wheres);
     $connector = strtoupper($connector);
     // 与 parsing() 保持一致：非法连接符直接拒绝而非静默纠正为 OR
@@ -82,7 +85,9 @@ class WhereGroup
           throw new InvalidArgumentException("无效的查询条件 index：$key");
         }
         $operator = $item[1];
-        if (!in_array($operator, BaseQuery::OPERATORS)) {
+        // 必须严格比较：loose in_array 下 true == '=' 为真，bool 会绕过白名单
+        // （where()/having() 均使用严格比较，此处保持一致）
+        if (!in_array($operator, BaseQuery::OPERATORS, true)) {
           throw new InvalidArgumentException("无效的查询条件运算符 index：$key");
         }
         $connector = strtoupper($item[3] ?? 'AND');

@@ -99,9 +99,10 @@ trait Crud
     $cacheStore = null;
     if ($this->options->cache) {
       $cacheStore = Cache::store($this->options->cache['store']);
-      if ($cacheStore->has($this->options->cache['key'])) {
-        return $cacheStore->get($this->options->cache['key']);
-      }
+      // 单次 get 取代 has+get 双调用：消除两次调用间 TTL 过期的竞态窗口，
+      // 并避免 get 返回非数组值（如缓存被外部污染）时违反返回类型声明
+      $cached = $cacheStore->get($this->options->cache['key']);
+      if (is_array($cached)) return $cached;
     }
     // 缓存未命中：执行查询（移除原恒真的 `isset($result)` 死代码分支）
     /**
@@ -439,7 +440,11 @@ trait Crud
     $this->options->columns[] = Db::raw("$fn($column) AS $type");
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
-    return $result[0][$type];
+    // 空表时 SQL 聚合返回 NULL 行；MySQL 对整型列的 AVG/SUM 还会返回 DECIMAL 字符串。
+    // 这里统一归一：null 表示"无数据"，is_numeric 值转为 int|float，其余（如日期）保留字符串
+    $value = $result[0][$type] ?? null;
+    if ($value === null) return null;
+    return is_numeric($value) ? $value + 0 : (string)$value;
   }
 
   /**
@@ -467,11 +472,11 @@ trait Crud
    * 获取指定列的最小值
    *
    * @param string $column 列名
-   * @return string|int|float|Raw 最小值
+   * @return string|int|float|null|Raw 最小值；空表（聚合结果为 NULL）时返回 null
    * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function min(string $column): string|int|float|Raw
+  public function min(string $column): string|int|float|null|Raw
   {
     // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
     return $this->aggregateQueries('min', $column);
@@ -481,11 +486,11 @@ trait Crud
    * 获取指定列的最大值
    *
    * @param string $column 列名
-   * @return string|int|float|Raw 最大值
+   * @return string|int|float|null|Raw 最大值；空表（聚合结果为 NULL）时返回 null
    * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function max(string $column): string|int|float|Raw
+  public function max(string $column): string|int|float|null|Raw
   {
     // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
     return $this->aggregateQueries('max', $column);
@@ -495,11 +500,11 @@ trait Crud
    * 获取指定列的平均值
    *
    * @param string $column 列名
-   * @return float|int|Raw 平均值
+   * @return float|int|null|Raw 平均值；空表（聚合结果为 NULL）时返回 null
    * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function avg(string $column): float|int|Raw
+  public function avg(string $column): float|int|null|Raw
   {
     // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
     return $this->aggregateQueries('avg', $column);
@@ -509,11 +514,11 @@ trait Crud
    * 获取指定列的总和
    *
    * @param string $column 列名
-   * @return float|int|Raw 总和
+   * @return float|int|null|Raw 总和；空表（聚合结果为 NULL）时返回 null
    * @throws InvalidArgumentException 聚合字段包含非法字符时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function sum(string $column): float|int|Raw
+  public function sum(string $column): float|int|null|Raw
   {
     // 修复: __METHOD__ 会产生带命名空间的非法SQL函数名，应使用简单方法名
     return $this->aggregateQueries('sum', $column);
@@ -573,6 +578,10 @@ trait Crud
    *
    * 不适用缓存，因为缓存大量数据仍会造成内存溢出。
    *
+   * 依赖缓冲查询模式：execute 在连接归还后才逐条 fetch——缓冲模式下结果集
+   * 已全量载入客户端内存，归还后 fetch 为纯本地操作；非缓冲模式已在
+   * PDO 连接池层禁止配置（MYSQL_ATTR_USE_BUFFERED_QUERY=false）。
+   *
    * @return Generator 逐条返回 DataSet 的生成器
    * @throws DbException 数据库操作失败时抛出
    */
@@ -622,8 +631,9 @@ trait Crud
       $raw = $this->channel->build($this->options);
       while (true) {
         $start = microtime(true);
-        // 替换 OFFSET 的值
-        $raw->sql = preg_replace('/OFFSET\s+\d+/', "OFFSET $offset", $raw->sql);
+        // 仅替换最后一处 OFFSET（主查询的分页子句）：负向前瞻保证命中末次出现，
+        // 避免误改写 whereRaw/union 手写片段（如子查询分页）中的 OFFSET
+        $raw->sql = preg_replace('/OFFSET\s+\d+(?!.*OFFSET\s+\d+)/s', "OFFSET $offset", $raw->sql);
         /**
          * @var PDOStatement $statement
          */
