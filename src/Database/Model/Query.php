@@ -416,6 +416,10 @@ class Query extends BaseQuery
   private function applyRowMutators(array $row): array
   {
     foreach ($row as $key => $value) {
+      // Raw 表达式（update/increment 的原生片段）不走修改器：
+      // 修改器面向标量值转换，对 Raw 做转换会抛 TypeError 或把表达式
+      // 替换为标量，静默破坏原子自增等 SQL 语义
+      if ($value instanceof Raw) continue;
       $row[$key] = $this->withSetAttr($key, $value);
     }
     return $row;

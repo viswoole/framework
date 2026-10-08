@@ -71,6 +71,7 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Query sharedLock() 共享锁定记录。
  * @method static Query toRaw() 返回Raw对象，不执行查询
  * @method static Query replace(bool $flag = true) 强制写入
+ * @method static Query duplicate(array $data, string $rowAlias = '') 设置 ON DUPLICATE KEY UPDATE 更新数据（仅 MySQL，配合 insert 使用）
  * @method static Query orWhere(string $column, array|string|int|float $operator, array|string|int|float|null $value = null) OR 查询条件
  * @method static Query where(string $column, array|string|int|float $operator, array|string|int|float|null $value = null, string $connector = 'AND') 查询条件
  * @method static Query wheres(array $wheres) 用数组批量设置查询条件
@@ -93,6 +94,8 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Raw|int insert(array $data) 插入数据
  * @method static Raw|string|int insertGetId(array $data) 插入数据，返回主键值
  * @method static Raw|int update(array $data) 更新记录
+ * @method static Raw|int increment(string $column, int|float $amount = 1, array $extra = []) 字段原子自增（col = col + ?）
+ * @method static Raw|int decrement(string $column, int|float $amount = 1, array $extra = []) 字段原子自减（col = col - ?）
  * @method static Raw|int count(string $column = '*') 计算指定列不能为null的记录总数
  * @method static mixed value(string $column) 返回某个字段的值，未查询到数据返回false
  * @method static Raw|string|int|float min(string $column) 获取最小值。
@@ -104,6 +107,8 @@ use Viswoole\Database\Query\RunInfo;
  * @method static Collection|Raw select(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static Collection|Raw get(bool $allowEmpty = true) 执行查询，并返回查询结果
  * @method static array|Raw getArray() 执行查询，并以数组方式返回查询结果
+ * @method static bool exists() 判断是否存在满足条件的数据
+ * @method static bool doesntExist() 判断是否不存在满足条件的数据
  * @method static Generator cursor() 游标查询
  * @method static Query strict(bool $flag = true) 如果关闭严格模式，则会忽略写入不存在的字段。
  * @see Query

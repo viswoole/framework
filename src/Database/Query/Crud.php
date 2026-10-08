@@ -254,6 +254,44 @@ trait Crud
   }
 
   /**
+   * 判断是否存在满足条件的数据
+   *
+   * 生成 SELECT 1 ... LIMIT 1 只取一行单列，命中即真，比 count() 全表计数高效。
+   * ```
+   * if (Db::table('user')->where('id', 1)->exists()) { ... }
+   * ```
+   * 注意：
+   * - 若调用方已通过 columns() 设置查询列，SELECT 1 会叠加在其后（判空不受影响）；
+   * - 缓存键不可与普通 select() 复用：exists 先执行会把单列哨兵行写入缓存，
+   *   同 key 的 select() 命中后返回错误形态的数据；
+   * - 模型查询中 with() 注册的关联不会被跳过，判空前会照常执行关联查询（浪费）。
+   *
+   * @return bool 存在返回 true
+   * @throws DbException 数据库操作失败时抛出
+   */
+  public function exists(): bool
+  {
+    // exists() 语义是真实执行并判空，忽略调用方设置的 toRaw 标记
+    $this->options->toRaw = false;
+    // 单列常量列：避免 SELECT * 把宽行数据拉回内存
+    $this->options->columns[] = Db::raw('1');
+    $this->limit(1);
+    $result = $this->runCrud('select');
+    return !empty($result);
+  }
+
+  /**
+   * 判断是否不存在满足条件的数据（exists() 的取反快捷方法）
+   *
+   * @return bool 不存在返回 true
+   * @throws DbException 数据库操作失败时抛出
+   */
+  public function doesntExist(): bool
+  {
+    return !$this->exists();
+  }
+
+  /**
    * 插入数据并返回自增主键值
    *
    * @param array $data 关联数组数据
@@ -286,6 +324,79 @@ trait Crud
     if (empty($data)) throw new InvalidArgumentException('要更新的数据不能为空');
     $this->options->data = $data;
     return $this->runCrud('update');
+  }
+
+  /**
+   * 字段原子自增（生成 col = col + ?），可同时写入其他字段
+   *
+   * 与 update() 一样需要 where 条件或数据中包含主键值；update_time 等模型
+   * 自动写入逻辑照常生效。
+   * ```
+   * Db::table('user')->where('id', 1)->increment('login_count');
+   * Db::table('user')->where('id', 1)->increment('score', 5, ['level' => 2]);
+   * ```
+   *
+   * @param string $column 列名
+   * @param int|float $amount 增量，默认 1，负值等价于减量
+   * @param array<string,mixed|Raw> $extra 同时写入的其他字段（不能包含自增列名）
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 列名包含非法字符、或 extra 中包含自增列名时抛出
+   * @throws DbException 数据库操作失败时抛出
+   */
+  public function increment(string $column, int|float $amount = 1, array $extra = []): int|Raw
+  {
+    return $this->incrementOrDecrement($column, '+', $amount, $extra);
+  }
+
+  /**
+   * 字段原子自减（生成 col = col - ?），可同时写入其他字段
+   *
+   * @param string $column 列名
+   * @param int|float $amount 减量，默认 1，负值等价于增量
+   * @param array<string,mixed|Raw> $extra 同时写入的其他字段（不能包含自增列名）
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 列名包含非法字符、或 extra 中包含自增列名时抛出
+   * @throws DbException 数据库操作失败时抛出
+   */
+  public function decrement(string $column, int|float $amount = 1, array $extra = []): int|Raw
+  {
+    return $this->incrementOrDecrement($column, '-', $amount, $extra);
+  }
+
+  /**
+   * increment/decrement 统一实现：列名经白名单校验后内插表达式，增量走参数绑定
+   *
+   * @param string $column 列名
+   * @param string $operator 算术运算符 +|-
+   * @param int|float $amount 增/减量
+   * @param array<string,mixed|Raw> $extra 同时写入的其他字段
+   * @return int|Raw 受影响的记录数
+   * @throws InvalidArgumentException 列名包含非法字符、或 extra 中包含自增列名时抛出
+   * @throws DbException 数据库操作失败时抛出
+   */
+  private function incrementOrDecrement(
+    string   $column,
+    string   $operator,
+    int|float $amount,
+    array    $extra
+  ): int|Raw {
+    // 表达式中的列名无法走 quote（Raw 原样拼接），与 aggregateQueries 同等白名单校验
+    $column = trim($column);
+    if (!preg_match('/^[A-Za-z0-9_.]+$/', $column)) {
+      throw new InvalidArgumentException(
+        "无效的自增字段：{$column}（仅允许字母、数字、下划线与点号）"
+      );
+    }
+    // extra 同名键会整体覆盖自增表达式，原子语义静默丢失，显式拦截
+    if (array_key_exists($column, $extra)) {
+      throw new InvalidArgumentException(
+        "increment/decrement 的 extra 数据不能包含自增列 {$column}"
+      );
+    }
+    // 增量为占位符绑定参数，占位符位于 SET 子句，先于 WHERE 参数入列
+    return $this->update(
+      array_merge([$column => new Raw("$column $operator ?", [$amount])], $extra)
+    );
   }
 
   /**
