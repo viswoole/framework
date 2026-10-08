@@ -120,6 +120,16 @@ class Options implements ArrayAccess
    */
   public bool $replace = false;
   /**
+   * @var array<string,mixed|Raw> ON DUPLICATE KEY UPDATE 更新数据，
+   *   键为列名、值为标量或 Raw 表达式（如 Db::raw('score + 1')），仅 MySQL 有效
+   */
+  public array $duplicate = [];
+  /**
+   * @var string VALUES 行别名（MySQL 8.0.19+），非空时生成 VALUES (...) AS alias，
+   *   供更新子句以 alias.col 引用待插入值；随 duplicate() 一同设置与清理
+   */
+  public string $duplicateRowAlias = '';
+  /**
    * @var string[] 需要从查询结果中排除的列名
    */
   public array $withoutColumns = [];

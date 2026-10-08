@@ -160,7 +160,67 @@ class SqlBuilder
       $values = implode(', ', $values);
       $sql .= "$table ($columns) VALUES ($values)";
     }
+    // VALUES 行别名（MySQL 8.0.19+）：仅 ODKU 场景有意义，供更新子句以 alias.col
+    // 引用待插入值；多行 VALUES 时别名对每行生效，单次拼接即可
+    if (!empty($this->options->duplicate) && $this->options->duplicateRowAlias !== '') {
+      $sql .= ' AS ' . $this->quote($this->options->duplicateRowAlias);
+    }
+    // ON DUPLICATE KEY UPDATE 子句（仅 MySQL）
+    $sql .= $this->parseDuplicate();
     return $sql;
+  }
+
+  /**
+   * 解析 ON DUPLICATE KEY UPDATE 子句（仅 MySQL）
+   *
+   * 更新列名经 quote 包裹；值支持标量（参数绑定）与 Raw 表达式（原生拼接），
+   * 与写入列同等应用 strict 过滤（strict 关闭时丢弃表中不存在的更新列）。
+   * 非 MySQL 驱动使用 duplicate 时抛出异常：PG/SQLite 的冲突写语法为
+   * ON CONFLICT，静默降级为普通 INSERT 会把 upsert 语义变成唯一键冲突报错，
+   * 构建期拦截避免歧义。
+   *
+   * @return string ON DUPLICATE KEY UPDATE 子句，未设置时返回空字符串
+   * @throws DbException strict 关闭且需获取表结构失败时抛出
+   * @throws InvalidArgumentException 非 MySQL 驱动、或过滤后无有效更新列时抛出
+   */
+  protected function parseDuplicate(): string
+  {
+    if (empty($this->options->duplicate)) return '';
+    // 互斥守卫放构建期：覆盖 duplicate() 在前、replace() 在后的调用顺序
+    if ($this->options->replace) {
+      throw new InvalidArgumentException('duplicate() 与 replace() 互斥，REPLACE INTO 无更新子句');
+    }
+    if ($this->channel->type !== DriverType::MYSQL) {
+      throw new InvalidArgumentException(
+        'duplicate() 仅支持 MySQL 驱动（'
+        . $this->channel->type->name . ' 请使用 ON CONFLICT 原生 SQL）'
+      );
+    }
+    $data = $this->options->duplicate;
+    // 与插入列同等 strict 过滤：忽略表中不存在的更新列
+    if (!$this->options->strict) {
+      $tableColumns = $this->getTableColumns();
+      $data = array_filter($data, function ($key) use ($tableColumns) {
+        return in_array($key, $tableColumns);
+      }, ARRAY_FILTER_USE_KEY);
+      if ($data === []) {
+        throw new InvalidArgumentException(
+          "ON DUPLICATE KEY UPDATE 失败：过滤后无有效更新字段"
+        );
+      }
+    }
+    $sets = [];
+    foreach ($data as $key => $value) {
+      $column = $this->quote($key);
+      if ($value instanceof Raw) {
+        $this->params = array_merge($this->params, $value->bindings);
+        $sets[] = "$column = $value->sql";
+      } else {
+        $this->params[] = $value;
+        $sets[] = "$column = ?";
+      }
+    }
+    return ' ON DUPLICATE KEY UPDATE ' . implode(', ', $sets);
   }
 
   /**

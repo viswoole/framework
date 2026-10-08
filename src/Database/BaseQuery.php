@@ -18,7 +18,6 @@ namespace Viswoole\Database;
 use InvalidArgumentException;
 use Viswoole\Database\Collection\BaseCollection;
 use Viswoole\Database\Collection\DataSet;
-use Viswoole\Database\Entity;
 use Viswoole\Database\Query\Crud;
 use Viswoole\Database\Query\Join;
 use Viswoole\Database\Query\Options;
@@ -58,7 +57,8 @@ class BaseQuery
     protected Channel $channel,
     string            $table,
     string            $pk
-  ) {
+  )
+  {
     $this->options = new Options($table, $pk);
   }
 
@@ -132,7 +132,8 @@ class BaseQuery
     string $operator,
     mixed  $value,
     string $connector = 'AND'
-  ): static {
+  ): static
+  {
     // HAVING 子句由 SqlBuilder 原样内插 operator 与 connector，
     // 必须与 where() 同等做白名单校验，防止恶意片段注入 HAVING 子句
     $operator = strtoupper(trim($operator));
@@ -299,6 +300,20 @@ class BaseQuery
   }
 
   /**
+   * 以原生 SQL 片段追加查询列（支持聚合/函数表达式等），等价于 columns(new Raw(...))
+   *
+   * ⚠️ $sql 直接参与 SQL 拼接（$bindings 走参数绑定），禁止将用户输入拼入片段
+   *
+   * @param string $sql 原生列表达式，可含 AS 别名
+   * @param array $bindings 表达式内占位符的绑定参数
+   * @return static 支持链式调用
+   */
+  public function selectRaw(string $sql, array $bindings = []): static
+  {
+    return $this->columns(new Raw($sql, $bindings));
+  }
+
+  /**
    * 设置要查询的列，支持别名（column AS alias）
    *
    * Raw 表达式原样追加（不解析不 quote，可携带自身绑定参数），
@@ -325,20 +340,6 @@ class BaseQuery
       }
     }
     return $this;
-  }
-
-  /**
-   * 以原生 SQL 片段追加查询列（支持聚合/函数表达式等），等价于 columns(new Raw(...))
-   *
-   * ⚠️ $sql 直接参与 SQL 拼接（$bindings 走参数绑定），禁止将用户输入拼入片段
-   *
-   * @param string $sql 原生列表达式，可含 AS 别名
-   * @param array $bindings 表达式内占位符的绑定参数
-   * @return static 支持链式调用
-   */
-  public function selectRaw(string $sql, array $bindings = []): static
-  {
-    return $this->columns(new Raw($sql, $bindings));
   }
 
   /**
@@ -400,11 +401,12 @@ class BaseQuery
    * @return static 支持链式调用
    */
   public function cache(
-    string $key,
-    int    $expire = 0,
+    string  $key,
+    int     $expire = 0,
     ?string $tag = null,
     ?string $store = null
-  ): static {
+  ): static
+  {
     $this->options->cache = compact('key', 'expire', 'tag', 'store');
     return $this;
   }
@@ -447,21 +449,70 @@ class BaseQuery
    *
    * @param bool $flag 是否启用 REPLACE，默认 true
    * @return static 支持链式调用
+   * @throws InvalidArgumentException 已设置 duplicate() 更新数据时抛出
    */
   public function replace(bool $flag = true): static
   {
+    // 与 duplicate() 对称的入口守卫：已设置更新数据后启用 REPLACE 属误用，
+    // 覆盖 duplicate() 在前、replace() 在后的调用顺序（构建期 parseDuplicate 亦兜底拦截）
+    if ($flag && !empty($this->options->duplicate)) {
+      throw new InvalidArgumentException('replace() 与 duplicate() 互斥，REPLACE INTO 无更新子句');
+    }
     $this->options->replace = $flag;
     return $this;
   }
 
   /**
-   * 创建一个全新的查询实例，共享当前通道和表配置
+   * 设置 INSERT ... ON DUPLICATE KEY UPDATE 更新数据（仅 MySQL 有效）
    *
-   * @return static 新的查询实例
+   * 配合 insert()/insertGetId() 使用，唯一键冲突时改为更新指定列：
+   * ```
+   * Db::table('user')->duplicate(['score' => 10])->insert(['name' => 'viswoole']);
+   * // INSERT INTO `user` (`name`) VALUES (?) ON DUPLICATE KEY UPDATE `score` = ?
+   * ```
+   * 更新值支持原生表达式：duplicate(['num' => Db::raw('num + 1')])。
+   * 传入 $rowAlias（MySQL 8.0.19+）生成 VALUES (...) AS alias 行别名，
+   * 更新子句可以 alias.col 引用待插入值（替代 8.0.20 起废弃的 VALUES(col) 惯用法）：
+   * ```
+   * Db::table('config')->duplicate([
+   *   'value' => Db::raw('new.value'),
+   * ], rowAlias: 'new')->insert($data);
+   * // INSERT INTO `config` (...) VALUES (...) AS new
+   * //   ON DUPLICATE KEY UPDATE `value` = new.value
+   * ```
+   * 注意：与 replace() 互斥；批量写入时更新子句仅拼接一次，对所有冲突行生效；
+   * 重复调用为整体覆盖（非追加合并）语义。
+   * ⚠️ 仅对 insert()/insertGetId()/create() 生效：以 update()/delete() 收尾时
+   * 已设置的更新数据会被静默忽略，请勿混用。
+   * ⚠️ 返回值语义（MySQL ODKU 行为，勿当作普通 insert 解读）：
+   * 1. insert() 返回的受影响行数为 0（冲突且值未变）/ 1（新插入）/ 2（冲突更新）；
+   * 2. insertGetId()/create() 在命中冲突更新路径时，LAST_INSERT_ID 返回的是
+   *    该连接上一次成功插入的自增值（连接池复用场景下常见过期/无关值），
+   *    create() 会将其回填到数据集主键——需要可靠取回冲突行 ID 时，
+   *    应在更新子句使用惯用法 duplicate(['id' => Db::raw('LAST_INSERT_ID(id)')])，
+   *    生成 `id` = LAST_INSERT_ID(id)（Raw 仅为赋值右侧表达式，勿自带 "id =" 前缀，
+   *    否则生成双重赋值布尔表达式导致主键被覆写）。
+   *
+   * @param array<string,mixed|Raw> $data 更新数据，键为列名、值为标量或 Raw 表达式
+   * @param string $rowAlias VALUES 行别名（MySQL 8.0.19+），空串表示不使用
+   * @return static 支持链式调用
+   * @throws InvalidArgumentException data 为空、rowAlias 非法、或同时启用 replace 时抛出
    */
-  public function newQuery(): static
+  public function duplicate(array $data, string $rowAlias = ''): static
   {
-    return new static($this->channel, $this->options->table, $this->options->pk);
+    if (empty($data)) throw new InvalidArgumentException(
+      'ON DUPLICATE KEY UPDATE 更新数据不能为空'
+    );
+    if ($this->options->replace) {
+      throw new InvalidArgumentException('duplicate() 与 replace() 互斥，REPLACE INTO 无更新子句');
+    }
+    // 行别名参与 SQL 拼接，入口做与 quote() 一致的标识符校验，防止片段注入
+    if ($rowAlias !== '' && !preg_match('/^[A-Za-z0-9_]+$/', $rowAlias)) {
+      throw new InvalidArgumentException("无效的 VALUES 行别名：{$rowAlias}（仅允许字母、数字、下划线）");
+    }
+    $this->options->duplicate = $data;
+    $this->options->duplicateRowAlias = $rowAlias;
+    return $this;
   }
 
   /**
@@ -477,6 +528,16 @@ class BaseQuery
   public function newRowSet(array $row): DataSet|Entity
   {
     return new DataSet($this->newQuery(), $row);
+  }
+
+  /**
+   * 创建一个全新的查询实例，共享当前通道和表配置
+   *
+   * @return static 新的查询实例
+   */
+  public function newQuery(): static
+  {
+    return new static($this->channel, $this->options->table, $this->options->pk);
   }
 
   /**
