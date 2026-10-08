@@ -148,7 +148,7 @@ trait Crud
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     if (empty($result) && !$allowEmpty) {
-      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->sql);
     }
     return new Collection($this->newQuery(), $result);
   }
@@ -549,7 +549,8 @@ trait Crud
    * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
    * @throws DbException 数据库操作失败时抛出
    */
-  public function find(int|string|null $value = null, bool $allowEmpty = true): DataSet|Entity|Raw|null
+  public function find(int|string|null $value = null, bool $allowEmpty = true
+  ): DataSet|Entity|Raw|null
   {
     $this->limit(1);
     // 修复: 使用严格比较 === null 判断，避免主键值为 0 时被 empty() 误判为空导致无法查询
@@ -560,7 +561,7 @@ trait Crud
     // 对其 save()/delete() 只能抛异常，语义上未命中就该是 null
     if (empty($result)) {
       if (!$allowEmpty) {
-        throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+        throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->sql);
       }
       return null;
     }

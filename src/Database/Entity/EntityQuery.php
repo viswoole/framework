@@ -103,7 +103,7 @@ class EntityQuery extends Query
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     if (empty($result) && !$allowEmpty) {
-      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->toString());
+      throw new DataNotFoundException('未查询到数据', 0, $this->getLastQuery()->sql->sql);
     }
     return $this->newRowsCollection($result);
   }

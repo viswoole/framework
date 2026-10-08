@@ -245,7 +245,9 @@ class PDOChannel extends Channel
       throw new DbException(
         $e->getMessage(),
         $e->errorInfo[1] ?? $e->getCode(),
-        Raw::merge($sql, $bindings),
+        // 异常携带占位符形式的 SQL 而非合并绑定值后的文本，防止 where 值
+        // （如密码等敏感字段）随异常消息进入日志或响应造成信息泄露
+        $sql,
         $e
       );
     } finally {
