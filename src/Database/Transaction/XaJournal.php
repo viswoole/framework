@@ -51,6 +51,15 @@ final class XaJournal
   private bool $tableEnsured = false;
 
   /**
+   * @var array<string,true> 进程级已建表缓存（键：通道对象ID + 表名）
+   *
+   * journal 实例经 fromConfig() 每事务新建，实例级缓存对"每事务一次"失效，
+   * 导致每个 XA 事务的提交关键路径都执行一次 CREATE TABLE（DDL 往返 + MDL）。
+   * 提升为进程级缓存后整个进程只建一次表
+   */
+  private static array $ensuredTables = [];
+
+  /**
    * @param Channel $channel journal 所在数据库通道
    * @param string $table journal 表名（可经 database.xa.journal_table 配置）
    */
@@ -120,7 +129,7 @@ final class XaJournal
   private function executeOnFreshConnection(string $sql): void
   {
     $this->ensureTable();
-    $connect = $this->channel->pop('write');
+    $connect = $this->popJournalConnection();
     try {
       XaDriver::execute($connect, $sql);
     } finally {
@@ -129,14 +138,36 @@ final class XaJournal
   }
 
   /**
+   * 从 journal 通道借出连接（带借出失败防护）
+   *
+   * 池借出超时返回 false（Swoole 连接池语义）：必须快速失败且不得把
+   * false 传入归还路径——污染连接池后其他协程借到 false 会直接崩溃
+   *
+   * @return object 可用的底层连接
+   * @throws DbException 借出失败（池超时）时抛出
+   */
+  private function popJournalConnection(): object
+  {
+    $connect = $this->channel->pop('write');
+    if (!is_object($connect)) {
+      throw new DbException('journal 通道连接借出失败（可能连接池超时），本次操作放弃');
+    }
+    return $connect;
+  }
+
+  /**
    * 确保 journal 表存在（幂等 DDL，随事务低频执行）
    */
   private function ensureTable(): void
   {
-    // 实例级缓存：同一 journal 实例的建表只执行一次，
-    // 事务提交关键路径上的后续写语句不再重复 DDL
+    $key = spl_object_id($this->channel) . ':' . $this->table;
+    // 进程级缓存 + 实例级缓存：同一进程内同一表只执行一次建表 DDL
+    if (isset(self::$ensuredTables[$key])) {
+      $this->tableEnsured = true;
+      return;
+    }
     if ($this->tableEnsured) return;
-    $connect = $this->channel->pop('write');
+    $connect = $this->popJournalConnection();
     try {
       XaDriver::execute(
         $connect, "CREATE TABLE IF NOT EXISTS {$this->quotedTable()} ("
@@ -150,6 +181,7 @@ final class XaJournal
     } finally {
       $this->channel->put($connect);
     }
+    self::$ensuredTables[$key] = true;
     $this->tableEnsured = true;
   }
 
@@ -229,14 +261,16 @@ final class XaJournal
   private function tableExists(): bool
   {
     if ($this->tableEnsured) return true;
-    $connect = $this->channel->pop('write');
+    $connect = $this->popJournalConnection();
     try {
       // information_schema 精确匹配（SHOW TABLES LIKE 的 _/% 通配符会误匹配表名）；
-      // journal 通道本就要求 MySQL（见使用前提），information_schema 可用
+      // journal 通道本就要求 MySQL（见使用前提），information_schema 可用。
+      // 表名来自配置，字符串字面量内单引号需转义（与写路径 quotedTable 同级防御）
+      $table = str_replace("'", "''", $this->table);
       $rows = XaDriver::query(
         $connect,
         "SELECT COUNT(*) AS cnt FROM information_schema.tables "
-        . "WHERE table_schema = DATABASE() AND table_name = '{$this->table}'"
+        . "WHERE table_schema = DATABASE() AND table_name = '{$table}'"
       );
     } finally {
       $this->channel->put($connect);

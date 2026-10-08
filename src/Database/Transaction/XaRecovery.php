@@ -20,6 +20,7 @@ use Viswoole\Core\App;
 use Viswoole\Database\Channel;
 use Viswoole\Database\Channel\PDO\DriverType;
 use Viswoole\Database\Channel\PDO\PDOChannel;
+use Viswoole\Database\DbException;
 use Viswoole\Database\DbManager;
 use function echo_log;
 
@@ -179,6 +180,11 @@ final class XaRecovery
   {
     try {
       $connect = $channel->pop('write');
+      // 池借出超时返回 false（Swoole 语义）：抛出走 catch 的兜底路径，
+      // 且不得把 false 传入归还路径污染连接池
+      if (!is_object($connect)) {
+        throw new DbException('XA 恢复：通道连接借出失败（可能连接池超时）');
+      }
       try {
         $inDoubtXids = XaDriver::recover($connect);
         foreach ($inDoubtXids as $xid) {
@@ -236,6 +242,18 @@ final class XaRecovery
       return;
     }
     $action = $rows[$gtrid]['state'] === XaJournal::STATE_PREPARED ? 'XA COMMIT' : 'XA ROLLBACK';
+    // 恢复路径的 xid 来自服务端 XA RECOVER（库内读回值可能被篡改）：
+    // 前缀命中 journal gtrid 后的尾部片段同样必须过白名单，防止注入终结语句。
+    // 白名单与 XaJournal::assertValidGtrid 的 gtrid 字符集一致（框架生成的
+    // 分支 xid = gtrid + '-b' + 序号，必然合法）
+    if (!preg_match('/^[0-9a-zA-Z._-]{1,64}$/', $xid)) {
+      echo_log(
+        "XA 恢复：xid 含非法字符，跳过请人工处理（xid: " . addcslashes($xid, "\0..\37") . "）",
+        'XA',
+        backtrace: 0
+      );
+      return;
+    }
     if ($dryRun) {
       echo_log("XA 恢复（dry-run）：将对未决分支 {$xid} 执行 {$action}", 'XA', backtrace: 0);
       return;

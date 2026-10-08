@@ -52,7 +52,12 @@ final class XaDriver
       /** @noinspection PhpComposerExtensionStubsInspection */
       if ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
         if (!$connect->query($sql)) {
-          throw new DbException("XA 语句执行失败：{$sql}");
+          // 拼入服务器错误码与文本：提交/恢复路径依赖 XAER_NOTA 判定幂等达成，
+          // 缺失会使 isNotExists 的消息匹配失效
+          throw new DbException(
+            "XA 语句执行失败（errno:{$connect->errno}）：{$connect->error}；SQL：{$sql}",
+            $connect->errno
+          );
         }
         return;
       }
@@ -62,7 +67,9 @@ final class XaDriver
     } catch (DbException $e) {
       throw $e;
     } catch (Throwable $e) {
-      throw new DbException("XA 语句执行失败（{$sql}）：{$e->getMessage()}", 0, $sql, $e);
+      // 保留原始错误码（如 MysqliException 的 code=errno）：XAER_NOTA(1397)
+      // 的幂等判定依赖它，丢失后 mysqli 系驱动的容忍逻辑失效
+      throw new DbException("XA 语句执行失败（{$sql}）：{$e->getMessage()}", $e->getCode(), $sql, $e);
     }
   }
 
@@ -87,7 +94,10 @@ final class XaDriver
     if ($connect instanceof MysqliProxy || $connect instanceof \mysqli) {
       $result = $connect->query($sql);
       if ($result === false) {
-        throw new DbException("XA 查询执行失败：{$sql}");
+        throw new DbException(
+          "XA 查询执行失败（errno:{$connect->errno}）：{$connect->error}；SQL：{$sql}",
+          $connect->errno
+        );
       }
       /** @noinspection PhpComposerExtensionStubsInspection */
       return $result->fetch_all(MYSQLI_ASSOC);
@@ -152,6 +162,8 @@ final class XaDriver
    */
   public static function isNotExists(Throwable $e): bool
   {
-    return str_contains($e->getMessage(), 'XAER_NOTA') || (int)$e->getCode() === 1390;
+    // MySQL 错误码 1397 = XAER_NOTA（XAE04，未知 xid）；旧实现误写为 1390
+    // （实为 ER_PS_MANY_PARAM，与 XA 无关），导致错误码判定恒 false
+    return str_contains($e->getMessage(), 'XAER_NOTA') || (int)$e->getCode() === 1397;
   }
 }
