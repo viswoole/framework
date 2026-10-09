@@ -33,20 +33,6 @@ use Viswoole\Router\ApiDoc\Structure\FieldStructure;
 class FieldStructureTest extends TestCase
 {
   /**
-   * 清空全局 API 文档配置，避免其他测试残留污染
-   *
-   * @return void
-   */
-  protected function setUp(): void
-  {
-    /** @var Config $config */
-    $config = App::factory()->get('config');
-    foreach (['header', 'query', 'body', 'returned'] as $source) {
-      $config->set("router.api_doc.$source", []);
-    }
-  }
-
-  /**
    * 测试纯 array 参数解析为 Array<mixed>
    *
    * 回归场景：#[InjectPost] array $apis 曾被误解析为 mixed
@@ -58,9 +44,9 @@ class FieldStructureTest extends TestCase
     $result = ParamParseTool::parse([ArrayTypeFixtureController::class, 'assignApis']);
     $apis = $result['params']['body']['apis'] ?? null;
     self::assertNotNull($apis, 'body 参数中应包含 apis 字段');
-    self::assertArrayHasKey('Array<mixed>', $apis->types, '纯 array 类型应解析为 Array<mixed>');
-    self::assertSame('array', $apis->types['Array<mixed>']->getType());
-    self::assertInstanceOf(ArrayTypeStructure::class, $apis->types['Array<mixed>']);
+    self::assertArrayHasKey('Array<any>', $apis->types, '纯 array 类型应解析为 Array<any>');
+    self::assertSame('array', $apis->types['Array<any>']->getType());
+    self::assertInstanceOf(ArrayTypeStructure::class, $apis->types['Array<any>']);
     // int 参数不受影响
     self::assertArrayHasKey('int', $result['params']['body']['role_id']->types);
   }
@@ -75,7 +61,7 @@ class FieldStructureTest extends TestCase
     $result = ParamParseTool::parse([ArrayTypeFixtureController::class, 'nullableArray']);
     $tags = $result['params']['body']['tags'] ?? null;
     self::assertNotNull($tags);
-    self::assertArrayHasKey('Array<mixed>', $tags->types);
+    self::assertArrayHasKey('Array<any>', $tags->types);
     self::assertTrue($tags->allowNull);
   }
 
@@ -87,13 +73,13 @@ class FieldStructureTest extends TestCase
   public function testBuiltinTypeMapping(): void
   {
     $closure = static function (
-      int     $a,
-      string  $b,
-      bool    $c,
-      float   $d,
-      array   $e,
-      ?array  $f,
-      mixed   $g,
+      int    $a,
+      string $b,
+      bool   $c,
+      float  $d,
+      array  $e,
+      ?array $f,
+      mixed  $g,
     ): void {
     };
     $parameters = (new ReflectionFunction($closure))->getParameters();
@@ -102,10 +88,10 @@ class FieldStructureTest extends TestCase
       'b' => 'string',
       'c' => 'bool',
       'd' => 'float',
-      // 纯 array 与 ?array 均应映射为 Array<mixed>
-      'e' => 'Array<mixed>',
-      'f' => 'Array<mixed>',
-      'g' => 'mixed',
+      // 纯 array 与 ?array 均应映射为 Array<any>（mixed 显示名统一映射为 any）
+      'e' => 'Array<any>',
+      'f' => 'Array<any>',
+      'g' => 'any',
     ];
     foreach ($parameters as $parameter) {
       $field = new FieldStructure($parameter->getName(), type: $parameter->getType());
@@ -114,6 +100,20 @@ class FieldStructureTest extends TestCase
         $field->types,
         "参数 \${$parameter->getName()} 类型映射不符合预期"
       );
+    }
+  }
+
+  /**
+   * 清空全局 API 文档配置，避免其他测试残留污染
+   *
+   * @return void
+   */
+  protected function setUp(): void
+  {
+    /** @var Config $config */
+    $config = App::factory()->get('config');
+    foreach (['header', 'query', 'body', 'returned'] as $source) {
+      $config->set("router.api_doc.$source", []);
     }
   }
 }

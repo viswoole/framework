@@ -34,20 +34,6 @@ use Viswoole\Router\ApiDoc\Structure\ObjectStructure;
 class DocTypeParserTest extends TestCase
 {
   /**
-   * 清空全局 API 文档配置，避免其他测试残留污染
-   *
-   * @return void
-   */
-  protected function setUp(): void
-  {
-    /** @var Config $config */
-    $config = App::factory()->get('config');
-    foreach (['header', 'query', 'body', 'returned'] as $source) {
-      $config->set("router.api_doc.$source", []);
-    }
-  }
-
-  /**
    * 测试基础数组后缀语法
    *
    * @return void
@@ -193,11 +179,25 @@ class DocTypeParserTest extends TestCase
     self::assertSame('id', $body['data']->types['object']->properties[0]->name);
     // 枚举数组（FQCN）
     self::assertArrayHasKey('Array<DocTypeEnum>', $body['statuses']->types);
-    // 无docblock声明的参数回退反射类型 Array<mixed>
-    self::assertArrayHasKey('Array<mixed>', $body['extra']->types);
+    // 无docblock声明的参数回退反射类型 Array<any>
+    self::assertArrayHasKey('Array<any>', $body['extra']->types);
     // 描述文本提取不受类型声明影响
     self::assertSame('接口权限列表', $body['apis']->description);
     self::assertSame('角色信息', $body['data']->description);
+  }
+
+  /**
+   * 清空全局 API 文档配置，避免其他测试残留污染
+   *
+   * @return void
+   */
+  protected function setUp(): void
+  {
+    /** @var Config $config */
+    $config = App::factory()->get('config');
+    foreach (['header', 'query', 'body', 'returned'] as $source) {
+      $config->set("router.api_doc.$source", []);
+    }
   }
 }
 
