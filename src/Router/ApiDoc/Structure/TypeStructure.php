@@ -43,7 +43,8 @@ class TypeStructure
   ) {
     $type = strtolower($type->name);
     $this->type = $type;
-    $this->name = $name ?? $this->type;
+    // mixed 对前端无具体语义，显示名映射为 TypeScript 兼容的 any
+    $this->name = $name ?? ($type === 'mixed' ? 'any' : $type);
   }
 
   /**

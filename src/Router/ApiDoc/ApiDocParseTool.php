@@ -39,6 +39,8 @@ class ApiDocParseTool
     $list = [];
     foreach ($routes as $route) {
       try {
+        // 顶层路由/分组标记 hidden 时同样不进入文档，与分组内子项的过滤逻辑保持一致
+        if ($route->getHidden()) continue;
         if ($route instanceof Group) {
           $item = self::generateGroup($route);
           $count += $item['count'];
