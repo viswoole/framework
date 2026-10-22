@@ -20,6 +20,7 @@ use InvalidArgumentException;
 use PDO;
 use PDOException;
 use Viswoole\Core\Common\Arr;
+use Viswoole\Database\ConnectManager;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Facade\Db;
 use Viswoole\Database\Query\Options;
@@ -80,6 +81,18 @@ class SqlBuilder
   }
 
   /**
+   * 清空表结构静态缓存
+   *
+   * 表结构在进程内长期缓存（strict 检测、字段过滤依赖），
+   * ALTER TABLE 等结构变更后需调用本方法使缓存失效；
+   * 亦用于测试隔离，避免跨用例污染。
+   */
+  public static function flushTableColumnsCache(): void
+  {
+    self::$tableColumns = [];
+  }
+
+  /**
    * 生成基本sql语句
    *
    * @return Raw
@@ -125,7 +138,7 @@ class SqlBuilder
         $rowKeys = array_keys($item);
         if (array_diff($rowKeys, $keys) || array_diff($keys, $rowKeys)) {
           throw new InvalidArgumentException(
-            "批量写入失败：第 {$index} 行字段与首行不一致"
+            "批量写入失败：第 $index 行字段与首行不一致"
           );
         }
       }
@@ -168,6 +181,122 @@ class SqlBuilder
     // ON DUPLICATE KEY UPDATE 子句（仅 MySQL）
     $sql .= $this->parseDuplicate();
     return $sql;
+  }
+
+  /**
+   * 用数据库标识符包裹字段名/表名（按点号分段包裹，支持 table.column 语法）
+   *
+   * 仅放行合法标识符字符（字母、数字、下划线、$）与点号分段，其余一律抛异常。
+   * 此前"遇特殊字符原样放行"的策略会让恶意列名（如排序/分组/列名参数被注入
+   * 用户输入时）直接拼入 SQL 构成注入；聚合函数等原生片段请使用 Db::raw() 显式声明
+   *
+   * @param string $str 待包裹的标识符
+   * @return string 包裹后的标识符（table.column 形式逐段包裹）
+   * @throws InvalidArgumentException 标识符包含非法字符时抛出
+   */
+  protected function quote(string $str): string
+  {
+    $str = trim($str);
+    if ($str === '') {
+      throw new InvalidArgumentException('数据库标识符不能为空');
+    }
+    $type = $this->channel->type->name;
+    $quoted = [];
+    foreach (explode('.', $str) as $segment) {
+      // 星号通配：支持 columns('*') 与 table.* 场景
+      if ($segment === '*') {
+        $quoted[] = '*';
+        continue;
+      }
+      if (!preg_match('/^[A-Za-z0-9_$]+$/', $segment)) {
+        throw new InvalidArgumentException(
+          "非法的数据库标识符：{$str}（仅允许字母、数字、下划线，"
+          . '原生片段请使用 Db::raw() 声明）'
+        );
+      }
+      $quoted[] = self::TAG[$type]['left'] . $segment . self::TAG[$type]['right'];
+    }
+    return implode('.', $quoted);
+  }
+
+  /**
+   * 获取当前表的字段名列表，结果按"通道实例:表名"缓存
+   *
+   * @return string[] 字段名列表
+   * @throws DbException 查询表结构失败时抛出
+   */
+  protected function getTableColumns(): array
+  {
+    $table = $this->options->table;
+    // 缓存键包含通道实例标识：不同通道（库）可能存在同名表但结构不同
+    $cacheKey = spl_object_id($this->channel) . ':' . $table;
+    if (isset(self::$tableColumns[$cacheKey])) return self::$tableColumns[$cacheKey];
+    // 修复#1: 对表名使用反引号包裹，防止SQL注入风险
+    $quotedTable = $this->quote($table);
+    $sql = match ($this->channel->type->value) {
+      'sqlite' => "PRAGMA table_info($quotedTable)",
+      'pgsql' => 'SELECT column_name FROM information_schema.columns WHERE table_name = ?',
+      'oci' => 'SELECT column_name FROM USER_TAB_COLUMNS WHERE table_name = ?',
+      'sqlsrv' => 'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ?',
+      default => "DESCRIBE $quotedTable"
+    };
+    // 事务内复用已持有的主库连接，避免池被等待行锁的事务占满后再次借连接。
+    $manager = ConnectManager::factory();
+    $conn = $manager->pop($this->channel, 'read');
+    try {
+      // 修复#1: pgsql/oci/sqlsrv 使用参数绑定代替直接拼接表名
+      if (in_array($this->channel->type->value, ['pgsql', 'oci', 'sqlsrv'])) {
+        $statement = $conn->prepare($sql);
+        $statement->execute([$table]);
+      } else {
+        $statement = $conn->query($sql);
+      }
+      if ($this->channel->type === DriverType::SQLite) {
+        $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $fields = array_column($fields, 'name');
+      } else {
+        $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
+      }
+    } catch (PDOException $e) {
+      // 异常模式下（ERRMODE_EXCEPTION）查询失败抛 PDOException，
+      // 统一包装为携带 SQL 信息的 DbException，满足模块异常契约
+      throw new DbException(
+        "获取表 {$table} 字段失败（表可能不存在）：{$e->getMessage()}",
+        $e->getCode(),
+        $sql,
+        $e
+      );
+    } finally {
+      // 成功与失败路径都必须归还连接，防止异常时连接泄漏
+      $manager->put($this->channel, $conn);
+    }
+    // 静默模式下查询失败返回 false；或查询成功但表无字段（表不存在）
+    if (!$fields) throw new DbException("获取表 {$table} 字段失败，表可能不存在", 0, $sql);
+    self::$tableColumns[$cacheKey] = $fields;
+    return $fields;
+  }
+
+  /**
+   * 将一行数据按指定字段顺序转为占位符值列表，同时收集绑定参数
+   *
+   * @param string[] $keys 字段名列表
+   * @param array $row 单行数据
+   * @return string[] 占位符值列表（? 或 Raw SQL）
+   */
+  private function parseDataToValues(array $keys, array $row): array
+  {
+    $values = [];
+    foreach ($keys as $key) {
+      $value = $row[$key] ?? null;
+      if ($value instanceof Raw) {
+        $this->params = array_merge($this->params, $value->bindings);
+        $values[] = $value->sql;
+      } else {
+        $this->params[] = $value;
+        $values[] = '?';
+      }
+    }
+    return $values;
   }
 
   /**
@@ -221,147 +350,6 @@ class SqlBuilder
       }
     }
     return ' ON DUPLICATE KEY UPDATE ' . implode(', ', $sets);
-  }
-
-  /**
-   * 用数据库标识符包裹字段名/表名（按点号分段包裹，支持 table.column 语法）
-   *
-   * 仅放行合法标识符字符（字母、数字、下划线、$）与点号分段，其余一律抛异常。
-   * 此前"遇特殊字符原样放行"的策略会让恶意列名（如排序/分组/列名参数被注入
-   * 用户输入时）直接拼入 SQL 构成注入；聚合函数等原生片段请使用 Db::raw() 显式声明
-   *
-   * @param string $str 待包裹的标识符
-   * @return string 包裹后的标识符（table.column 形式逐段包裹）
-   * @throws InvalidArgumentException 标识符包含非法字符时抛出
-   */
-  protected function quote(string $str): string
-  {
-    $str = trim($str);
-    if ($str === '') {
-      throw new InvalidArgumentException('数据库标识符不能为空');
-    }
-    $type = $this->channel->type->name;
-    $quoted = [];
-    foreach (explode('.', $str) as $segment) {
-      // 星号通配：支持 columns('*') 与 table.* 场景
-      if ($segment === '*') {
-        $quoted[] = '*';
-        continue;
-      }
-      if (!preg_match('/^[A-Za-z0-9_$]+$/', $segment)) {
-        throw new InvalidArgumentException(
-          "非法的数据库标识符：{$str}（仅允许字母、数字、下划线，"
-          . '原生片段请使用 Db::raw() 声明）'
-        );
-      }
-      $quoted[] = self::TAG[$type]['left'] . $segment . self::TAG[$type]['right'];
-    }
-    return implode('.', $quoted);
-  }
-
-  /**
-   * 包裹带别名的表名（table AS alias）
-   *
-   * @param string $table 表名，支持 table AS alias 语法
-   * @return string 包裹后的表名片段
-   * @throws InvalidArgumentException 标识符包含非法字符时抛出
-   */
-  protected function quoteTableWithAlias(string $table): string
-  {
-    if (preg_match('/^(.+?)\s+AS\s+(.+)$/i', $table, $matches)) {
-      return $this->quote($matches[1]) . ' AS ' . $this->quote($matches[2]);
-    }
-    return $this->quote($table);
-  }
-
-  /**
-   * 获取当前表的字段名列表，结果按"通道实例:表名"缓存
-   *
-   * @return string[] 字段名列表
-   * @throws DbException 查询表结构失败时抛出
-   */
-  protected function getTableColumns(): array
-  {
-    $table = $this->options->table;
-    // 缓存键包含通道实例标识：不同通道（库）可能存在同名表但结构不同
-    $cacheKey = spl_object_id($this->channel) . ':' . $table;
-    if (isset(self::$tableColumns[$cacheKey])) return self::$tableColumns[$cacheKey];
-    // 修复#1: 对表名使用反引号包裹，防止SQL注入风险
-    $quotedTable = $this->quote($table);
-    $sql = match ($this->channel->type->value) {
-      'sqlite' => "PRAGMA table_info($quotedTable)",
-      'pgsql' => 'SELECT column_name FROM information_schema.columns WHERE table_name = ?',
-      'oci' => 'SELECT column_name FROM USER_TAB_COLUMNS WHERE table_name = ?',
-      'sqlsrv' => 'SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = ?',
-      default => "DESCRIBE $quotedTable"
-    };
-    $conn = $this->channel->pop('read');
-    try {
-      // 修复#1: pgsql/oci/sqlsrv 使用参数绑定代替直接拼接表名
-      if (in_array($this->channel->type->value, ['pgsql', 'oci', 'sqlsrv'])) {
-        $statement = $conn->prepare($sql);
-        $statement->execute([$table]);
-      } else {
-        $statement = $conn->query($sql);
-      }
-      if ($this->channel->type === DriverType::SQLite) {
-        $fields = $statement->fetchAll(PDO::FETCH_ASSOC);
-        $fields = array_column($fields, 'name');
-      } else {
-        $fields = $statement->fetchAll(PDO::FETCH_COLUMN);
-      }
-    } catch (PDOException $e) {
-      // 异常模式下（ERRMODE_EXCEPTION）查询失败抛 PDOException，
-      // 统一包装为携带 SQL 信息的 DbException，满足模块异常契约
-      throw new DbException(
-        "获取表 {$table} 字段失败（表可能不存在）：{$e->getMessage()}",
-        $e->getCode(),
-        $sql,
-        $e
-      );
-    } finally {
-      // 成功与失败路径都必须归还连接，防止异常时连接泄漏
-      $this->channel->put($conn);
-    }
-    // 静默模式下查询失败返回 false；或查询成功但表无字段（表不存在）
-    if (!$fields) throw new DbException("获取表 {$table} 字段失败，表可能不存在", 0, $sql);
-    self::$tableColumns[$cacheKey] = $fields;
-    return $fields;
-  }
-
-  /**
-   * 清空表结构静态缓存
-   *
-   * 表结构在进程内长期缓存（strict 检测、字段过滤依赖），
-   * ALTER TABLE 等结构变更后需调用本方法使缓存失效；
-   * 亦用于测试隔离，避免跨用例污染。
-   */
-  public static function flushTableColumnsCache(): void
-  {
-    self::$tableColumns = [];
-  }
-
-  /**
-   * 将一行数据按指定字段顺序转为占位符值列表，同时收集绑定参数
-   *
-   * @param string[] $keys 字段名列表
-   * @param array $row 单行数据
-   * @return string[] 占位符值列表（? 或 Raw SQL）
-   */
-  private function parseDataToValues(array $keys, array $row): array
-  {
-    $values = [];
-    foreach ($keys as $key) {
-      $value = $row[$key] ?? null;
-      if ($value instanceof Raw) {
-        $this->params = array_merge($this->params, $value->bindings);
-        $values[] = $value->sql;
-      } else {
-        $this->params[] = $value;
-        $values[] = '?';
-      }
-    }
-    return $values;
   }
 
   /**
@@ -711,6 +699,21 @@ class SqlBuilder
       }
     }
     return implode(' ', $join);
+  }
+
+  /**
+   * 包裹带别名的表名（table AS alias）
+   *
+   * @param string $table 表名，支持 table AS alias 语法
+   * @return string 包裹后的表名片段
+   * @throws InvalidArgumentException 标识符包含非法字符时抛出
+   */
+  protected function quoteTableWithAlias(string $table): string
+  {
+    if (preg_match('/^(.+?)\s+AS\s+(.+)$/i', $table, $matches)) {
+      return $this->quote($matches[1]) . ' AS ' . $this->quote($matches[2]);
+    }
+    return $this->quote($table);
   }
 
   /**
