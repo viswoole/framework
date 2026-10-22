@@ -340,16 +340,30 @@ class SqlBuilder
     }
     $sets = [];
     foreach ($data as $key => $value) {
-      $column = $this->quote($key);
-      if ($value instanceof Raw) {
-        $this->params = array_merge($this->params, $value->bindings);
-        $sets[] = "$column = $value->sql";
-      } else {
-        $this->params[] = $value;
-        $sets[] = "$column = ?";
-      }
+      $sets[] = $this->parseAssign($key, $value);
     }
     return ' ON DUPLICATE KEY UPDATE ' . implode(', ', $sets);
+  }
+
+  /**
+   * 将单个更新值解析为赋值片段并收集绑定参数
+   *
+   * Raw 表达式原生拼接（其绑定参数合入 $this->params），标量走参数绑定。
+   * 供 parseDuplicate 与 parseUpdateData 复用，保证 SET 片段生成逻辑单一来源。
+   *
+   * @param string $key 字段名（内部经 quote 包裹）
+   * @param mixed $value 更新值：Raw 表达式或标量
+   * @return string "column = value" 形式的赋值片段
+   */
+  private function parseAssign(string $key, mixed $value): string
+  {
+    $column = $this->quote($key);
+    if ($value instanceof Raw) {
+      $this->params = array_merge($this->params, $value->bindings);
+      return "$column = $value->sql";
+    }
+    $this->params[] = $value;
+    return "$column = ?";
   }
 
   /**
@@ -392,14 +406,7 @@ class SqlBuilder
     foreach ($data as $key => $value) {
       // 如果表不存在该字段，则跳过
       if (!$this->options->strict && !in_array($key, $this->getTableColumns())) continue;
-      $column = $this->quote($key);
-      if ($value instanceof Raw) {
-        $this->params = array_merge($this->params, $value->bindings);
-        $sql[] = "$column = $value->sql";
-      } else {
-        $this->params[] = $value;
-        $sql[] = "$column = ?";
-      }
+      $sql[] = $this->parseAssign($key, $value);
     }
     if (empty($this->options->where)) {
       if (isset($data[$this->options->pk])) {
