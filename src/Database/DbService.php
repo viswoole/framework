@@ -23,7 +23,6 @@ use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Database\Transaction\XaRecovery;
 use function config;
-use function echo_log;
 
 /**
  * 数据库服务提供者
@@ -57,8 +56,9 @@ class DbService extends Provider
       try {
         XaRecovery::run();
       } catch (Throwable $e) {
-        // 恢复失败不阻断 worker 启动：残留 journal 行保留，下次启动/重试继续收敛
-        echo_log('XA 崩溃恢复任务执行失败：' . $e->getMessage(), 'XA', backtrace: 0);
+        // 恢复失败不阻断 worker 启动：残留 journal 行保留，下次启动/重试继续收敛；
+        // DbLog 保证不抛异常，避免日志驱动故障在 workerStart 钩子中二次引爆
+        DbLog::write('error', 'XA 崩溃恢复任务执行失败：' . $e->getMessage());
       }
     }
     );

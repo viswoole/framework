@@ -21,6 +21,7 @@ use Viswoole\Database\Channel;
 use Viswoole\Database\Channel\PDO\DriverType;
 use Viswoole\Database\Channel\PDO\PDOChannel;
 use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\DbLog;
 use Viswoole\Database\DbManager;
 use function echo_log;
 
@@ -80,9 +81,15 @@ final class XaRecovery
    * @param string|null $onlyGtrid 仅处置指定 gtrid 的行（xa:recover --xid），
    *                               null 处置全部；未命中过滤的行与其分支保持原样
    * @param bool $dryRun 仅扫描并报告将执行的动作，不终结分支、不删除 journal 行（xa:recover --dry-run）
+   * @param bool $reportToConsole 交互式调用（xa:recover 命令）传 true：过程消息
+   *                               在落盘之外同步回显控制台，保证命令行操作可感知
    * @throws Throwable journal 读取失败时向上抛出（调用方负责告警，不影响服务启动）
    */
-  public static function run(?string $onlyGtrid = null, bool $dryRun = false): void
+  public static function run(
+    ?string $onlyGtrid = null,
+    bool    $dryRun = false,
+    bool    $reportToConsole = false
+  ): void
   {
     $journal = XaJournal::fromConfig();
     $rows = $journal->all();
@@ -107,10 +114,10 @@ final class XaRecovery
       if (self::isBeyondGrace($row['created_at']) && !self::isHeartbeatAlive($row['heartbeat_at'] ?? null)) {
         continue;
       }
-      echo_log(
+      self::report(
+        'info',
         "XA 恢复：journal 行（gtrid: {$gtrid}）处于冷却期内或心跳仍活跃，跳过待下次恢复",
-        'XA',
-        backtrace: 0
+        $reportToConsole
       );
       unset($rows[$gtrid]);
     }
@@ -122,10 +129,10 @@ final class XaRecovery
       try {
         $state = $journal->stateOf($gtrid);
       } catch (Throwable $e) {
-        echo_log(
+        self::report(
+          'warning',
           "XA 恢复：journal 行状态重读失败，保留待下次恢复（gtrid: {$gtrid}，{$e->getMessage()}）",
-          'XA',
-          backtrace: 0
+          $reportToConsole
         );
         $rows[$gtrid]['blocked'] = true;
         continue;
@@ -146,7 +153,7 @@ final class XaRecovery
       // 仅扫描可能持有 XA 分支的通道：跳过既消除非 MySQL 通道的
       // 扫描告警噪音，也避免其扫描失败永久阻塞 journal 行清理
       if (!self::canHostXaBranches($channel)) continue;
-      self::recoverChannel($channel, $rows, $dryRun, $allRows);
+      self::recoverChannel($channel, $rows, $dryRun, $allRows, $reportToConsole);
     }
     if ($dryRun) return; // dry-run 到此为止：终结语句与 journal 删除均已按计划输出而未执行
     // 仅删除所有通道均确认无未决分支的行；任一通道扫描失败则保留待下次
@@ -233,8 +240,15 @@ final class XaRecovery
    * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null,blocked?:bool}> $rows journal 行（引用更新 blocked 标记与重读后的 state）
    * @param bool $dryRun true 时仅报告未决分支与计划动作，不执行终结语句
    * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null}> $allRows 过滤前的全量 journal 行（区分"被过滤跳过"与"无记录"）
+   * @param bool $reportToConsole 交互式调用时同步回显控制台（见 run()）
    */
-  private static function recoverChannel(Channel $channel, array &$rows, bool $dryRun = false, array $allRows = []): void
+  private static function recoverChannel(
+    Channel $channel,
+    array   &$rows,
+    bool    $dryRun = false,
+    array   $allRows = [],
+    bool    $reportToConsole = false
+  ): void
   {
     try {
       $connect = $channel->pop('write');
@@ -246,16 +260,18 @@ final class XaRecovery
       try {
         $inDoubtXids = XaDriver::recover($connect);
         foreach ($inDoubtXids as $xid) {
-          self::recoverXid($connect, $xid, $rows, $dryRun, $allRows);
+          self::recoverXid($connect, $xid, $rows, $dryRun, $allRows, $reportToConsole);
         }
       } finally {
         $channel->put($connect);
       }
     } catch (Throwable $e) {
-      echo_log(
+      // 扫描失败意味着该通道的未决状态不可知，journal 行只能保留，
+      // 运维需要据此排查通道可用性
+      self::report(
+        'error',
         "XA 恢复：通道 " . $channel::class . " 扫描失败，journal 行保留待下次恢复（{$e->getMessage()}）",
-        'XA',
-        backtrace: 0
+        $reportToConsole
       );
       foreach ($rows as &$row) $row['blocked'] = true;
       unset($row);
@@ -270,13 +286,15 @@ final class XaRecovery
    * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null,blocked?:bool}> $rows journal 行（引用更新 blocked 标记）
    * @param bool $dryRun true 时仅输出计划动作，不执行终结语句
    * @param array<string,array{state:int,branches:string[],created_at:string,heartbeat_at:string|null}> $allRows 过滤前的全量 journal 行
+   * @param bool $reportToConsole 交互式调用时同步回显控制台（见 run()）
    */
   private static function recoverXid(
     object $connect,
     string $xid,
     array  &$rows,
     bool   $dryRun = false,
-    array  $allRows = []
+    array  $allRows = [],
+    bool   $reportToConsole = false
   ): void {
     $gtrid = self::matchJournalRow($rows, $xid);
     if ($gtrid === null) {
@@ -284,18 +302,18 @@ final class XaRecovery
       // 避免与"确实无记录需人工处理"混淆（后者可能意味着 journal 丢失等异常）
       $skippedGtrid = $allRows === [] ? null : self::matchJournalRow($allRows, $xid);
       if ($skippedGtrid !== null) {
-        echo_log(
+        self::report(
+          'info',
           "XA 恢复：xid {$xid} 归属事务（gtrid: {$skippedGtrid}）已过滤跳过，本次不处置",
-          'XA',
-          backtrace: 0
+          $reportToConsole
         );
         return;
       }
       // 不属于框架管理的事务（或 journal 丢失）：只告警不处理，避免误伤他方事务
-      echo_log(
+      self::report(
+        'warning',
         "XA 恢复：发现无 journal 记录的未决事务，已跳过请人工处理（xid: {$xid}）",
-        'XA',
-        backtrace: 0
+        $reportToConsole
       );
       return;
     }
@@ -305,10 +323,10 @@ final class XaRecovery
     // 白名单与 XaJournal::assertValidGtrid 的 gtrid 字符集一致（框架生成的
     // 分支 xid = gtrid + '-b' + 序号，必然合法）
     if (!preg_match('/^[0-9a-zA-Z._-]{1,64}$/', $xid)) {
-      echo_log(
+      self::report(
+        'warning',
         "XA 恢复：xid 含非法字符，跳过请人工处理（xid: " . addcslashes($xid, "\0..\37") . "）",
-        'XA',
-        backtrace: 0
+        $reportToConsole
       );
       return;
     }
@@ -320,13 +338,32 @@ final class XaRecovery
       XaDriver::execute($connect, "{$action} '{$xid}'");
     } catch (Throwable $e) {
       if (XaDriver::isNotExists($e)) return; // 已被并发恢复终结，幂等达成
-      echo_log(
+      // 终结失败意味着 in-doubt 事务继续悬挂，需运维介入
+      self::report(
+        'error',
         "XA 恢复：{$action} 失败，journal 行保留待下次恢复（xid: {$xid}，{$e->getMessage()}）",
-        'XA',
-        backtrace: 0
+        $reportToConsole
       );
       $rows[$gtrid]['blocked'] = true;
     }
+  }
+
+  /**
+   * 记录恢复过程消息
+   *
+   * 恒久经 DbLog 落盘（write 绕过协程缓冲，恢复任务可能在 worker 启动等
+   * 非请求上下文执行；DbLog 保证日志驱动故障不打断剩余通道/行的收敛流程）；
+   * 交互式调用（xa:recover 命令）额外回显控制台，使命令行操作可感知处置
+   * 细节——不依赖 log 配置的 console 开关。
+   *
+   * @param string $level 日志级别（info|warning|error）
+   * @param string $message 消息内容
+   * @param bool $reportToConsole 是否同步回显控制台
+   */
+  private static function report(string $level, string $message, bool $reportToConsole): void
+  {
+    DbLog::write($level, $message);
+    if ($reportToConsole) echo_log($message, 'XA', backtrace: 0);
   }
 
   /**

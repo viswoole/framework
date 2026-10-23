@@ -1376,10 +1376,11 @@ class XaTransactionTest extends TestCase
     $origin = $prop->getValue($db);
     try {
       $prop->setValue($db, $channels);
-      // 恢复任务的 echo_log 告警输出会污染 PHPUnit 输出，捕获后返回供断言
+      // 恢复任务的过程消息输出会污染 PHPUnit 输出，捕获后返回供断言；
+      // 第三参模拟 xa:recover 命令的交互形态（回显控制台）
       ob_start();
       try {
-        XaRecovery::run($onlyGtrid, $dryRun);
+        XaRecovery::run($onlyGtrid, $dryRun, true);
       } finally {
         $output = ob_get_clean();
       }

@@ -65,7 +65,8 @@ class XaRecover extends Command
   {
     $io = new SymfonyStyle($input, $output);
     try {
-      XaRecovery::run($input->getOption('xid'), (bool)$input->getOption('dry-run'));
+      // 交互式命令：恢复过程消息同步回显控制台（恒久落盘由 Log 负责）
+      XaRecovery::run($input->getOption('xid'), (bool)$input->getOption('dry-run'), true);
     } catch (Throwable $e) {
       $io->error(
         $e->getMessage() . ' in '

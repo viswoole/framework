@@ -17,6 +17,7 @@ namespace Viswoole\Database\Transaction;
 
 use Closure;
 use Throwable;
+use Viswoole\Database\DbLog;
 use Viswoole\Database\Exception\DbException;
 
 /**
@@ -117,7 +118,15 @@ final class XaCoordinator
     } catch (Throwable $e) {
       // 尚未执行任何 XA COMMIT，全体回滚不会造成部分提交
       $isFullyRolledBack = self::abortAll($context, $branches);
-      $rollbackResult = $isFullyRolledBack ? '已全体回滚' : '存在未决分支，已保留恢复日志';
+      if ($isFullyRolledBack) {
+        $rollbackResult = '已全体回滚';
+      } elseif ($context->journalRowExists()) {
+        $rollbackResult = '存在未决分支，已保留恢复日志';
+      } else {
+        // journal 未写入（步骤①即失败）：恢复任务无从经 journal 发现该事务，
+        // 收敛路径是连接淘汰断连后由服务端回滚未 prepared 的分支
+        $rollbackResult = '存在未决分支，无恢复日志，分支将随连接淘汰断连后由服务端回滚';
+      }
       throw new DbException(
         "XA 事务提交失败，{$rollbackResult}（gtrid: {$gtrid}）：{$e->getMessage()}",
         0,
@@ -211,10 +220,11 @@ final class XaCoordinator
     try {
       $state = $context->journal()->stateOf($gtrid);
     } catch (Throwable $e) {
-      echo_log(
-        "XA 提交：XAER_NOTA 后 journal 核对失败，按提交达成容忍（gtrid: {$gtrid}，{$e->getMessage()}）",
-        'XA',
-        backtrace: 0
+      // DbLog 保证不抛异常：本告警处于 XAER_NOTA 二义性消除路径，日志驱动
+      // 故障不能顶替提交流程的原始异常；write 立即落盘供运维检索
+      DbLog::write(
+        'warning',
+        "XA 提交：XAER_NOTA 后 journal 核对失败，按提交达成容忍（gtrid: {$gtrid}，{$e->getMessage()}）"
       );
       return;
     }

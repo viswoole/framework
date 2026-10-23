@@ -185,7 +185,9 @@ abstract class Channel
         $connect->close();
       }
     } catch (Throwable $exception) {
-      error_log('[Viswoole Database] 连接关闭失败：' . $exception->getMessage());
+      // DbLog 保证不抛异常：淘汰是归还兜底路径，日志驱动故障不能打断
+      // 调用方的清理流程；write 绕过协程缓冲立即落盘
+      DbLog::write('warning', '[Viswoole Database] 连接关闭失败：' . $exception->getMessage());
     } finally {
       // put(null) 是通道已有的坏连接契约，确保容量和借出计数一起归还。
       $this->put(null);

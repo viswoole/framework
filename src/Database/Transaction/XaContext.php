@@ -44,6 +44,12 @@ final class XaContext
   private array $branches = [];
 
   /**
+   * @var array<int,true> 本次事务内分支回滚已失败的连接（键为 spl_object_id），
+   *                      重试无意义，调用方应直接淘汰连接而非重放终结语句
+   */
+  private array $rollbackFailures = [];
+
+  /**
    * @var int 已分配的分支序号
    */
   private int $branchSequence = 0;
@@ -131,6 +137,27 @@ final class XaContext
     if (isset($this->branches[$id])) {
       $this->branches[$id]['state'] = $state;
     }
+  }
+
+  /**
+   * 标记连接的分支回滚已失败（本次事务内不再重试终结语句）
+   *
+   * @param object $connect 事务连接
+   */
+  public function markRollbackFailed(object $connect): void
+  {
+    $this->rollbackFailures[spl_object_id($connect)] = true;
+  }
+
+  /**
+   * 查询连接的分支回滚是否已失败过
+   *
+   * @param object $connect 事务连接
+   * @return bool 已失败返回 true
+   */
+  public function isRollbackFailed(object $connect): bool
+  {
+    return isset($this->rollbackFailures[spl_object_id($connect)]);
   }
 
   /**

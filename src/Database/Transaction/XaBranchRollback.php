@@ -7,6 +7,7 @@ declare(strict_types=1);
 namespace Viswoole\Database\Transaction;
 
 use Throwable;
+use Viswoole\Database\DbLog;
 
 final class XaBranchRollback
 {
@@ -20,6 +21,9 @@ final class XaBranchRollback
   public static function attempt(XaContext $context, object $connection, string $xid): bool
   {
     if ($context->branchStateOf($connection) === XaBranchState::Done) return true;
+    // 本次事务内已失败过的连接不再重试：连接级故障（断连/协议失效）重试
+    // 大概率再次失败，重放只会产生重复 I/O 与重复日志，直接交给调用方淘汰
+    if ($context->isRollbackFailed($connection)) return false;
     try {
       // MySQL 禁止 ACTIVE 分支直接 ROLLBACK，必须先结束业务阶段。
       if ($context->branchStateOf($connection) === XaBranchState::Active) {
@@ -29,7 +33,11 @@ final class XaBranchRollback
       XaDriver::execute($connection, "XA ROLLBACK '$xid'");
     } catch (Throwable $exception) {
       if (!XaDriver::isNotExists($exception)) {
-        error_log("[Viswoole XA] 分支回滚失败（xid: {$xid}）：{$exception->getMessage()}");
+        $context->markRollbackFailed($connection);
+        // DbLog 保证不抛异常：本方法处于回滚/清理兜底路径，日志驱动故障
+        // 不能打断后续分支的清理，也不能顶替调用方的原始数据库异常；
+        // write 绕过协程缓冲立即落盘（回滚失败可能发生在协程收尾阶段）
+        DbLog::write('error', "[Viswoole XA] 分支回滚失败（xid: {$xid}）：{$exception->getMessage()}");
         return false;
       }
     }
