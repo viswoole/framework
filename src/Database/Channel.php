@@ -19,6 +19,7 @@ namespace Viswoole\Database;
 use PDO;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
+use Throwable;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\Options;
 
@@ -171,6 +172,25 @@ abstract class Channel
    * @param mixed $connect 数据库连接实例
    */
   abstract public function put(mixed $connect): void;
+
+  /**
+   * 淘汰无法可靠清理的借出连接，并释放连接池容量。
+   * @param mixed $connect 待废弃连接；原生 PDO 随调用方释放最后引用关闭
+   * @return void
+   */
+  public function discard(mixed $connect): void
+  {
+    try {
+      if (is_object($connect) && method_exists($connect, 'close') && is_callable([$connect, 'close'])) {
+        $connect->close();
+      }
+    } catch (Throwable $exception) {
+      error_log('[Viswoole Database] 连接关闭失败：' . $exception->getMessage());
+    } finally {
+      // put(null) 是通道已有的坏连接契约，确保容量和借出计数一起归还。
+      $this->put(null);
+    }
+  }
 
   /**
    * 根据查询选项构建SQL语句

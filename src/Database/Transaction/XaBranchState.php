@@ -19,7 +19,7 @@ namespace Viswoole\Database\Transaction;
  * XA 分支状态机
  *
  * 状态流转（提交路径）：Active --XA END--> Ended --XA PREPARE--> Prepared --XA COMMIT--> Done
- * 状态流转（放弃路径）：Active/Ended/Prepared --XA ROLLBACK--> Done
+ * 状态流转（放弃路径）：Active --XA END--> Ended/Prepared --XA ROLLBACK--> Done
  *
  * Prepared 及之后的分支事务由数据库服务端持有（连接已解除关联，可安全回池），
  * Active/Ended 分支仍依附于当前连接，归还连接前必须显式终结。

@@ -23,6 +23,7 @@ use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Channel\PDO\{DriverType, PDOChannel};
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Transaction\XaBranchState;
+use Viswoole\Database\Transaction\XaBranchRollback;
 use Viswoole\Database\Transaction\XaContext;
 use Viswoole\Database\Transaction\XaCoordinator;
 use Viswoole\Database\Transaction\XaDriver;
@@ -215,14 +216,11 @@ class ConnectManager
       if (is_object($connect)) {
         $state = $this->xaContext->branchStateOf($connect);
         if ($state === XaBranchState::Active || $state === XaBranchState::Ended) {
-          try {
-            XaDriver::execute(
-              $connect,
-              "XA ROLLBACK '" . $this->xaContext->branchXidOf($connect) . "'"
-            );
-          } catch (Throwable) {
-            // 回滚失败说明连接已失效：服务端断连时自行回滚，
-            // 连接交由连接池健康检查淘汰（与普通模式语义一致）
+          $xid = $this->xaContext->branchXidOf($connect);
+          if ($xid === null || !XaBranchRollback::attempt($this->xaContext, $connect, $xid)) {
+            // SELECT 1 仍可能成功：事务协议故障必须主动淘汰，不能依赖探活。
+            $channel->discard($connect);
+            return;
           }
         }
       }
@@ -234,7 +232,8 @@ class ConnectManager
         try {
           $connect->rollBack();
         } catch (Throwable) {
-          // 回滚失败说明连接已失效，仍归还交由连接池健康检查淘汰
+          $channel->discard($connect);
+          return;
         }
       }
     }

@@ -116,9 +116,10 @@ final class XaCoordinator
       }
     } catch (Throwable $e) {
       // 尚未执行任何 XA COMMIT，全体回滚不会造成部分提交
-      self::abortAll($context, $branches);
+      $isFullyRolledBack = self::abortAll($context, $branches);
+      $rollbackResult = $isFullyRolledBack ? '已全体回滚' : '存在未决分支，已保留恢复日志';
       throw new DbException(
-        "XA 事务提交失败，已全体回滚（gtrid: {$gtrid}）：{$e->getMessage()}",
+        "XA 事务提交失败，{$rollbackResult}（gtrid: {$gtrid}）：{$e->getMessage()}",
         0,
         null,
         $e
@@ -243,20 +244,17 @@ final class XaCoordinator
    *
    * @param XaContext $context XA 事务上下文
    * @param array<int,array{connect:object,xid:string}> $branches 分支列表
+   * @return bool 所有分支均已确认终结时为 true
    */
-  private static function abortAll(XaContext $context, array $branches): void
+  private static function abortAll(XaContext $context, array $branches): bool
   {
+    $isFullyRolledBack = true;
     foreach ($branches as $branch) {
-      if ($context->branchStateOf($branch['connect']) === XaBranchState::Done) continue;
-      try {
-        XaDriver::execute($branch['connect'], "XA ROLLBACK '{$branch['xid']}'");
-      } catch (Throwable) {
-        // 回滚失败：连接大概率已失效，服务端会在断连时自行回滚，
-        // 连接交由连接池健康检查淘汰——不阻断其余分支的回滚
-      }
-      $context->markBranch($branch['connect'], XaBranchState::Done);
+      $isRolledBack = XaBranchRollback::attempt($context, $branch['connect'], $branch['xid']);
+      $isFullyRolledBack = $isRolledBack && $isFullyRolledBack;
     }
-    if ($context->journalRowExists()) {
+    // 未决 prepared 分支仍需恢复任务按 prepare_start 意图收敛，不能删掉证据。
+    if ($isFullyRolledBack && $context->journalRowExists()) {
       try {
         $context->journal()->remove($context->gtrid);
       } catch (Throwable) {
@@ -264,6 +262,7 @@ final class XaCoordinator
       }
       $context->setJournalRowExists(false);
     }
+    return $isFullyRolledBack;
   }
 
   /**

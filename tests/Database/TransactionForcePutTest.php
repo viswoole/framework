@@ -155,12 +155,12 @@ class TransactionForcePutTest extends TestCase
   }
 
   /**
-   * 场景6：rollBack 双重失败（连接已失效）——forcePut 吞掉二次回滚异常，
-   * 连接仍强制归还，进程不出现致命错误
+   * 场景6：rollBack 双重失败——forcePut 淘汰脏连接并归还容量，
+   * 不得把仍处于事务中的连接交给后续请求
    */
-  public function testRollBackFailureStillForcesPutWithoutFatal(): void
+  public function testRollBackFailureDiscardsConnectionWithoutFatal(): void
   {
-    $bag = new \ArrayObject(['rollBack' => 0, 'put' => null]);
+    $bag = new \ArrayObject(['rollBack' => 0, 'put' => 'not-returned']);
     $channel = new class($bag) extends Channel {
       public function __construct(private readonly \ArrayObject $bag) {}
 
@@ -212,7 +212,7 @@ class TransactionForcePutTest extends TestCase
       }
     });
     self::assertSame(2, $bag['rollBack'], 'rollBack 失败后 forcePut 应再尝试一次兜底回滚');
-    self::assertNotNull($bag['put'], '兜底回滚失败时连接仍应强制归还');
+    self::assertNull($bag['put'], '兜底回滚失败必须淘汰连接并通过 put(null) 归还容量');
   }
 
   /**
