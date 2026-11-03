@@ -295,14 +295,26 @@ class Redis extends Driver
   }
 
   /**
-   * @inheritDoc
-   * @throws RedisException 无法到达 Redis 服务器
+   * 原子取出并删除缓存，保证并发消费者至多一方取得原始值。
+   *
+   * @param string $key 不含前缀的缓存键
+   * @return mixed 解码后的缓存值，未命中或过期返回 null
+   * @throws RedisException 无法到达 Redis 服务器或脚本执行失败
    */
   #[Override] public function pull(string $key): mixed
   {
-    $result = $this->get($key);
-    if ($result !== null) $this->delete($key);
-    return $result;
+    $key = $this->getCacheKey($key);
+    // 取值与删除必须在同一原子脚本内完成，防止并发请求重复消费一次性凭证。
+    // 使用 Lua 避免要求 Redis 6.2 的 GETDEL；删除依据原始值，NULL 缓存也会消费。
+    $script = <<<'LUA'
+      local value = redis.call('GET', KEYS[1])
+      if value ~= false then
+        redis.call('DEL', KEYS[1])
+      end
+      return value
+      LUA;
+    $value = $this->withConnection(fn(\Redis $redis) => $redis->eval($script, [$key], 1));
+    return $value === false ? null : $this->unserialize($value);
   }
 
   /**
