@@ -133,39 +133,69 @@ class BuiltinTypeValidate
   }
 
   /**
-   * 校验整数类型，数字字符串自动转为整数（含科学计数法）
+   * 精确校验整数类型
    *
-   * 超出 int64 可表示范围的数字字符串（如恶意/异常雪花 ID 入参）直接拒绝，
-   * 不做 (int) 钳制——强转发生在自定义验证规则之前，静默钳制会导致业务侧
-   * 「超范围拒绝」类规则被整体绕过
+   * 数字字符串按十进制位数解析，科学计数法仅在结果为整数时接受；不截断小数或钳制溢出值。
    *
    * @param mixed $value 待校验的值
-   * @return int 校验通过的整数值
-   * @throws ValidateException 类型不匹配或数值超出 int 可表示范围时抛出
+   * @return int 精确整数
+   * @throws ValidateException 输入非整数或超出int范围
    */
   public static function int(mixed $value): int
   {
-    if (is_string($value) && preg_match('/^-?\d+$/', $value) === 1) {
-      // 修复: 纯整数字符串必须 (int) 直转——经 float 中转时超出 2^53 的
-      // 大整数（如雪花 ID）会发生精度丢失（末几位被舍入指向错误记录）；
-      // 强转前校验 int64 范围——(int) 对超范围字符串会静默钳制为
-      // PHP_INT_MAX / PHP_INT_MIN
-      if (!self::isWithinIntRange($value)) {
-        throw new ValidateException("数字 {$value} 超出 int 可表示范围");
+    if (is_string($value) && is_numeric($value)) {
+      return self::parseIntegerString(trim($value));
+    }
+    if (is_float($value)) {
+      if (!is_finite($value) || floor($value) !== $value) {
+        throw new ValidateException('数字必须是有限整数');
       }
-      $value = (int)$value;
-    } elseif (is_numeric($value) && !is_int($value)) {
-      // 非整型数字串（如科学计数法 '1e5'）才经 float 中转，
-      // 确保 intval() 截断科学计数法的问题不复现；
-      // float 中转后校验可表示性——超出 int 范围的浮点强转同样会静默钳制
-      $float = (float)$value;
-      if ($float >= (float)PHP_INT_MAX || $float <= (float)PHP_INT_MIN) {
-        throw new ValidateException("数字 {$value} 超出 int 可表示范围");
+      if ($value >= (float)PHP_INT_MAX || $value <= (float)PHP_INT_MIN) {
+        throw new ValidateException('数字超出 int 可表示范围');
       }
-      $value = (int)$float;
+      return (int)$value;
     }
     if (!is_int($value)) self::unifiedExceptionHandling('int', $value);
     return $value;
+  }
+
+  /**
+   * 解析整数数值字符串
+   *
+   * 通过移动十进制小数点判断整除性，防止float吞掉小数尾部或舍入19位ID。
+   *
+   * @param string $value 已确认是数值的字符串
+   * @return int int64范围内的精确整数
+   * @throws ValidateException 数值包含非零小数或超过int范围
+   */
+  private static function parseIntegerString(string $value): int
+  {
+    preg_match('/^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/D', $value, $parts);
+    $fraction = $parts[3] ?? '';
+    $digits = ltrim(($parts[2] ?? '') . $fraction, '0');
+    if ($digits === '') return 0;
+    $exponent = (int)($parts[4] ?? 0);
+    // 先限制指数再移动小数点，避免溢出计算或按恶意指数分配超大字符串。
+    if ($exponent > strlen($fraction) + 19 || $exponent < -strlen($digits)) {
+      throw new ValidateException('数字不是 int 范围内的整数');
+    }
+    $scale = strlen($fraction) - $exponent;
+    if ($scale > 0) {
+      if ($scale >= strlen($digits) || strspn(substr($digits, -$scale), '0') !== $scale) {
+        throw new ValidateException('数字必须是整数，不能截断小数');
+      }
+      $digits = substr($digits, 0, -$scale);
+    } elseif ($scale < 0) {
+      if (strlen($digits) - $scale > 19) {
+        throw new ValidateException('数字超出 int 可表示范围');
+      }
+      $digits .= str_repeat('0', -$scale);
+    }
+    $integer = ($parts[1] === '-' ? '-' : '') . $digits;
+    if (!self::isWithinIntRange($integer)) {
+      throw new ValidateException('数字超出 int 可表示范围');
+    }
+    return (int)$integer;
   }
 
   /**
