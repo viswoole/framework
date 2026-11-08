@@ -436,8 +436,9 @@ trait Crud
         "无效的聚合字段：{$column}（仅允许字母、数字、下划线与点号）"
       );
     }
-    // 聚合表达式含函数语法，无法作为普通标识符 quote，经 Raw 显式构建
-    $this->options->columns[] = Db::raw("$fn($column) AS $type");
+    // 聚合必须替换展示字段，否则 columns(...)->count() 会混合普通列与聚合列，违反 ONLY_FULL_GROUP_BY。
+    // 聚合表达式含函数语法，无法作为普通标识符 quote，经 Raw 显式构建。
+    $this->options->columns = [Db::raw("$fn($column) AS $type")];
     $result = $this->runCrud('select');
     if ($result instanceof Raw) return $result;
     // 空表时 SQL 聚合返回 NULL 行；MySQL 对整型列的 AVG/SUM 还会返回 DECIMAL 字符串。
