@@ -1,4 +1,5 @@
 <?php
+
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -31,6 +32,14 @@ enum TestStatus: string
   case Active = 'active';
   case Inactive = 'inactive';
   case Pending = 'pending';
+}
+
+/** 纯枚举无回退值，保留数字位置兼容。 */
+enum TestPureStatus
+{
+  case Active;
+  case Inactive;
+  case Pending;
 }
 
 /**
@@ -153,14 +162,14 @@ class ValidateTest extends TestCase
   }
 
   /**
-   * 测试 check 方法 - 验证枚举（数字索引）
+   * 测试 check 方法 - 验证纯枚举（数字索引）
    *
    * @return void
    */
   public function testCheckWithEnumIndex(): void
   {
-    $result = Validate::check(0, TestStatus::class);
-    static::assertEquals(TestStatus::Active, $result);
+    $result = Validate::check(0, TestPureStatus::class);
+    static::assertEquals(TestPureStatus::Active, $result);
   }
 
   /**
@@ -240,7 +249,7 @@ class ValidateTest extends TestCase
   public function testIntersection(): void
   {
     // 创建一个同时实现多个接口的测试类
-    $value = new class implements \Countable, \ArrayAccess {
+    $value = new class () implements \Countable, \ArrayAccess {
       public function count(): int
       {
         return 0;

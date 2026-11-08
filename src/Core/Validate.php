@@ -1,4 +1,5 @@
 <?php
+
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -15,6 +16,7 @@ declare (strict_types=1);
 
 namespace Viswoole\Core;
 
+use BackedEnum;
 use ReflectionAttribute;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
@@ -49,12 +51,12 @@ class Validate
    */
   public static function checkRules(
     array|ReflectionAttribute|BaseValidateRule $rules,
-    mixed                                      $value,
-    mixed                                      ...$args
+    mixed $value,
+    mixed ...$args
   ): mixed
   {
-    if (empty($rules)) return $value;
-    if (!is_array($rules)) $rules = [$rules];
+    if (empty($rules)) { return $value; }
+    if (!is_array($rules)) { $rules = [$rules]; }
     foreach ($rules as $attribute) {
       $instance = $attribute;
       if ($attribute instanceof ReflectionAttribute) {
@@ -85,13 +87,13 @@ class Validate
    */
   public static function withContext(ValidateException $e, mixed ...$args): ValidateException
   {
-    if (!str_contains($e->getMessage(), '{:name}')) return $e;
+    if (!str_contains($e->getMessage(), '{:name}')) { return $e; }
     $name = $args[0] ?? null;
     $replacement = is_string($name) && $name !== '' ? '$' . $name : '';
     $replaced = str_replace('{:name}', $replacement, $e->getError());
     if (is_array($replaced)) {
       $replaced = array_map(
-        fn($item) => is_string($item) ? preg_replace('/^\s+/', '', $item) : $item,
+        fn ($item) => is_string($item) ? preg_replace('/^\s+/', '', $item) : $item,
         $replaced
       );
     } else {
@@ -111,7 +113,7 @@ class Validate
   public static function check(mixed $value, array|string|Type|ReflectionType $types): mixed
   {
     if (is_array($types)) {
-      $types = array_map(fn($type) => self::formatType($type), $types);
+      $types = array_map(fn ($type) => self::formatType($type), $types);
       return self::checkType($value, $types);
     } else {
       return self::checkType($value, self::formatType($types));
@@ -129,7 +131,7 @@ class Validate
    */
   public static function formatType(Type|ReflectionType|string $type): string|array
   {
-    if ($type instanceof Type) return $type->value;
+    if ($type instanceof Type) { return $type->value; }
     if ($type instanceof ReflectionUnionType) {
       $tArr = [];
       foreach ($type->getTypes() as $childType) {
@@ -142,12 +144,12 @@ class Validate
       }
       return $tArr;
     }
-    if ($type instanceof ReflectionIntersectionType) return (string)$type;
+    if ($type instanceof ReflectionIntersectionType) { return (string)$type; }
     if ($type instanceof ReflectionNamedType) {
       $typeString = $type->getName();
       return $type->allowsNull() ? ['null', $typeString] : $typeString;
     }
-    if (str_contains($type, '|')) return explode('|', $type);
+    if (str_contains($type, '|')) { return explode('|', $type); }
     return $type;
   }
 
@@ -230,38 +232,52 @@ class Validate
   }
 
   /**
-   * 枚举类型校验，支持枚举实例、名称字符串和数字索引三种输入形式
+   * 解析领域枚举输入
+   *
+   * backed enum 优先按精确回退值匹配，整数回退值接受 HTTP 数字字符串；
+   * 名称仍支持大小写不敏感匹配，只有纯枚举保留数字位置输入。
    *
    * @param string $enum 枚举类名
-   * @param mixed $case 枚举实例、名称字符串或数字索引
-   * @return UnitEnum 匹配到的枚举项
-   * @throws ValidateException 无法匹配到枚举项时抛出
+   * @param mixed $case 枚举实例、回退值或名称
+   * @return UnitEnum 匹配的枚举实例
+   * @throws ValidateException 输入不属于枚举时抛出
    */
   public static function enum(string $enum, mixed $case): UnitEnum
   {
-    if ($case instanceof $enum) return $case;
+    if ($case instanceof $enum) { return $case; }
     $cases = call_user_func($enum . '::cases');
-    // 兼容用数字索引枚举
-    if (is_int($case)) {
-      // 修复#11: 枚举数字索引未做边界检查，改为isset检查；修复return throw语法错误
-      if (isset($cases[$case])) {
-        return $cases[$case];
-      } else {
-        throw new ValidateException('must be between 0 and ' . (count($cases) - 1));
-      }
+    // 稀疏整数枚举的回退值不等于声明位置，禁止将未知值按下标降级匹配。
+    if (is_int($case) && !is_subclass_of($enum, BackedEnum::class)) {
+      return $cases[$case] ?? throw new ValidateException('must be between 0 and ' . (count($cases) - 1));
     }
     $names = [];
     foreach ($cases as $item) {
+      if ($item instanceof BackedEnum && self::matchesEnumValue($item, $case)) {
+        return $item;
+      }
       $names[strtolower($item->name)] = $item;
     }
     if (is_string($case)) {
-      $case = strtolower(trim($case));
-      if (isset($names[$case])) {
-        return $names[$case];
-      }
+      $name = strtolower(trim($case));
+      if (isset($names[$name])) { return $names[$name]; }
     }
-    $names = implode('|', array_keys($names));
-    throw new ValidateException("must be between $names");
+    throw new ValidateException('must be between ' . implode('|', array_keys($names)));
+  }
+
+  /**
+   * 精确匹配枚举回退值
+   *
+   * 整数使用十进制字符串比较，避免浮点转换、溢出和数字位置歧义。
+   * 字符串回退值保持大小写敏感，名称别名由调用方单独处理。
+   *
+   * @param BackedEnum $item 候选枚举项
+   * @param mixed $value 原始输入
+   * @return bool 输入是否对应此枚举的回退值
+   */
+  private static function matchesEnumValue(BackedEnum $item, mixed $value): bool
+  {
+    if ($item->value === $value) { return true; }
+    return is_int($item->value) && is_string($value) && (string)$item->value === trim($value);
   }
 
   /**
@@ -274,10 +290,10 @@ class Validate
    */
   public static function class(string $class, mixed $value): object
   {
-    if ($value instanceof $class) return $value;
+    if ($value instanceof $class) { return $value; }
     $app = App::factory();
     if (interface_exists($class)) {
-      if ($app->has($class)) return $app->make($class, is_array($value) ? $value : []);
+      if ($app->has($class)) { return $app->make($class, is_array($value) ? $value : []); }
     } else {
       // 如果验证通过，则将值注入,得到新实例
       return $app->make($class, is_array($value) ? $value : []);
