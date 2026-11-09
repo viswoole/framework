@@ -48,14 +48,14 @@ trait Where
    * 添加 OR 连接的查询条件
    *
    * @param string $column 列名
-   * @param string|int|float|array $operator 运算符；当 $value 为 null 时作为比较值
-   * @param string|int|float|array|null $value 比较值，为 null 时 $operator 作为值
+   * @param string|int|float|bool|array $operator 运算符；当 $value 为 null 时作为比较值
+   * @param string|int|float|bool|array|null $value 比较值，为 null 时 $operator 作为值
    * @return static 支持链式调用
    */
   public function orWhere(
-    string                      $column,
-    string|int|float|array      $operator,
-    string|int|float|array|null $value = null,
+    string                       $column,
+    string|int|float|bool|array  $operator,
+    string|int|float|bool|array|null $value = null,
   ): static
   {
     return $this->where($column, $operator, $value, 'OR');
@@ -65,17 +65,17 @@ trait Where
    * 添加查询条件，支持简化写法（省略运算符时默认为 = 或 IN）
    *
    * @param string $column 列名
-   * @param string|int|float|array $operator 运算符；当 $value 为 null 时作为比较值，数组自动转为 IN
-   * @param string|int|float|array|null $value 比较值，为 null 时 $operator 作为值
+   * @param string|int|float|bool|array $operator 运算符；当 $value 为 null 时作为比较值，数组自动转为 IN
+   * @param string|int|float|bool|array|null $value 比较值，为 null 时 $operator 作为值
    * @param string $connector 条件连接符 AND|OR，默认 AND
    * @return static 支持链式调用
    * @throws InvalidArgumentException 运算符或连接符无效时抛出
    */
   public function where(
-    string                      $column,
-    string|int|float|array      $operator,
-    string|int|float|array|null $value = null,
-    string                      $connector = 'AND'
+    string                       $column,
+    string|int|float|bool|array  $operator,
+    string|int|float|bool|array|null $value = null,
+    string                       $connector = 'AND'
   ): static
   {
     // IS NULL / IS NOT NULL 是 whereNull()/whereNotNull() 传入的合法操作符，
@@ -134,14 +134,14 @@ trait Where
    * 添加 AND 连接的查询条件（where 的显式写法）
    *
    * @param string $column 列名
-   * @param string|int|float|array $operator 运算符
-   * @param string|int|float|array|null $value 比较值
+   * @param string|int|float|bool|array $operator 运算符
+   * @param string|int|float|bool|array|null $value 比较值
    * @return static 支持链式调用
    */
   public function andWhere(
-    string                      $column,
-    string|int|float|array      $operator,
-    string|int|float|array|null $value = null,
+    string                       $column,
+    string|int|float|bool|array  $operator,
+    string|int|float|bool|array|null $value = null,
   ): static
   {
     return $this->where($column, $operator, $value);

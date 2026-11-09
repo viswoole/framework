@@ -17,6 +17,7 @@ namespace Viswoole\Database\Channel\PDO;
 
 use InvalidArgumentException;
 use Override;
+use PDO;
 use PDOException;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
@@ -237,7 +238,15 @@ class PDOChannel extends Channel
     Context::set('$_db_query_route_' . $this->name, $route);
     try {
       $stmt = $connect->prepare($sql);
-      $stmt->execute($bindings);
+      // execute(array) 会将所有绑定值按 PARAM_STR 传递：布尔值在 MySQL
+      // native prepare 下被序列化为空串、整型与 NULL 丧失原生语义，
+      // 因此非空绑定时先按 PHP 类型显式声明绑定类型再执行
+      if ($bindings === []) {
+        $stmt->execute();
+      } else {
+        $this->bindStatementValues($stmt, $bindings);
+        $stmt->execute(null);
+      }
       // 大小写不敏感判定写语句类型：小写 SQL 同样需要返回自增 ID，
       // 否则 insertGetId 会静默退化为返回 statement
       $isInsertLike = stripos($sql, 'INSERT') === 0 || stripos($sql, 'REPLACE') === 0;
@@ -395,5 +404,34 @@ class PDOChannel extends Channel
   private function removeCurrentPoolIndex(): void
   {
     Context::remove($this->contextKey('$_pdo_current_index_'));
+  }
+
+  /**
+   * 按参数的 PHP 类型显式绑定预编译参数
+   *
+   * PDOStatement::execute(array) 不支持指定绑定类型，所有值按 PARAM_STR
+   * 传递：布尔值在 MySQL native prepare 下被序列化为空串，导致布尔
+   * 字段写入与条件匹配异常。本方法按类型映射后经 bindValue 声明类型，
+   * 兼容 ? 占位符与命名占位符两种形式；浮点数经 PARAM_STR 的字符串
+   * 转换传递，各驱动均能正确接收。
+   *
+   * @param PDOStatement|PDOStatementProxy $stmt 预编译语句
+   * @param array $bindings 绑定参数列表（支持索引数组与关联数组）
+   * @return void
+   */
+  private function bindStatementValues(PDOStatement|PDOStatementProxy $stmt, array $bindings): void
+  {
+    foreach ($bindings as $key => $value) {
+      // 位置占位符的绑定键为 1 基索引（bindValue 与 execute(array) 的 0 基索引
+      // 语义不同），字符串键为命名占位符，原样传递
+      if (is_int($key)) $key++;
+      $type = match (true) {
+        is_bool($value) => PDO::PARAM_BOOL,
+        is_int($value) => PDO::PARAM_INT,
+        is_null($value) => PDO::PARAM_NULL,
+        default => PDO::PARAM_STR,
+      };
+      $stmt->bindValue($key, $value, $type);
+    }
   }
 }
