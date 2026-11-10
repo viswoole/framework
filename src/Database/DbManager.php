@@ -1,4 +1,5 @@
 <?php
+
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -28,6 +29,7 @@ use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\RunInfo;
 use Viswoole\Database\Transaction\XaJournal;
 use Viswoole\Log\LogManager;
+
 use function invoke;
 
 /**
@@ -46,15 +48,15 @@ class DbManager
   /**
    * 调试信息输出到控制台
    */
-  const int DEBUG_SAVE_CONSOLE = 1;
+  public const int DEBUG_SAVE_CONSOLE = 1;
   /**
    * 调试信息保存到日志文件
    */
-  const int DEBUG_SAVE_LOGGER = 2;
+  public const int DEBUG_SAVE_LOGGER = 2;
   /**
    * 查询监听器连续失败熔断阈值：连续失败达到该次数后本进程内停用监听器
    */
-  const int LISTENER_MAX_FAILURES = 3;
+  public const int LISTENER_MAX_FAILURES = 3;
   public readonly string $defaultChannel;
   /**
    * @var array<string,Channel> 已注册的数据库通道，键名为通道小写名称
@@ -90,7 +92,7 @@ class DbManager
     $channels = $config->get('database.channels', []);
     if (!empty($channels)) {
       $this->defaultChannel = $config->get('database.default', array_key_first($channels));
-      foreach ($channels as $key => $driver) $this->addChannel($key, $driver);
+      foreach ($channels as $key => $driver) { $this->addChannel($key, $driver); }
     } else {
       // 空配置时也必须初始化 readonly 属性，
       // 否则运行时 addChannel() 动态注册后再访问 channel() 会因
@@ -106,7 +108,8 @@ class DbManager
     $debug = $config->get('database.debug', false);
     // 修复: 配置路径错误，应与 database.debug 一致使用 database 命名空间下的 info_save_manner
     $save = $config->get(
-      'database.info_save_manner', self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER
+      'database.info_save_manner',
+      self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER
     );
     if (!is_int($save)) {
       $save = self::DEBUG_SAVE_CONSOLE | self::DEBUG_SAVE_LOGGER;
@@ -220,7 +223,7 @@ class DbManager
     // 熔断：连续失败达到阈值后本进程内永久停用（配置注册的监听器是确定性代码，
     // 连续异常基本为代码缺陷或依赖不可用，继续重试只会徒增每条查询的异常开销
     // 与 error 日志噪音）；进程重启/reload 后自动恢复。
-    if ($this->listener === null || $this->listenerDisabled) return;
+    if ($this->listener === null || $this->listenerDisabled) { return; }
     try {
       invoke($this->listener, [$debugInfo]);
       // 成功即归零：偶发失败不累积，仅连续失败才熔断
@@ -293,6 +296,7 @@ class DbManager
   public function startTransaction(?Closure $query = null): mixed
   {
     ConnectManager::factory()->start();
+    $level = ConnectManager::factory()->transactionLevel();
     if ($query instanceof Closure) {
       try {
         // 先捕获闭包返回值，提交成功后透传给调用方（修复：原实现丢弃返回值）
@@ -300,8 +304,7 @@ class DbManager
         $this->commit();
         return $result;
       } catch (Throwable $e) {
-        $this->rollBack();
-        throw $e;
+        $this->rollBackAndRethrow($e, $level);
       }
     }
     return null;
@@ -335,17 +338,49 @@ class DbManager
   public function startXaTransaction(?Closure $query = null): mixed
   {
     ConnectManager::factory()->startXa(XaJournal::fromConfig());
+    $level = ConnectManager::factory()->transactionLevel();
     if ($query instanceof Closure) {
       try {
         $result = $query();
         $this->commit();
         return $result;
       } catch (Throwable $e) {
-        $this->rollBack();
-        throw $e;
+        $this->rollBackAndRethrow($e, $level);
       }
     }
     return null;
+  }
+
+  /**
+   * 清理当前闭包作用域并保留原始异常
+   *
+   * 提交失败可能已经退出当前层，不能再误回滚调用方外层；保存点清理失败
+   * 只记录错误类型和码，不覆盖原始SQLSTATE或记录SQL参数。
+   *
+   * @param Throwable $error 原始业务或驱动异常
+   * @param int $level 本闭包进入的事务层级
+   * @return never 始终重抛同一个原始异常
+   */
+  private function rollBackAndRethrow(Throwable $error, int $level): never
+  {
+    try {
+      if (ConnectManager::factory()->transactionLevel() >= $level) {
+        $this->rollBack();
+      }
+    } catch (Throwable $cleanupError) {
+      // 兜底清理路径的日志必须走 DbLog：日志驱动故障不外抛打断收尾，
+      // 失败时由 DbLog 自动降级 error_log 留痕（与 XA 子系统防护约定一致）
+      DbLog::write('error', sprintf(
+        '事务回滚清理失败：%s (%s)；保留原始异常：%s (%s)',
+        $cleanupError::class,
+        $cleanupError->getCode(),
+        $error::class,
+        $error->getCode()
+      ));
+    } finally {
+      // 即使错误日志不可写，也不能让清理阶段错误覆盖导致本次事务失败的原异常。
+      throw $error;
+    }
   }
 
   /**
@@ -434,7 +469,7 @@ class DbManager
       'cost_time_s' => round($interval, 6),
       'cost_time_ms' => round($interval * 1000),
     ];
-    if (!$sql instanceof Raw) $sql = new Raw($sql);
+    if (!$sql instanceof Raw) { $sql = new Raw($sql); }
     $this->saveDebugInfo(new RunInfo(
       $sql,
       false,
@@ -492,7 +527,10 @@ class DbManager
    * @return int|string 受影响行数或自增ID
    * @throws DbException SQL 执行失败时抛出
    */
-  public function execute(string|Raw $sql, array $bindings = [], false|string $getId = false
+  public function execute(
+    string|Raw $sql,
+    array $bindings = [],
+    false|string $getId = false
   ): int|string
   {
     $channel = $this->channel();

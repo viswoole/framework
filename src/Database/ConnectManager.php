@@ -1,4 +1,5 @@
 <?php
+
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -22,8 +23,8 @@ use Throwable;
 use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Channel\PDO\{DriverType, PDOChannel};
 use Viswoole\Database\Exception\DbException;
-use Viswoole\Database\Transaction\XaBranchState;
 use Viswoole\Database\Transaction\XaBranchRollback;
+use Viswoole\Database\Transaction\XaBranchState;
 use Viswoole\Database\Transaction\XaContext;
 use Viswoole\Database\Transaction\XaCoordinator;
 use Viswoole\Database\Transaction\XaDriver;
@@ -63,6 +64,8 @@ class ConnectManager
   protected int $transactionDepth = 0;
   /** @var XaContext|null XA 事务上下文，非 XA 模式为 null */
   protected ?XaContext $xaContext = null;
+  /** @var bool 保存点状态失效后只允许逐层回滚，禁止连接被误作自动提交使用 */
+  private bool $isRollbackOnly = false;
 
   /**
    * 获取当前协程中的连接管理器单例，首次调用时自动创建
@@ -106,6 +109,7 @@ class ConnectManager
    */
   public function pop(Channel $channel, string $type): mixed
   {
+    $this->assertUsableTransaction();
 
     if ($this->transactionDepth > 0) {
       // 处于事务中则拿到空闲连接，复用，避免占用过多连接
@@ -161,6 +165,21 @@ class ConnectManager
       $connect = $channel->pop($type);
     }
     return $connect;
+  }
+
+  /**
+   * 拒绝继续使用保存点已失效的事务
+   *
+   * 保留外层层级直到调用方逐层退出，不能把连接提前当作非事务连接重新使用。
+   *
+   * @return void 当前事务允许继续执行
+   * @throws DbException 保存点失败后事务仅允许回滚
+   */
+  private function assertUsableTransaction(): void
+  {
+    if ($this->isRollbackOnly) {
+      throw new DbException('事务状态已失效，仅允许回滚后重新开启事务');
+    }
   }
 
   /**
@@ -266,17 +285,28 @@ class ConnectManager
    * 外层已完成的操作不受影响，外层事务可继续使用；
    * 首层回滚丢弃全部数据并释放所有事务连接。
    * 内层回滚失败时异常向外抛（层级已在 finally 回退），
-   * 失效连接留在事务池中，由外层收尾或析构时 forcePut 兜底回收。
+   * 失败后事务标记为仅允许回滚，禁止外层捕获异常后继续查询或提交；
+   * 失效连接由最外层回滚或析构时 forcePut 兜底回收。
    */
   public function rollBack(): void
   {
-    if ($this->transactionDepth === 0) return;
+    if ($this->transactionDepth === 0) {
+      return;
+    }
+    if ($this->transactionDepth > 1 && $this->isRollbackOnly) {
+      $this->transactionDepth--;
+      return;
+    }
     if ($this->transactionDepth > 1) {
       $sql = 'ROLLBACK TO SAVEPOINT ' . self::savepointName($this->transactionDepth);
       try {
         foreach ($this->connections as $item) {
           $this->executeSavepointSql($item['connect'], $sql);
         }
+      } catch (Throwable $error) {
+        // 服务端可能已撤销整个事务；不能在外层捕获后继续复用已失去保存点的连接。
+        $this->isRollbackOnly = true;
+        throw $error;
       } finally {
         // 中途异常也必须回退层级，避免后续 commit/rollBack 作用于错误层级
         $this->transactionDepth--;
@@ -308,10 +338,21 @@ class ConnectManager
     try {
       $array = $this->connections;
       foreach ($array as $key => $item) {
-        $item['connect']->rollBack();
+        $connect = $item['connect'];
+        // 服务端可能已自动回滚（如死锁），连接已无活跃事务；此时直接 rollBack
+        // 会抛原生 "There is no active transaction"，与 forcePut 的防御保持一致：
+        // 先按连接状态判定，跳过无效回滚，连接交由 forcePut 归还或淘汰
+        if ($connect instanceof PDO || $connect instanceof PDOProxy) {
+          if (!$connect->inTransaction()) {
+            unset($this->connections[$key]);
+            $this->forcePut($item['channel'], $connect);
+            continue;
+          }
+        }
+        $connect->rollBack();
         unset($this->connections[$key]);
         // 强制归还：见 commit() 中说明，避免落入事务标记分支
-        $this->forcePut($item['channel'], $item['connect']);
+        $this->forcePut($item['channel'], $connect);
       }
     } finally {
       $this->close();
@@ -325,13 +366,17 @@ class ConnectManager
    */
   private function xaBranches(): array
   {
-    if ($this->xaContext === null) return [];
+    if ($this->xaContext === null) {
+      return [];
+    }
     $branches = [];
     foreach ($this->connections as $item) {
       $connect = $item['connect'];
       // is_object 而非 instanceof object：object 是保留类型名而非类名，
       // instanceof 对恒定返回 false
-      if (!is_object($connect)) continue;
+      if (!is_object($connect)) {
+        continue;
+      }
       $xid = $this->xaContext->branchXidOf($connect);
       if ($xid !== null) {
         $branches[] = ['connect' => $connect, 'xid' => $xid];
@@ -359,6 +404,7 @@ class ConnectManager
       // 也必须重置事务状态：残留的 connections/depth 会让后续事务
       // 复用已失效的连接，xaContext 残留则会污染下一次 XA 分支判定
       $this->transactionDepth = 0;
+      $this->isRollbackOnly = false;
       $this->connections = [];
       $this->xaContext = null;
     }
@@ -377,6 +423,7 @@ class ConnectManager
    */
   public function startXa(XaJournal $journal): void
   {
+    $this->assertUsableTransaction();
     if ($this->transactionDepth > 0) {
       if ($this->xaContext !== null) {
         $this->start();
@@ -400,13 +447,19 @@ class ConnectManager
    */
   public function start(): void
   {
+    $this->assertUsableTransaction();
     $level = $this->transactionDepth + 1;
     if ($level > 1) {
       // 先声明保存点再提升层级计数：保存点创建失败（如连接失效）时
       // 层级计数不至错乱；残余保存点无害（该层未成功开启，不会被引用）
       $sql = 'SAVEPOINT ' . self::savepointName($level);
-      foreach ($this->connections as $item) {
-        $this->executeSavepointSql($item['connect'], $sql);
+      try {
+        foreach ($this->connections as $item) {
+          $this->executeSavepointSql($item['connect'], $sql);
+        }
+      } catch (Throwable $error) {
+        $this->isRollbackOnly = true;
+        throw $error;
       }
     }
     $this->transactionDepth = $level;
@@ -418,17 +471,25 @@ class ConnectManager
    * 嵌套层提交仅释放该层保存点，数据仍处于最外层事务保护中；
    * 首层提交才真正落库，并释放所有事务连接。
    * 内层释放保存点失败时异常向外抛（层级已在 finally 回退），
-   * 失效连接留在事务池中，由外层收尾或析构时 forcePut 兜底回收。
+   * 失败后事务标记为仅允许回滚，禁止外层捕获异常后继续查询或提交；
+   * 失效连接由最外层回滚或析构时 forcePut 兜底回收。
    */
   public function commit(): void
   {
-    if ($this->transactionDepth === 0) return;
+    $this->assertUsableTransaction();
+    if ($this->transactionDepth === 0) {
+      return;
+    }
     if ($this->transactionDepth > 1) {
       $sql = 'RELEASE SAVEPOINT ' . self::savepointName($this->transactionDepth);
       try {
         foreach ($this->connections as $item) {
           $this->executeSavepointSql($item['connect'], $sql);
         }
+      } catch (Throwable $error) {
+        // 服务端可能已撤销整个事务；不能在外层捕获后继续复用已失去保存点的连接。
+        $this->isRollbackOnly = true;
+        throw $error;
       } finally {
         // 中途异常也必须回退层级，避免后续 commit/rollBack 作用于错误层级
         $this->transactionDepth--;
