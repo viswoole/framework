@@ -1,4 +1,5 @@
 <?php
+
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -17,11 +18,13 @@ namespace Viswoole\Tests\Router;
 
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
-use ReflectionMethod;
 use ReflectionProperty;
 use Viswoole\Core\App;
 use Viswoole\Core\Config;
 use Viswoole\Core\Middleware;
+use Viswoole\Monitor\MonitorOptions;
+use Viswoole\Monitor\RequestTrace;
+use Viswoole\Monitor\TraceContext;
 use Viswoole\Router\RouteTable;
 use Viswoole\Router\Route\Collector;
 use Viswoole\Router\Route\Group;
@@ -51,7 +54,7 @@ class DispatchRouteParamTest extends TestCase
   {
     $app = App::factory();
     // 组装分组 bench 与子路由 bench.api（路径合并结果为 /bench/user/{id}）
-    $group = new Group('/bench', fn() => null, null, id: 'bench');
+    $group = new Group('/bench', fn () => null, null, id: 'bench');
     $route = new Route('/user/{id}', $handler, $group, id: 'api');
     $group->addItem($route);
     // 绕过构造函数创建实例，避免触发路由文件加载与控制器目录扫描
@@ -92,7 +95,7 @@ class DispatchRouteParamTest extends TestCase
    */
   public function testDynamicRouteParamImplicitInjection(): void
   {
-    $router = $this->buildRouter(fn(string $id) => "user:$id");
+    $router = $this->buildRouter(fn (string $id) => "user:$id");
 
     $result = $router->dispatch('/bench/user/1024', 'GET', 'localhost');
 
@@ -106,11 +109,13 @@ class DispatchRouteParamTest extends TestCase
    */
   public function testCallbackReceivesRouteParams(): void
   {
-    $router = $this->buildRouter(fn(string $id) => $id);
+    $router = $this->buildRouter(fn (string $id) => $id);
     $captured = null;
 
     $router->dispatch(
-      '/bench/user/1024', 'GET', 'localhost',
+      '/bench/user/1024',
+      'GET',
+      'localhost',
       callback: function (array $params) use (&$captured): void {
         $captured = $params;
       }
@@ -126,13 +131,59 @@ class DispatchRouteParamTest extends TestCase
    */
   public function testExplicitParamsMergedWithPatternPriority(): void
   {
-    $router = $this->buildRouter(fn(string $id, string $extra) => "$id:$extra");
+    $router = $this->buildRouter(fn (string $id, string $extra) => "$id:$extra");
 
     $result = $router->dispatch(
-      '/bench/user/1024', 'GET', 'localhost',
+      '/bench/user/1024',
+      'GET',
+      'localhost',
       params: ['id' => '2048', 'extra' => 'x']
     );
 
     $this->assertSame('1024:x', $result);
   }
+
+  /**
+   * 实际分发补充路由模板及参数
+   *
+   * 路径参数不能仅存在于控制器入参中，慢请求记录需要保留来源以支持接口聚合。
+   *
+   * @return void
+   */
+  public function testDispatchRecordsMatchedRoute(): void
+  {
+    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0]), []);
+    TraceContext::attach($trace);
+    try {
+      $router = $this->buildRouter(static fn (string $id): string => 'user:' . $id);
+      self::assertSame('user:1024', $router->dispatch('/bench/user/1024', 'GET', 'localhost'));
+      $route = $trace->finish()['request']['route'];
+      // 此夹具手工插入路由表别名，Route 自身仍保存声明模板。
+      self::assertContains('/user/{id}', $route['paths']);
+      self::assertSame(['id' => '1024'], $route['parameters']);
+    } finally {
+      TraceContext::clear();
+    }
+  }
+
+  /** @return void 路径脱敏不得改变真实参数注入，关闭参数采集仍保护展示路径。 */
+  public function testSensitivePathDoesNotChangeControllerArgument(): void
+  {
+    foreach ([true, false] as $canCapture) {
+      $trace = new RequestTrace(new MonitorOptions([
+        'threshold_ms' => 0, 'capture_request' => $canCapture, 'sensitive_keys' => ['id'],
+      ]), ['path' => '/bench/user/424242424242']);
+      TraceContext::attach($trace);
+      try {
+        $router = $this->buildRouter(static fn (string $id): string => 'user:' . $id);
+        self::assertSame('user:424242424242', $router->dispatch('/bench/user/424242424242', 'GET', 'localhost'));
+        $snapshot = $trace->snapshot();
+        self::assertSame('[REDACTED]', $snapshot->request->path);
+        self::assertStringNotContainsString('424242424242', json_encode($snapshot, JSON_THROW_ON_ERROR));
+      } finally {
+        TraceContext::clear();
+      }
+    }
+  }
+
 }

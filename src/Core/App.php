@@ -26,6 +26,7 @@ use Viswoole\HttpServer\Contract\ResponseInterface;
 use Viswoole\HttpServer\HttpService;
 use Viswoole\Log\LogManager;
 use Viswoole\Log\LogService;
+use Viswoole\Monitor\MonitorService;
 use Viswoole\Router\Router;
 use Viswoole\Router\RouterService;
 
@@ -72,6 +73,7 @@ class App extends Container
    */
   protected array $services = [
     LogService::class,
+    MonitorService::class,
     CacheService::class,
     MiddlewareService::class,
     RouterService::class,

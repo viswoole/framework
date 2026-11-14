@@ -20,8 +20,10 @@ use InvalidArgumentException;
 use Override;
 use RuntimeException;
 use Swoole\Http\Response as swooleResponse;
-use Viswoole\Core\Console\Output;
 use Viswoole\HttpServer\Contract\ResponseInterface;
+use Viswoole\HttpServer\Response\EventStreamFrame;
+use Viswoole\HttpServer\Response\TransmitsContent;
+use Viswoole\Monitor\TraceContext;
 
 /**
  * Swoole HTTP 响应的代理封装
@@ -34,6 +36,8 @@ use Viswoole\HttpServer\Contract\ResponseInterface;
  */
 class Response implements ResponseInterface
 {
+  use TransmitsContent;
+
   /**
    * @var int 响应状态码，仅构造时同步到 swooleResponse，后续不同步
    */
@@ -70,6 +74,10 @@ class Response implements ResponseInterface
     foreach ($this->headers as $key => $value) {
       $this->swooleResponse->header($key, $value);
     }
+    TraceContext::current()?->updateResponse([
+      'status' => $this->statusCode, 'headers' => $this->swooleResponse->header ?? $this->headers,
+      'content_type' => $this->headers['Content-Type'],
+    ]);
   }
 
   /**
@@ -96,6 +104,7 @@ class Response implements ResponseInterface
       $reasonPhrase = Status::getReasonPhrase($http_status_code);
     }
     $this->swooleResponse->status($http_status_code, $reasonPhrase);
+    TraceContext::current()?->updateResponse(['status' => $http_status_code]);
     return $this;
   }
 
@@ -119,6 +128,10 @@ class Response implements ResponseInterface
     if (!$result) {
       throw new InvalidArgumentException('设置响应头失败，响应对象已结束或已分离');
     }
+    // 增量记录单个标头，避免每次调用全量快照与全量递归脱敏的开销
+    $trace = TraceContext::current();
+    $trace?->updateResponseHeader($key, $value);
+    if (strtolower($key) === 'content-type') $trace?->updateResponse(['content_type' => $value]);
     return $this;
   }
 
@@ -224,46 +237,6 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 发送响应（end 方法的别名）
-   *
-   * @see end
-   */
-  public function send(?string $content = null): bool
-  {
-    return $this->end($content);
-  }
-
-  /**
-   * 结束响应并发送内容
-   *
-   * 若已开启 echoToConsole，会同时将响应内容和耗时输出到控制台。
-   * 响应对象不可写时直接返回 false。
-   *
-   * @param string|null $content 响应内容，为 null 时使用已设置的 content
-   * @return bool 发送成功返回 true，响应已结束或不可写返回 false
-   */
-  #[Override]
-  public function end(?string $content = null): bool
-  {
-    if ($this->isWritable()) {
-      if (is_null($content)) $content = $this->content;
-      if ($this->echoToConsole) {
-        // 请求时间
-        $request_time = \Viswoole\HttpServer\Facade\Request::getServer('request_time_float');
-        // 获取当前时间
-        $current_time_float = microtime(true);
-        // 计算耗时
-        $elapsed_time = $current_time_float - $request_time;
-        // 输出到控制台
-        Output::dump($content, "响应内容:耗时{$elapsed_time}秒");
-      }
-      return $this->swooleResponse->end($content);
-    } else {
-      return false;
-    }
-  }
-
-  /**
    * 判断响应是否仍可写入（未结束且未分离）
    *
    * @return bool true 表示可写入，false 表示已结束或已分离
@@ -298,34 +271,6 @@ class Response implements ResponseInterface
   }
 
   /**
-   * 发送 HTTP 重定向响应
-   *
-   * @param string $uri 目标 URI
-   * @param int $http_code 重定向状态码，默认 302
-   * @return bool 重定向成功返回 true
-   */
-  #[Override]
-  public function redirect(string $uri, int $http_code = 302): bool
-  {
-    return $this->swooleResponse->redirect($uri, $http_code);
-  }
-
-  /**
-   * 分段写入响应数据（HTTP Chunk 模式）
-   *
-   * @param string $data 数据内容，最大长度受 buffer_output_size 配置控制
-   * @return self 返回当前实例，支持链式调用
-   * @throws RuntimeException 写入失败（连接上下文已不存在）时抛出
-   */
-  #[Override]
-  public function write(string $data): self
-  {
-    $result = $this->swooleResponse->write($data);
-    if (!$result) throw new RuntimeException('分段写入数据失败，连接上下文已不存在。');
-    return $this;
-  }
-
-  /**
    * 开启 SSE（Server-Sent Events）响应：设置 text/event-stream 头并写入首个 retry 帧
    *
    * 调用后通过 {@see self::sendEvent()} 持续推送事件，连接结束时调用 end()。
@@ -343,22 +288,34 @@ class Response implements ResponseInterface
   }
 
   /**
+   * 快捷设置 Content-Type 响应标头
+   *
+   * @param string $contentType MIME 类型，如 application/json
+   * @param string $charset 字符编码，默认 utf-8
+   * @return self 返回当前实例，支持链式调用
+   */
+  #[Override]
+  public function setContentType(
+    string $contentType,
+    string $charset = 'utf-8'
+  ): self
+  {
+    $this->header('Content-Type', $contentType . '; charset=' . $charset);
+    return $this;
+  }
+
+  /**
    * 写入一条 SSE 事件帧（自动按 SSE 规范处理多行 data 与可选 event/id 字段）
    *
    * @param string $data 事件数据（含换行时自动拆分为多个 data 行）
    * @param string|null $event 事件类型（客户端 addEventListener 按 event 区分），null 时默认 message
    * @param string|null $id 事件 ID（客户端 Last-Event-ID 断线续传依据）
    * @return static 支持链式调用
+   * @throws InvalidArgumentException event/id 包含换行，或 id 包含 NUL 时抛出
    */
   public function sendEvent(string $data, ?string $event = null, ?string $id = null): static
   {
-    $frame = '';
-    if ($id !== null) $frame .= "id: {$id}\n";
-    if ($event !== null) $frame .= "event: {$event}\n";
-    foreach (explode("\n", $data) as $line) {
-      $frame .= "data: {$line}\n";
-    }
-    $this->write($frame . "\n");
+    $this->write(EventStreamFrame::encode($data, $event, $id));
     return $this;
   }
 
@@ -381,23 +338,6 @@ class Response implements ResponseInterface
     }
     $this->setContentType('application/json');
     $this->setContent($data);
-    return $this;
-  }
-
-  /**
-   * 快捷设置 Content-Type 响应标头
-   *
-   * @param string $contentType MIME 类型，如 application/json
-   * @param string $charset 字符编码，默认 utf-8
-   * @return self 返回当前实例，支持链式调用
-   */
-  #[Override]
-  public function setContentType(
-    string $contentType,
-    string $charset = 'utf-8'
-  ): self
-  {
-    $this->header('Content-Type', $contentType . '; charset=' . $charset);
     return $this;
   }
 
@@ -437,47 +377,6 @@ class Response implements ResponseInterface
     $this->setContentType('text/html');
     $this->setContent($html);
     return $this;
-  }
-
-  /**
-   * 发送本地文件作为响应体
-   *
-   * 未指定 MIME 类型时通过 finfo 自动检测，检测失败回退为 application/octet-stream。
-   *
-   * @param string $filePath 文件绝对路径
-   * @param int $offset 发送起始偏移量
-   * @param int $length 发送字节数，0 表示全部
-   * @param string|null $fileMimeType 强制指定的 MIME 类型
-   * @return bool 发送成功返回 true
-   * @throws InvalidArgumentException 文件不存在时抛出
-   */
-  #[Override]
-  public function sendfile(
-    string  $filePath,
-    int     $offset = 0,
-    int     $length = 0,
-    ?string $fileMimeType = null
-  ): bool
-  {
-    if (!file_exists($filePath)) {
-      throw new InvalidArgumentException("没有找到要发送的文件：{$filePath}，请检查路径是否正确。");
-    }
-    if (empty($fileMimeType)) {
-      // 修复: finfo_open 和 finfo_file 可能返回 false，增加 false 检查
-      $finfo = finfo_open(FILEINFO_MIME_TYPE);
-      if ($finfo === false) {
-        $this->header('Content-Type', 'application/octet-stream');
-      } else {
-        $fileMimeType = finfo_file($finfo, $filePath);
-        if ($fileMimeType === false) {
-          $fileMimeType = 'application/octet-stream';
-        }
-        $this->header('Content-Type', $fileMimeType);
-      }
-    } else {
-      $this->header('Content-Type', $fileMimeType);
-    }
-    return $this->swooleResponse->sendfile($filePath, $offset, $length);
   }
 
   /**

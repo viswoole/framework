@@ -18,13 +18,11 @@ namespace Viswoole\Database\Channel\PDO;
 use InvalidArgumentException;
 use Override;
 use PDO;
-use PDOException;
 use PDOStatement;
 use Swoole\Database\PDOStatementProxy;
 use Swoole\Table;
 use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Channel;
-use Viswoole\Database\ConnectManager;
 use Viswoole\Database\Exception\DbException;
 use Viswoole\Database\Query\Options;
 use Viswoole\Database\Raw;
@@ -37,6 +35,7 @@ use Viswoole\Database\Raw;
  */
 class PDOChannel extends Channel
 {
+  use ExecutesStatements;
   /**
    * @var PDOPool|array{read:PDOPool[],write:PDOPool[]} 连接池，单库时为 PDOPool，读写分离时为 read/write 分组
    */
@@ -206,68 +205,6 @@ class PDOChannel extends Channel
   {
     $build = new SqlBuilder($this, $options);
     return $build->build();
-  }
-
-  /**
-   * 执行参数化 SQL 语句，INSERT/REPLACE 时可选返回自增 ID
-   *
-   * @inheritDoc
-   * @throws DbException SQL 执行失败时抛出
-   */
-  public function execute(
-    string|Raw   $sql,
-    array        $bindings = [],
-    false|string $getId = false,
-    bool         $master = false
-  ): PDOStatementProxy|PDOStatement|int|string {
-    $manager = ConnectManager::factory();
-    if ($sql instanceof Raw) {
-      $bindings = $sql->bindings;
-      $sql = $sql->sql;
-    }
-    // $master 为 true 或锁定读（FOR UPDATE / FOR SHARE 等各驱动锁定语法，
-    // 见 Channel::isLockingQuery）时强制从写库（主库）获取连接：
-    // 锁定读落从库将失去与主库写入者的互斥语义（与 think-orm 主库策略一致）
-    $route = $master || self::isLockingQuery($sql) ? 'write' : $this->getType($sql);
-    /**
-     * @var PDOProxy $connect
-     */
-    $connect = $manager->pop($this, $route);
-    // 记录读写路由到协程上下文（按通道名隔离，协程间互不污染），
-    // 供查询层构造 RunInfo 时读取，使监听器/日志能区分主从库
-    Context::set('$_db_query_route_' . $this->name, $route);
-    try {
-      $stmt = $connect->prepare($sql);
-      // execute(array) 会将所有绑定值按 PARAM_STR 传递：布尔值在 MySQL
-      // native prepare 下被序列化为空串、整型与 NULL 丧失原生语义，
-      // 因此非空绑定时先按 PHP 类型显式声明绑定类型再执行
-      if ($bindings === []) {
-        $stmt->execute();
-      } else {
-        $this->bindStatementValues($stmt, $bindings);
-        $stmt->execute(null);
-      }
-      // 大小写不敏感判定写语句类型：小写 SQL 同样需要返回自增 ID，
-      // 否则 insertGetId 会静默退化为返回 statement
-      $isInsertLike = stripos($sql, 'INSERT') === 0 || stripos($sql, 'REPLACE') === 0;
-      if (!empty($getId) && $isInsertLike) {
-        return $connect->lastInsertId($getId);
-      }
-    } catch (PDOException $e) {
-      // 抛出异常（errorInfo[1] 在部分驱动下可能未定义，回退到异常码）
-      throw new DbException(
-        $e->getMessage(),
-        $e->errorInfo[1] ?? $e->getCode(),
-        // 异常携带占位符形式的 SQL 而非合并绑定值后的文本，防止 where 值
-        // （如密码等敏感字段）随异常消息进入日志或响应造成信息泄露
-        $sql,
-        $e
-      );
-    } finally {
-      // 归还连接
-      $manager->put($this, $connect);
-    }
-    return $stmt;
   }
 
   /**

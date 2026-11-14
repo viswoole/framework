@@ -117,7 +117,9 @@ class CacheManager
         $name . '缓存驱动配置错误，驱动类需实现' . CacheDriverInterface::class . '接口'
       );
     }
-    $this->stores[strtolower($name)] = $driver;
+    // 装饰器跟随商店生命周期，是否采集由当前请求上下文决定。
+    $this->stores[strtolower($name)] = $this->config->get('monitor.enabled', false)
+      ? new MonitoredDriver($driver, strtolower($name)) : $driver;
   }
 
   /**

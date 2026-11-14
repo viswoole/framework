@@ -1,4 +1,5 @@
 <?php
+
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -18,10 +19,12 @@ namespace Viswoole\Router;
 use InvalidArgumentException;
 use RuntimeException;
 use Viswoole\Core\App;
+use Viswoole\Core\Common\PathNormalizer;
 use Viswoole\Core\Config;
 use Viswoole\Core\Event;
 use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Middleware;
+use Viswoole\Monitor\Http\RouteCapture;
 use Viswoole\Router\ApiDoc\ApiDocParseTool;
 use Viswoole\Router\Exception\RouteNotFoundException;
 use Viswoole\Router\Route\BaseRoute;
@@ -143,8 +146,8 @@ class Router extends Collector
    */
   public function getApiList(): array
   {
-    if (!$this->enableApiDoc) return ['count' => 0, 'routes' => []];
-    if (!isset($this->init)) throw new RuntimeException('路由正在初始化，请稍后再试');
+    if (!$this->enableApiDoc) { return ['count' => 0, 'routes' => []]; }
+    if (!isset($this->init)) { throw new RuntimeException('路由正在初始化，请稍后再试'); }
     return ApiDocParseTool::parse($this->getRoutes());
   }
 
@@ -209,15 +212,7 @@ class Router extends Collector
     // 候选路径：完整路径优先（点号属于动态参数值，如 /user/john.doe），
     // 命中路由但伪静态后缀校验失败时再尝试剥离后缀的路径（仅按最后一个
     // 不含 / 的点段剥离）。无点号时仅一个候选，保持原语义
-    $candidates = [[$decodedPath, '']];
-    $dotPos = strrpos($decodedPath, '.');
-    if ($dotPos !== false) {
-      $ext = substr($decodedPath, $dotPos + 1);
-      if ($ext !== '' && !str_contains($ext, '/')) {
-        $strippedPath = rtrim(substr($decodedPath, 0, $dotPos), '/');
-        if ($strippedPath !== '') $candidates[] = [$strippedPath, $ext];
-      }
-    }
+    $candidates = PathNormalizer::candidates($decodedPath);
     $pattern = [];
     /** @var Route|null $route 路由 */
     $route = null;
@@ -251,7 +246,7 @@ class Router extends Collector
         }
         // 遍历正则匹配路由（使用原始大小写路径，保留动态参数值大小写）
         foreach (array_keys($routes) as $regex) {
-          if (!preg_match($regex, $candPath, $matches)) continue;
+          if (!preg_match($regex, $candPath, $matches)) { continue; }
           $routeIndex = $this->selectRouteIndex($routes[$regex], $method);
           if ($routeIndex === null) {
             // 路径命中但该正则下无匹配请求方法的路由，
@@ -271,7 +266,7 @@ class Router extends Collector
         }
       }
       // 未命中任何路由则尝试下一候选
-      if ($route === null) continue;
+      if ($route === null) { continue; }
       // 伪静态后缀校验不通过时不抛异常，回退下一候选：
       // 完整路径候选可能把后缀误当作参数值的一部分（如 /article/5.html 与 {id}）
       if (!in_array('*', $route->getSuffix()) && !in_array($ext, $route->getSuffix())) {
@@ -284,7 +279,7 @@ class Router extends Collector
     }
     try {
       if (is_null($route)) {
-        if ($suffixError !== null) throw $suffixError;
+        if ($suffixError !== null) { throw $suffixError; }
         throw new RouteNotFoundException(
           $pathMatched
             ? "request method '$method' is not allowed"
@@ -296,14 +291,17 @@ class Router extends Collector
       // 需放行进入中间件管道，由跨域中间件短路响应，避免预检被 404 拦截）
       if ($method !== 'OPTIONS') {
         $this->checkOption(
-          $route->getMethod(), $method, "request method '$method' is not allowed"
+          $route->getMethod(),
+          $method,
+          "request method '$method' is not allowed"
         );
       }
       // 判断域名
       $this->checkOption($route->getDomain(), $domain, "request domain '$domain' is not allowed");
       // 伪静态后缀已在候选循环中校验（不通过时回退下一候选），无需重复校验
       // 动态路由参数先交由回调处理（如 HTTP 场景并入 Request 的 GET 参数）
-      if (!empty($pattern) && $callback) $callback($pattern);
+      RouteCapture::record($route->getCiteLink(), $route->getPaths(), $pattern, $route->getHandler());
+      if (!empty($pattern) && $callback) { $callback($pattern); }
       // 修复#8: $params 必须先初始化再合并，否则未显式传参时（如 HTTP 请求）动态路由
       // 参数无法并入注入参数，方法参数就不能按名隐式获取路由参数（/user/1024 → $id = 1024）。
       // 合并语义保持不变：路由匹配参数优先于手动传入的同名参数；GET/POST 请求参数仍需注解显式注入
@@ -321,7 +319,7 @@ class Router extends Collector
         $miss = $this->missRoutes['*'];
       }
       // 如果匹配到miss路由执行处理方法
-      if (isset($miss)) return $miss->handler();
+      if (isset($miss)) { return $miss->handler(); }
       // 未匹配则抛出异常
       throw $e;
     }
@@ -341,17 +339,7 @@ class Router extends Collector
    */
   private function decodeRequestPath(string $path): string
   {
-    // 无编码字符时直接返回，免去拆分开销
-    if (!str_contains($path, '%')) return $path;
-    $segments = explode('/', $path);
-    foreach ($segments as &$segment) {
-      if ($segment === '') continue;
-      $decoded = rawurldecode($segment);
-      // 解码引入新分隔符的段保持编码原样（注册侧 handlePaths 同规则，两侧对齐）
-      if (!str_contains($decoded, '/')) $segment = $decoded;
-    }
-    unset($segment);
-    return implode('/', $segments);
+    return PathNormalizer::decode($path);
   }
 
   /**
@@ -367,8 +355,8 @@ class Router extends Collector
    */
   private function selectRouteIndex(array $methodMap, string $method): ?string
   {
-    if (isset($methodMap[$method])) return $methodMap[$method];
-    if (isset($methodMap['*'])) return $methodMap['*'];
+    if (isset($methodMap[$method])) { return $methodMap[$method]; }
+    if (isset($methodMap['*'])) { return $methodMap['*']; }
     if ($method === 'OPTIONS') {
       // reset() 在空数组上返回 false，需显式判空
       return $methodMap === [] ? null : reset($methodMap);
