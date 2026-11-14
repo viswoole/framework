@@ -7,3 +7,4 @@
 # 忽略测试生成的运行时目录
 /runtime/
 default.profraw
+/docs/
