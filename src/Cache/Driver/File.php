@@ -22,9 +22,10 @@ use Override;
 use Swoole\Coroutine\System;
 use Throwable;
 use Viswoole\Cache\Driver;
+use Viswoole\Cache\Driver\File\ArrayOperations;
+use Viswoole\Cache\Driver\File\LockStore;
 use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Core\Common\Filesystem;
-use Viswoole\Core\Coroutine;
 use Viswoole\Core\Exception\FilesystemException;
 
 /**
@@ -37,15 +38,23 @@ use Viswoole\Core\Exception\FilesystemException;
  */
 class File extends Driver
 {
+  use ArrayOperations;
+
+  /** 普通缓存键禁止使用的内部目录名，清缓存时永久保留。 */
+  public const string LOCK_DIRECTORY = '.viswoole-locks';
+
   public const string EXPIRE_PATTERN = '/^expire\((\d+)\)/';
   /**
    * @var string 缓存文件存储根目录
    */
   protected string $storage;
   /**
-   * @var array<string,array{scene:string,secretKey:string,autoUnlock:bool,lockHandle:resource}> 当前持有锁的列表
+   * @var array<string,array{scene:string,autoUnlock:bool}> 当前持有锁的列表
    */
   private array $lockList = [];
+
+  /** @var LockStore|null 与缓存数据隔离的租约存储 */
+  private ?LockStore $lockStore = null;
 
   /**
    * 初始化文件缓存驱动
@@ -140,6 +149,9 @@ class File extends Driver
       throw new InvalidArgumentException("非法的缓存键（禁止反斜杠）：$key");
     }
     foreach (explode('/', $key) as $segment) {
+      if (strcasecmp($segment, self::LOCK_DIRECTORY) === 0) {
+        throw new InvalidArgumentException("缓存键不能访问内部锁目录：$key");
+      }
       if ($segment === '..') {
         throw new InvalidArgumentException("非法的缓存键（禁止路径穿越）：$key");
       }
@@ -186,8 +198,8 @@ class File extends Driver
     try {
       $result = is_file($path) && unlink($path);
       $dir = dirname($path);
-      // 如果目录为空，删除目录
-      if (count(glob($dir . '/*')) === 0) rmdir($dir);
+      // 隐藏的锁目录也属于有效内容，不能因 glob 忽略隐藏项而删除父目录。
+      if (!(new FilesystemIterator($dir))->valid()) rmdir($dir);
       return $result;
     } catch (Throwable) {
       return false;
@@ -352,7 +364,7 @@ class File extends Driver
   }
 
   /**
-   * 递归删除指定目录及其下所有缓存文件
+   * 递归清理缓存数据，保留内部锁区域及缓存根目录
    *
    * @param string $dirname 目录路径
    * @return bool 清理成功返回 true
@@ -360,17 +372,22 @@ class File extends Driver
   protected function rmdir(string $dirname): bool
   {
     if (!is_dir($dirname)) return true;
-
-    $items = new FilesystemIterator($dirname);
-
-    foreach ($items as $item) {
-      if ($item->isDir()) {
-        $this->rmdir($item->getPathname());
-      } else {
-        $this->unlink($item->getPathname());
+    $isSuccessful = true;
+    $hasLockDirectory = false;
+    foreach (new FilesystemIterator($dirname) as $item) {
+      if (strcasecmp($item->getFilename(), self::LOCK_DIRECTORY) === 0) {
+        $hasLockDirectory = true;
+        continue;
       }
+      $isRemoved = $item->isDir()
+        ? $this->rmdir($item->getPathname())
+        : @unlink($item->getPathname());
+      $isSuccessful = $isRemoved && $isSuccessful;
     }
-    return !is_dir($dirname) || rmdir($dirname);
+    // 保留根目录，clear 与首次创建内部锁目录交错时也不删除其父目录。
+    $isRoot = rtrim($dirname, DIRECTORY_SEPARATOR) === rtrim($this->storage, DIRECTORY_SEPARATOR);
+    if ($isRoot || $hasLockDirectory) return $isSuccessful;
+    return (!is_dir($dirname) || @rmdir($dirname)) && $isSuccessful;
   }
 
   /**
@@ -385,77 +402,33 @@ class File extends Driver
     float|int $sleep = 0.2
   ): string
   {
-    $expire = $expire <= 0 ? null : time() + $expire;
-
-    if ($retry <= 0) $retry = 1;
-
-    $result = false;
-
     $scene = $this->getLockKey($scene);
-
-    $filename = $this->getLockFilename($scene);
-
-    $lockId = md5(uniqid("{$scene}_", true) . '_' . Coroutine::getCid());
-
-    $data = $expire ? "expire($expire)$lockId" : $lockId;
-
-    while ($retry-- > 0) {
-
-      // 修复：使用 'c+' 模式打开文件，避免 'w' 模式截断已有锁文件内容导致无法判断上一个锁状态
-      $lockHandle = fopen($filename, 'c+');
-      if ($lockHandle === false) {
-        System::sleep($sleep);
-        continue;
+    $lockId = bin2hex(random_bytes(16));
+    $store = $this->getLockStore();
+    $attempts = max(1, $retry);
+    while ($attempts-- > 0) {
+      if ($store->acquire($scene, $lockId, $expire)) {
+        $this->lockList[$lockId] = ['scene' => $scene, 'autoUnlock' => $autoUnlock];
+        return $lockId;
       }
-
-      if (flock($lockHandle, LOCK_EX | LOCK_NB)) {
-        // flock 成功意味着没有其他进程持有锁
-        // 读取文件内容，仅用于判断上一个锁是否已过期（处理进程崩溃未释放锁的情况）
-        $fileContent = stream_get_contents($lockHandle, 0, 0);
-        // 仅当上一个锁有过期时间且未过期时才重试；无过期时间(-1)或已过期(true)都应获取锁
-        $expireStatus = $fileContent === '' ? true : $this->hasExpire($fileContent);
-        if ($expireStatus !== true && $expireStatus > 0) {
-          // 上一个锁有过期时间且未过期，取锁失败，释放当前锁并关闭句柄后重试
-          flock($lockHandle, LOCK_UN);
-          fclose($lockHandle);
-          System::sleep($sleep);
-          continue;
-        }
-        // 将锁ID写入锁文件，先截断旧内容再写入
-        ftruncate($lockHandle, 0);
-        rewind($lockHandle);
-        fwrite($lockHandle, $data);
-        // 刷新文件缓冲区
-        fflush($lockHandle);
-        // 记录到锁列表
-        $this->lockList[$lockId] = [
-          'scene' => $scene,
-          'secretKey' => $data,
-          'autoUnlock' => $autoUnlock,
-          'lockHandle' => $lockHandle
-        ];
-        $result = true;
-        break;
-      } else {
-        // 修复：未获得锁时关闭句柄避免文件句柄泄漏，再休眠重试
-        fclose($lockHandle);
-        System::sleep($sleep);
-      }
+      if ($attempts > 0 && $sleep > 0) System::sleep($sleep);
     }
-    if ($result === false) throw new CacheErrorException('缓存系统繁忙，请稍后重试');
-    return $lockId;
+    throw new CacheErrorException('缓存系统繁忙，请稍后重试');
   }
 
   /**
-   * 生成锁文件的完整路径
+   * 使用存储目录内的保留区域，仅要求缓存目录本身可写。
    *
-   * @param string $scene 锁场景标识
-   * @return string 锁文件路径
+   * @return LockStore 文件租约存储
    */
-  private function getLockFilename(string $scene): string
+  private function getLockStore(): LockStore
   {
-    $dir = $this->dir('/lock');
-    return $dir . $scene;
+    if ($this->lockStore === null) {
+      $storage = realpath($this->dir());
+      if ($storage === false) throw new CacheErrorException('解析文件缓存目录失败');
+      $this->lockStore = new LockStore($storage . DIRECTORY_SEPARATOR . self::LOCK_DIRECTORY);
+    }
+    return $this->lockStore;
   }
 
   /**
@@ -475,31 +448,11 @@ class File extends Driver
   #[Override]
   public function unlock(string $id): bool
   {
-    if (empty($this->lockList)) return false;
     if (!isset($this->lockList[$id])) return false;
-    $lockInfo = $this->lockList[$id];
-    $lockHandle = $lockInfo['lockHandle'];
-    $secretKey = $lockInfo['secretKey'];
-    if (is_resource($lockHandle)) {
-      // 读取文件内容
-      rewind($lockHandle);
-      $fileContent = stream_get_contents($lockHandle);
-      if ($fileContent === $secretKey) {
-        // 修复：解锁前先清空文件内容，避免重新获取锁时读到旧的过期数据导致误判
-        ftruncate($lockHandle, 0);
-        rewind($lockHandle);
-        fflush($lockHandle);
-        // 释放锁并关闭句柄
-        flock($lockHandle, LOCK_UN);
-        fclose($lockHandle);
-        unset($this->lockList[$id]);
-        return true;
-      } else {
-        return false;
-      }
-    } else {
-      return false;
-    }
+    $released = $this->getLockStore()->release($this->lockList[$id]['scene'], $id);
+    // 释放操作已等待互斥量；成功释放或已被接管的租约均可移除本地记录。
+    unset($this->lockList[$id]);
+    return $released;
   }
 
   /**
@@ -509,64 +462,5 @@ class File extends Driver
   public function connect(): File
   {
     return $this;
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override]
-  public function sAddArray(
-    string       $key,
-    array|string $values,
-  ): false|int
-  {
-    if (is_string($values)) $values = [$values];
-
-    $oldArray = $this->getArray($key);
-
-    $oldArray = $oldArray === false ? [] : $oldArray;
-
-    $newArray = array_merge($oldArray, $values);
-
-    $oldLen = count($oldArray);
-
-    $newLen = count($newArray);
-
-    if ($oldLen === $newLen) return false;
-    $result = $this->set($key, $newArray);
-    return $result ? $newLen - $oldLen : false;
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override]
-  public function getArray(string $key): array|false
-  {
-    // 修复问题#4：原实现 get($key, []) 永远返回数组不会返回 false，
-    // 改为缓存不存在时返回 false，与接口声明 array|false 一致
-    $result = $this->get($key);
-    if ($result === null) return false;
-    return is_array($result) ? $result : [$result];
-  }
-
-  /**
-   * @inheritDoc
-   */
-  #[Override]
-  public function sRemoveArray(
-    string       $key,
-    array|string $values,
-  ): false|int
-  {
-    $array = $this->getArray($key);
-    if (empty($array)) return 0;
-    if (is_string($values)) $values = [$values];
-    $newArray = array_filter($array, function ($value) use ($values) {
-      return !in_array($value, $values);
-    });
-    $count = count($array) - count($newArray);
-    $result = $this->set($key, $newArray);
-    return $result ? $count : false;
   }
 }

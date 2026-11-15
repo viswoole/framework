@@ -153,7 +153,9 @@ class FileTest extends TestCase
   {
     $id = $this->cache->lock('test');
     static::assertTrue($this->cache->unlock($id));
-    static::assertTrue(is_string($this->cache->lock('test')));
+    $nextId = $this->cache->lock('test');
+    static::assertTrue(is_string($nextId));
+    static::assertTrue($this->cache->unlock($nextId));
   }
 
   /**
