@@ -26,11 +26,11 @@ final class ResponseHeaderBudgetTest extends TestCase
     $raw->method('status')->willReturn(true);
     $raw->method('isWritable')->willReturn(true);
     $raw->method('end')->willReturn(true);
-    $trace = $this->createTrace(['sensitive_keys' => ['headers']]);
+    $trace = $this->createTrace(['privacy' => PrivacyOptions::disableHeaders()]);
     TraceContext::attach($trace);
     self::assertTrue((new Response($raw))->json(['ok' => true])->send());
     $response = $trace->finish()['response'];
-    self::assertSame('[REDACTED]', $response['headers']);
+    self::assertSame('[CAPTURE_DISABLED]', $response['headers']);
     self::assertSame(['ok' => true], $response['body']['content']);
     self::assertTrue($response['completed']);
   }

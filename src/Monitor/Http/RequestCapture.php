@@ -19,6 +19,7 @@ namespace Viswoole\Monitor\Http;
 use Swoole\Http\Request;
 use Viswoole\Monitor\MonitorOptions;
 use Viswoole\Monitor\PayloadSanitizer;
+use Viswoole\Monitor\Privacy\Target;
 
 /**
  * Swoole 原始请求采集器
@@ -75,24 +76,40 @@ final readonly class RequestCapture
         'path' => $path,
       ];
     }
-    $type = $headers['content-type'] ?? '';
-    // 白名单之外不读取 rawContent，避免监控为文件或二进制请求额外复制正文。
-    $canCaptureBody = BodyContentType::canCapture($type);
-    $body = $canCaptureBody ? $request->rawContent() : false;
+    $context = ['path' => $path, 'method' => (string)($request->server['request_method'] ?? ''), 'direction' => 'request'];
+    $sanitizer = ($this->sanitizer ?? new PayloadSanitizer($this->options, $path))->forScope(Target::REQUEST_BODY, $context['method']);
     return [
       'method' => $request->server['request_method'] ?? '',
       'path' => $path,
       'host' => $headers['host'] ?? '',
       'ip' => $request->server['remote_addr'] ?? '',
-      'headers' => $headers, 'query' => $request->get ?? [],
-      'post' => $request->post ?? [],
-      // 非结构化正文不创建额外脱敏器；HTTP 入口复用监控器已解析的策略。
-      'body' => $canCaptureBody ? ($this->sanitizer ?? new PayloadSanitizer($this->options, $path))
-        ->sanitizeBody($body === false ? '' : $body, $type, [
-          'path' => $path, 'method' => (string)($request->server['request_method'] ?? ''), 'direction' => 'request',
-        ])
-        : BodyContentType::omitted($type, null),
+      'headers' => $sanitizer->forScope(Target::REQUEST_HEADERS)->canCapture() ? $headers : '[CAPTURE_DISABLED]',
+      'query' => $sanitizer->forScope(Target::REQUEST_QUERY)->canCapture() ? ($request->get ?? []) : '[CAPTURE_DISABLED]',
+      'post' => $sanitizer->canCapture() ? ($request->post ?? []) : '[CAPTURE_DISABLED]',
+      'body' => $this->captureBody($request, $sanitizer, $context),
       'files' => array_keys($request->files ?? []),
     ];
   }
+
+  /**
+   * 按策略读取正文
+   *
+   * 采集关闭或类型不支持时不调用 rawContent，也不执行裁剪处理器。
+   *
+   * @param Request $request 原始 HTTP 请求
+   * @param PayloadSanitizer $sanitizer 已解析请求正文策略的脱敏器
+   * @param array $context 请求身份及方向
+   * @return array 正文快照或未采集占位
+   */
+  private function captureBody(Request $request, PayloadSanitizer $sanitizer, array $context): array
+  {
+    if (!$sanitizer->canCapture()) {
+      return ['content' => '[CAPTURE_DISABLED]', 'bytes' => 0, 'size_known' => false, 'truncated' => false];
+    }
+    $type = $request->header['content-type'] ?? '';
+    if (!BodyContentType::canCapture($type)) { return BodyContentType::omitted($type, null); }
+    $body = $request->rawContent();
+    return $sanitizer->sanitizeBody($body === false ? '' : $body, $type, $context);
+  }
+
 }

@@ -18,6 +18,7 @@ namespace Viswoole\Monitor;
 
 use InvalidArgumentException;
 use Viswoole\Core\Common\PathNormalizer;
+use Viswoole\Monitor\Privacy\Policy;
 
 /**
  * 监控配置值对象
@@ -34,7 +35,7 @@ final readonly class MonitorOptions
   /** @var bool 排除路径匹配是否遵循区分大小写的路由配置 */
   public bool $isRouteCaseSensitive;
   public RequestIdOptions $requestId;
-  private SensitiveKeyPolicy $sensitiveKeyPolicy;
+  public Policy $privacy;
   public bool $captureRequest;
   public bool $captureResponse;
   public bool $captureDatabase;
@@ -56,8 +57,6 @@ final readonly class MonitorOptions
   public bool $canRecordSql;
   /** @var array<string> 不采集的路径列表，支持 fnmatch 通配符 */
   public array $excludePaths;
-  /** @var array<string> 敏感字段名规则（与内置规则合并，命中即脱敏） */
-  public array $sensitiveKeys;
 
   /**
    * 构造时完成验证
@@ -70,6 +69,11 @@ final readonly class MonitorOptions
    */
   public function __construct(array $options = [], bool $isRouteCaseSensitive = false)
   {
+    foreach (['sensitive_keys', 'sensitive_keys_by_path'] as $legacyKey) {
+      if (array_key_exists($legacyKey, $options)) {
+        throw new InvalidArgumentException('monitor.' . $legacyKey . ' 已移除，请迁移至 monitor.privacy（capture 与 redact_fields 分离）');
+      }
+    }
     $this->isRouteCaseSensitive = $isRouteCaseSensitive;
     $this->isEnabled = OptionValidator::readBoolean($options, 'enabled', false);
     $this->captureRequest = OptionValidator::readBoolean($options, 'capture_request', true);
@@ -83,7 +87,7 @@ final readonly class MonitorOptions
     $this->writer = OptionValidator::readNullableString($options, 'writer');
     $this->bodyTruncator = new BodyTruncator($options['body_truncator'] ?? null);
     $this->requestId = new RequestIdOptions($options['request_id'] ?? []);
-    $this->sensitiveKeyPolicy = new SensitiveKeyPolicy($options['sensitive_keys_by_path'] ?? [], $isRouteCaseSensitive);
+    $this->privacy = new Policy(array_key_exists('privacy', $options) ? $options['privacy'] : [], $isRouteCaseSensitive);
     $this->recordBindings = OptionValidator::readBoolean($options, 'record_bindings', false);
     $this->canRecordSql = OptionValidator::readBoolean($options, 'record_sql', false);
     $this->validateLists($options);
@@ -91,11 +95,6 @@ final readonly class MonitorOptions
       static fn (string $pattern): string => PathNormalizer::forMatching($pattern, $isRouteCaseSensitive),
       $options['exclude_paths'] ?? []
     );
-    $this->sensitiveKeys = array_merge([
-      'password', 'passwd', 'pwd', 'secret', 'token', 'authorization',
-      'cookie', 'set-cookie', 'api_key', 'access_token', 'refresh_token',
-      'sms_code', 'verify_code', 'verification_code', 'captcha', 'ticket', 'otp',
-    ], $options['sensitive_keys'] ?? []);
     if (!is_finite($this->thresholdMs) || $this->thresholdMs < 0
       || $this->maxBodyBytes < 0 || $this->maxOperations < 0 || $this->maxSnapshotBytes < 16384) {
       throw new InvalidArgumentException('monitor 阈值与采集上限必须非负，总快照预算至少 16384 字节');
@@ -130,19 +129,7 @@ final readonly class MonitorOptions
     return array_all($this->excludePaths, static fn (string $pattern): bool => !$matcher->matches($pattern));
   }
   /**
-   * 解析请求路径的有效脱敏字段
-   *
-   * @param string $path 原始请求路径
-   * @param PathPolicyMatcher|null $matcher 已解析的同一路径匹配器，避免重复解码
-   * @return list<string> 内置、全局和匹配路径的字段并集
-   */
-  public function sensitiveKeysForPath(string $path, ?PathPolicyMatcher $matcher = null): array
-  {
-    return $this->sensitiveKeyPolicy->resolve($this->sensitiveKeys, $path, $matcher);
-  }
-
-  /**
-   * 验证路径及敏感词配置
+   * 验证排除路径配置
    *
    * 不能把列表成员错误延迟到请求内，造成每次采集都异常降级。
    *
@@ -152,7 +139,7 @@ final readonly class MonitorOptions
    */
   private function validateLists(array $options): void
   {
-    foreach (['exclude_paths', 'sensitive_keys'] as $key) {
+    foreach (['exclude_paths'] as $key) {
       $values = $options[$key] ?? [];
       if (!is_array($values) || !array_all($values, static fn (mixed $value): bool => is_string($value) && trim($value) !== '')) {
         throw new InvalidArgumentException('monitor.' . $key . ' 必须是非空字符串列表');

@@ -18,6 +18,8 @@ namespace Viswoole\Monitor;
 
 use Viswoole\Monitor\Dto\SlowRequestSnapshot;
 use Viswoole\Monitor\Http\RequestPrivacy;
+use Viswoole\Monitor\Http\RequestRecordSanitizer;
+use Viswoole\Monitor\Privacy\Target;
 
 /**
  * 单个请求的有界采集状态
@@ -74,7 +76,8 @@ final class RequestTrace
     $this->requestId = $options->requestId->generate();
     $this->budget = new SnapshotBudget($options->maxSnapshotBytes);
     $this->summary = new OperationSummary();
-    $this->sanitizer = $sanitizer ?? new PayloadSanitizer($options, (string)($request['path'] ?? '/'));
+    $this->sanitizer = ($sanitizer ?? new PayloadSanitizer($options, (string)($request['path'] ?? '/')))
+      ->forScope(Target::REQUEST_METADATA, (string)($request['method'] ?? ''));
     $this->bodyContext = ['path' => (string)($request['path'] ?? '/'), 'method' => (string)($request['method'] ?? '')];
     $this->responseCapture = new ResponseCapture($options, $this->budget, $this->sanitizer);
     if (!$options->captureRequest) {
@@ -90,28 +93,14 @@ final class RequestTrace
    * 清洗请求元数据，预脱敏正文不重复递归
    *
    * body 由 RequestCapture::capture 按内容类型解析并完成字段级脱敏，
-   * 这里仅应用 body 整组隐藏规则，避免每请求对已脱敏正文做二次递归清洗。
+   * 这里按明确分组执行采集开关，避免每请求对已脱敏正文做二次递归清洗。
    *
    * @param array $request 请求元数据（由 RequestCapture::capture 提供）
    * @return array 已脱敏且有界的请求元数据
    */
   private function sanitizeRequest(array $request): array
   {
-    if (is_array($request['headers'] ?? null)) {
-      $request['headers'] = RequestPrivacy::sanitizeHeaders($request['headers']);
-    }
-    // 仅信任采集器产出的摘要结构（content + bytes 键齐全），测试直接传入
-    // 的未脱敏 body 仍走完整递归清洗
-    $isPreSanitizedBody = is_array($request['body'] ?? null)
-      && array_key_exists('content', $request['body'])
-      && array_key_exists('bytes', $request['body']);
-    $body = $isPreSanitizedBody ? $request['body'] : null;
-    if ($isPreSanitizedBody) { unset($request['body']); }
-    $safe = $this->sanitizer->sanitize($request);
-    if ($isPreSanitizedBody) {
-      $safe['body'] = $this->sanitizer->redactContainer('body', $body);
-    }
-    return $safe;
+    return (new RequestRecordSanitizer($this->sanitizer))->sanitize($request);
   }
 
   /**
@@ -133,7 +122,7 @@ final class RequestTrace
     }
     $index = count($this->operations);
     $metadata = SqlCapture::sanitize($metadata, $this->options->canRecordSql);
-    $safe = $this->sanitizer->sanitize(CacheKeySanitizer::sanitize($metadata));
+    $safe = $this->sanitizer->forScope(Target::OPERATION_METADATA)->sanitize(CacheKeySanitizer::sanitize($metadata));
     if (!$this->budget->replace('operation:' . $index, SnapshotBudget::size($safe) + 1024)) {
       $this->droppedOperations++;
       return null;
@@ -165,7 +154,7 @@ final class RequestTrace
     ]);
     $record = array_merge(
       $this->operations[$index],
-      $this->sanitizer->sanitize($outcome),
+      $this->sanitizer->forScope(Target::OPERATION_METADATA)->sanitize($outcome),
       ['duration_ms' => $duration]
     );
     if (!$this->budget->replace('operation:' . $index, SnapshotBudget::size($record) + 2)) {

@@ -17,6 +17,10 @@ declare(strict_types=1);
 namespace Viswoole\Monitor;
 
 use Viswoole\Monitor\Http\BodyContentType;
+use Viswoole\Monitor\Privacy\Context;
+use Viswoole\Monitor\Privacy\Fields;
+use Viswoole\Monitor\Privacy\Settings;
+use Viswoole\Monitor\Privacy\Target;
 
 /**
  * 数据脱敏与大小限制
@@ -28,22 +32,28 @@ use Viswoole\Monitor\Http\BodyContentType;
  */
 final readonly class PayloadSanitizer
 {
-  /** @var list<string> 当前请求路径的有效字段，不修改全局配置 */
-  private array $sensitiveKeys;
+  /** @var Settings 当前请求及分组的只读保护设置 */
+  private Settings $settings;
+  private Context $context;
+  private PathPolicyMatcher $matcher;
+  private string $path;
   /**
    * 构造脱敏器
    *
    * @param MonitorOptions $options 采集配置，提供敏感字段规则与正文上限
-   * @param string $path 当前请求原始路径
+   * @param string|Context $path 原始请求路径或明确分组的只读上下文
    * @param PathPolicyMatcher|null $matcher 已解析的同一路径匹配器，避免重复解码
    */
   public function __construct(
     private MonitorOptions $options,
-    private string $path = '/',
+    string|Context $path = '/',
     ?PathPolicyMatcher $matcher = null
   )
   {
-    $this->sensitiveKeys = $options->sensitiveKeysForPath($path, $matcher);
+    $this->context = is_string($path) ? new Context($path) : $path;
+    $this->path = $this->context->path;
+    $this->matcher = $matcher ?? new PathPolicyMatcher($this->path, $options->isRouteCaseSensitive);
+    $this->settings = $options->privacy->resolve($this->context, $this->matcher);
   }
 
   /**
@@ -61,26 +71,11 @@ final readonly class PayloadSanitizer
    * 判断字段名是否命中敏感规则
    *
    * @param string $key 字段名
-   * @return bool 归一化后包含任一敏感词时返回 true
+   * @return bool 归一化完整字段名命中时返回 true
    */
   public function isSensitiveField(string $key): bool
   {
-    // PDO 允许命名绑定键携带前导冒号，短敏感词也必须按同一逻辑识别。
-    $normalized = strtolower(str_replace(['-', '_'], '', ltrim($key, ':')));
-    foreach ($this->sensitiveKeys as $sensitiveKey) {
-      $needle = strtolower(str_replace(['-', '_'], '', $sensitiveKey));
-      if ($needle === '') { continue; }
-      // 短词（<4 字符，如 otp/pwd）子串误伤率过高（otp 命中 desktop），
-      // 仅要求完全相等；较长敏感词仍允许包含匹配以覆盖 x-authorization 等变体
-      if (strlen($needle) < 4) {
-        if ($normalized === $needle) { return true; }
-        continue;
-      }
-      if (str_contains($normalized, $needle)) {
-        return true;
-      }
-    }
-    return false;
+    return isset($this->settings->fields[Fields::normalize($key)]);
   }
 
   /**
@@ -94,6 +89,7 @@ final readonly class PayloadSanitizer
    */
   public function sanitize(mixed $value, int $depth = 0): mixed
   {
+    if (!$this->canCapture()) { return '[CAPTURE_DISABLED]'; }
     // 字节预算至少 4 KiB，保证 max_body_bytes=0 时元数据仍可采集
     $budget = ['bytes' => min(
       max(4096, $this->options->maxBodyBytes),
@@ -164,29 +160,41 @@ final readonly class PayloadSanitizer
   }
 
   /**
-   * 应用整组容器脱敏
+   * 派生明确作用域的脱敏器
    *
-   * 输入已经完成内容脱敏与局部限额，不再次递归，避免缩短原有深度预算。
+   * 请求身份与匹配器只读共享，作用域不写回当前实例，避免跨方向污染。
    *
-   * @param string $key 容器字段名
-   * @param array $value 已安全处理的容器数据
-   * @return array|string 原容器或统一脱敏标记
+   * @param Target $target 目标分组
+   * @param string|null $method 请求方法，为 null 时复用已知方法
+   * @return self 当前请求指定分组的独立脱敏器
    */
-  public function redactContainer(string $key, array $value): array|string
+  public function forScope(Target $target, ?string $method = null): self
   {
-    return $this->isSensitiveField($key) ? '[REDACTED]' : $value;
+    return new self($this->options, new Context($this->path, $method ?? $this->context->method, $target), $this->matcher);
+  }
+
+  /**
+   * 判断当前分组是否允许采集
+   *
+   * capture 只影响明确分组，与 redact_fields 中的业务字段名无关。
+   *
+   * @return bool 有效隐私规则允许采集
+   */
+  public function canCapture(): bool
+  {
+    return $this->settings->canCapture;
   }
 
   /**
    * 判断是否需要为超限正文保留处理器输入
    *
-   * 无处理器或整组隐藏时直接省略，避免为最终丢弃的内容额外复制大段正文。
+   * 无处理器或关闭采集时直接省略，避免为最终丢弃的内容额外复制大段正文。
    *
    * @return bool 当前请求策略允许执行已配置的裁剪处理器
    */
   public function canTruncateBody(): bool
   {
-    return $this->options->bodyTruncator->isEnabled && !$this->isSensitiveField('body');
+    return $this->options->bodyTruncator->isEnabled && $this->canCapture();
   }
 
   /**
@@ -197,11 +205,15 @@ final readonly class PayloadSanitizer
    */
   public function truncateBody(string $body, array $context): array
   {
+    $context = $this->resolveBodyContext($context);
+    $scope = $this->resolveBodyScope($context);
+    if ($scope !== $this) { return $scope->truncateBody($body, $context); }
+    if (!$this->canCapture()) { return ['content' => '[CAPTURE_DISABLED]', 'bytes' => strlen($body), 'truncated' => false]; }
     $limit = $this->options->bodyLimit();
     $content = '[BODY_LIMIT]';
-    // 整组隐藏时不向用户处理器暴露原文，也不支付其解析成本。
+    // 关闭采集时不向用户处理器暴露原文，也不支付其解析成本。
     if ($this->canTruncateBody()) {
-      $summary = $this->options->bodyTruncator->summarize($body, array_replace(['path' => $this->path, 'method' => '', 'direction' => 'response'], $context, ['max_bytes' => $limit]));
+      $summary = $this->options->bodyTruncator->summarize($body, array_replace($context, ['max_bytes' => $limit]));
       if ($summary !== null) {
         $safe = $this->sanitize($summary);
         if (SnapshotBudget::size($safe) <= $limit) { $content = $safe; }
@@ -217,12 +229,16 @@ final readonly class PayloadSanitizer
    *
    * @param string $body 完整正文
    * @param string $contentType MIME 类型
-   * @param array{path?:string,method?:string,direction?:string} $context 请求身份，独立使用时未知方法为空串
+   * @param array{path?:string,method?:string,direction?:string} $context 默认继承当前方向和方法，允许显式覆盖
    * @return array{content:mixed,bytes:int,truncated:bool} 正文摘要
    */
   public function sanitizeBody(string $body, string $contentType = '', array $context = []): array
   {
+    $context = $this->resolveBodyContext($context);
+    $scope = $this->resolveBodyScope($context);
+    if ($scope !== $this) { return $scope->sanitizeBody($body, $contentType, $context); }
     $bytes = strlen($body);
+    if (!$this->canCapture()) { return ['content' => '[CAPTURE_DISABLED]', 'bytes' => $bytes, 'truncated' => false]; }
     if (!BodyContentType::canCapture($contentType)) { return BodyContentType::omitted($contentType, $bytes); }
     // 空正文（204、空 JSON 响应）不是解析失败，避免记录误导性的不可解析标记
     if ($bytes === 0) { return ['content' => null, 'bytes' => 0, 'truncated' => false]; }
@@ -243,4 +259,37 @@ final readonly class PayloadSanitizer
     }
     return ['content' => $content, 'bytes' => $bytes, 'truncated' => false];
   }
+
+  /**
+   * 补齐正文身份上下文
+   *
+   * 默认继承当前请求方向和方法，只有显式上下文才能覆盖，避免关闭采集被默认响应策略绕过。
+   *
+   * @param array $context 调用方显式提供的上下文
+   * @return array 已包含路径、方法与正文方向的上下文
+   */
+  private function resolveBodyContext(array $context): array
+  {
+    return array_replace([
+      'path' => $this->path,
+      'method' => $this->context->method,
+      'direction' => str_starts_with($this->context->target->value, 'request.') ? 'request' : 'response',
+    ], $context);
+  }
+
+  /**
+   * 解析最终正文作用域
+   *
+   * 两个正文入口共用同一解析规则，覆盖方法或方向后重新选择策略，不改变原实例。
+   *
+   * @param array{method:string,direction:string} $context 已补齐的正文身份
+   * @return self 最终正文策略，身份一致时复用当前实例
+   */
+  private function resolveBodyScope(array $context): self
+  {
+    $target = $context['direction'] === 'request' ? Target::REQUEST_BODY : Target::RESPONSE_BODY;
+    return $this->context->target === $target && $this->context->method === $context['method']
+      ? $this : $this->forScope($target, $context['method']);
+  }
+
 }

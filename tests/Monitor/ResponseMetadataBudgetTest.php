@@ -83,7 +83,7 @@ final class ResponseMetadataBudgetTest extends TestCase
   /** @return void 展示字段整体脱敏不应被解析器状态反向泄漏。 */
   public function testRedactedContentTypeStillUsesSafeBodyParser(): void
   {
-    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys' => ['content_type']]), []);
+    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::redact(['content_type'])]), []);
     $trace->updateResponse(['content_type' => 'application/json']);
     $trace->appendResponse('{"password":"private","ok":true}', true);
     $record = $trace->finish();

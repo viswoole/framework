@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace Viswoole\Tests\Monitor;
 
-use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Viswoole\Monitor\MonitorOptions;
 use Viswoole\Monitor\RequestTrace;
@@ -26,9 +25,9 @@ final class PathSensitiveKeysTest extends TestCase
    */
   public function testAllMatchedRulesApplyAcrossCaptureSources(): void
   {
-    $options = new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys' => ['global_field'], 'sensitive_keys_by_path' => [
+    $options = new MonitorOptions(['threshold_ms' => 0, 'privacy' => array_merge(PrivacyOptions::redact(['global_field']), PrivacyOptions::paths([
       '/api/*' => ['code'], '/api/auth/*' => ['mobile'], '/api/auth/login' => ['x-private'],
-    ]]);
+    ]))]);
     $trace = new RequestTrace($options, ['path' => '/API/AUTH/%6cogin/',
       'query' => ['password' => 'synthetic', 'code' => 'synthetic', 'mobile' => 'synthetic', 'global_field' => 'synthetic']]);
     TraceContext::attach($trace);
@@ -53,12 +52,12 @@ final class PathSensitiveKeysTest extends TestCase
    */
   public function testPathRulesDoNotLeakIntoOtherRequests(): void
   {
-    $options = new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys_by_path' => ['/private/*' => ['name']]]);
+    $options = new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::paths(['/private/*' => ['name']])]);
     $private = new RequestTrace($options, ['path' => '/private/detail', 'query' => ['name' => 'visible']]);
     $public = new RequestTrace($options, ['path' => '/public/detail', 'query' => ['name' => 'visible']]);
     self::assertSame('[REDACTED]', $private->finish()['request']['query']['name']);
     self::assertSame('visible', $public->finish()['request']['query']['name']);
-    self::assertNotContains('name', $options->sensitiveKeys);
+    self::assertFalse((new \Viswoole\Monitor\PayloadSanitizer($options, '/public/detail'))->isSensitiveField('name'));
   }
 
   /**
@@ -68,21 +67,10 @@ final class PathSensitiveKeysTest extends TestCase
    */
   public function testPathCanHideWholeResponseBody(): void
   {
-    $options = new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys_by_path' => ['/private/*' => ['body']]]);
+    $options = new MonitorOptions(['threshold_ms' => 0, 'privacy' => ['rules' => [['paths' => ['/private/*'], 'response' => ['body' => ['capture' => false]]]]]]);
     $trace = new RequestTrace($options, ['path' => '/private/detail']);
     $trace->appendResponse('{"name":"synthetic"}', true);
-    self::assertSame('[REDACTED]', $trace->finish()['response']['body']);
-  }
-
-  /**
-   * 路径规则错误启动期拒绝
-   *
-   * @return void
-   */
-  public function testInvalidPathRuleIsRejected(): void
-  {
-    $this->expectException(InvalidArgumentException::class);
-    new MonitorOptions(['sensitive_keys_by_path' => ['/private/*' => [null]]]);
+    self::assertSame('[CAPTURE_DISABLED]', $trace->finish()['response']['body']['content']);
   }
 
   /**
@@ -92,7 +80,7 @@ final class PathSensitiveKeysTest extends TestCase
    */
   public function testPathRulesRespectRouterCaseAndEncodedSlashes(): void
   {
-    $options = new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys_by_path' => ['/private/login' => ['name']]], true);
+    $options = new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::paths(['/private/login' => ['name']])], true);
     foreach (['/PRIVATE/LOGIN', '/private%2Flogin'] as $path) {
       $trace = new RequestTrace($options, ['path' => $path, 'query' => ['name' => 'visible']]);
       self::assertSame('visible', $trace->finish()['request']['query']['name']);
@@ -108,7 +96,7 @@ final class PathSensitiveKeysTest extends TestCase
   {
     $writer = new InMemoryTraceWriter();
     $options = new MonitorOptions(['enabled' => true, 'threshold_ms' => 0,
-      'sensitive_keys_by_path' => ['/private/*' => ['name']]]);
+      'privacy' => PrivacyOptions::paths(['/private/*' => ['name']])]);
     $monitor = new \Viswoole\Monitor\SlowRequestMonitor($options, $writer);
     \Swoole\Coroutine\run(static function () use ($monitor): void {
       $done = new \Swoole\Coroutine\Channel(2);

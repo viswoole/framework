@@ -171,7 +171,7 @@ class DispatchRouteParamTest extends TestCase
   {
     foreach ([true, false] as $canCapture) {
       $trace = new RequestTrace(new MonitorOptions([
-        'threshold_ms' => 0, 'capture_request' => $canCapture, 'sensitive_keys' => ['id'],
+        'threshold_ms' => 0, 'capture_request' => $canCapture, 'privacy' => ['defaults' => ['request' => ['metadata' => ['redact_fields' => ['id']]]]],
       ]), ['path' => '/bench/user/424242424242']);
       TraceContext::attach($trace);
       try {

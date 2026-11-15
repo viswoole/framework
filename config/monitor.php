@@ -55,14 +55,28 @@ return [
   // 默认仅记录 SQL 的 SHA-256 摘要；开启原文后，SQL 字面量和注释可能含敏感信息。
   // 此开关与 record_bindings 独立，不使用正则猜测各数据库方言的字面量边界。
   'record_sql' => false,
-  // 追加业务敏感字段，不替换内置规则；body 可隐藏请求/响应整组正文，
-  // 输出字段的脱敏不会改变数据库/缓存的内部统计分类。
-  'sensitive_keys' => [],
-  // 按请求 path 追加字段，支持通配符；所有命中项与内置/全局规则取并集。
-  // 复用排除路径的单次解码、尾斜线和 router.case_sensitive 语义。
-  // 完整路径及去后缀候选命中的规则取并集，带点的真实路径也可能获得额外保护。
-  'sensitive_keys_by_path' => [
-    // '/api/auth/*' => ['code', 'mobile'],
-    // '/api/private/*' => ['body'],
+  // capture 只控制对应分组是否采集；redact_fields 只匹配业务字段名，body 没有特殊含义。
+  // 字段递归完全匹配，忽略大小写、下划线和连字符；内置敏感字段始终隐藏。
+  // 多条命中规则的字段取并集，任意 capture=false 均不能被其他规则重新开启。
+  'privacy' => [
+    'defaults' => [
+      'request' => [
+        'body' => ['capture' => true, 'redact_fields' => []], // 包含 post 副本
+        'query' => ['capture' => true, 'redact_fields' => []],
+        'headers' => ['capture' => true, 'redact_fields' => []],
+      ],
+      'response' => [
+        'body' => ['capture' => true, 'redact_fields' => []],
+        'headers' => ['capture' => true, 'redact_fields' => []],
+      ],
+    ],
+    // paths 必填且非空，methods 省略表示全部方法；方向与分组独立。
+    'rules' => [
+      // ['paths' => ['/admin/auth/profile/phone'], 'methods' => ['PUT'],
+      //   'request' => ['body' => ['redact_fields' => ['code', 'oldCode']]]],
+      // ['paths' => ['/admin/service-configs/*'],
+      //   'request' => ['body' => ['capture' => false], 'query' => ['capture' => false]],
+      //   'response' => ['body' => ['capture' => false]]],
+    ],
   ],
 ];

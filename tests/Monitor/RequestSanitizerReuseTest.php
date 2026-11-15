@@ -27,7 +27,7 @@ final class RequestSanitizerReuseTest extends TestCase
   public function testRequestCaptureReceivesTraceSanitizer(): void
   {
     $options = new MonitorOptions(['enabled' => true, 'threshold_ms' => 0,
-      'sensitive_keys_by_path' => ['/private/*' => ['code']]]);
+      'privacy' => PrivacyOptions::paths(['/private/*' => ['code']])]);
     $request = $this->createMock(Request::class);
     $request->server = ['path_info' => '/private/login'];
     $request->header = ['content-type' => 'application/json'];
@@ -42,7 +42,10 @@ final class RequestSanitizerReuseTest extends TestCase
     }, canReceiveSanitizer: true);
     $trace = TraceContext::current();
     self::assertNotNull($trace);
-    self::assertSame($received, (new ReflectionProperty(RequestTrace::class, 'sanitizer'))->getValue($trace));
+    // 作用域实例独立，但复用只读匹配器，不能跨方向修改脱敏规则。
+    $traceSanitizer = (new ReflectionProperty(RequestTrace::class, 'sanitizer'))->getValue($trace);
+    self::assertSame((new ReflectionProperty(PayloadSanitizer::class, 'matcher'))->getValue($received),
+      (new ReflectionProperty(PayloadSanitizer::class, 'matcher'))->getValue($traceSanitizer));
     self::assertSame(['code' => '[REDACTED]', 'ok' => true], $trace->snapshot()->request->body->content);
     $monitor->finish();
   }

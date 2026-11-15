@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-/* 职责：复现路径排除、内部操作分类和正文容器脱敏三个审查问题。 */
+/* 职责：复现路径排除、内部操作分类和正文关闭采集三个审查问题。 */
 
 namespace Viswoole\Tests\Monitor;
 
@@ -55,7 +55,7 @@ final class ReviewRegressionTest extends TestCase
   {
     foreach ([0, 1] as $limit) {
       $trace = new RequestTrace(new MonitorOptions([
-        'threshold_ms' => 0, 'max_operations' => $limit, 'sensitive_keys' => ['type'],
+        'threshold_ms' => 0, 'max_operations' => $limit, 'privacy' => PrivacyOptions::redact(['type']),
       ]), []);
       TraceContext::attach($trace);
       TraceContext::measure(['type' => 'database', 'sql' => 'SELECT 1'], static fn (): bool => true);
@@ -73,17 +73,17 @@ final class ReviewRegressionTest extends TestCase
    *
    * @return void
    */
-  public function testBodyContainerRuleRedactsBothDirections(): void
+  public function testCaptureSwitchDisablesBothBodies(): void
   {
-    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys' => ['body']]), [
+    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::disableBodies()]), [
       'body' => ['content' => ['name' => 'synthetic']],
     ]);
     $trace->updateResponse(['content_type' => 'application/json']);
     $trace->appendResponse('{"name":');
     $trace->appendResponse('"synthetic"}', true);
     $record = $trace->finish();
-    self::assertSame('[REDACTED]', $record['request']['body']);
-    self::assertSame('[REDACTED]', $record['response']['body']);
+    self::assertSame('[CAPTURE_DISABLED]', $record['request']['body']['content']);
+    self::assertSame('[CAPTURE_DISABLED]', $record['response']['body']['content']);
     self::assertStringNotContainsString('synthetic', json_encode($record, JSON_THROW_ON_ERROR));
     self::assertTrue($record['response']['completed']);
   }
@@ -116,7 +116,7 @@ final class ReviewRegressionTest extends TestCase
   }
 
   /**
-   * 超限正文依然应用容器脱敏
+   * 超限正文依然应用关闭采集
    *
    * @return void
    */
@@ -124,10 +124,10 @@ final class ReviewRegressionTest extends TestCase
   {
     foreach ([true, false] as $isCaptured) {
       $trace = new RequestTrace(new MonitorOptions([
-        'threshold_ms' => 0, 'max_body_bytes' => 1, 'capture_response' => $isCaptured, 'sensitive_keys' => ['body'],
+        'threshold_ms' => 0, 'max_body_bytes' => 1, 'capture_response' => $isCaptured, 'privacy' => PrivacyOptions::disableBodies(),
       ]), []);
       $trace->appendResponse('synthetic', true);
-      self::assertSame('[REDACTED]', $trace->finish()['response']['body']);
+      self::assertSame('[CAPTURE_DISABLED]', $trace->finish()['response']['body']['content']);
     }
   }
 
@@ -139,7 +139,7 @@ final class ReviewRegressionTest extends TestCase
   public function testBudgetDroppedOperationsKeepTheirInternalType(): void
   {
     $trace = new RequestTrace(new MonitorOptions([
-      'threshold_ms' => 0, 'max_snapshot_bytes' => 16384, 'sensitive_keys' => ['type'],
+      'threshold_ms' => 0, 'max_snapshot_bytes' => 16384, 'privacy' => PrivacyOptions::redact(['type']),
     ]), []);
     TraceContext::attach($trace);
     for ($index = 0; $index < 30; $index++) {

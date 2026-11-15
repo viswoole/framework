@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-/* 职责：验证默认省略及整组脱敏不额外复制超限分段，不依赖外部服务。 */
+/* 职责：验证默认省略及关闭采集不额外复制超限分段，不依赖外部服务。 */
 
 namespace Viswoole\Tests\Monitor;
 
@@ -28,17 +28,17 @@ final class BodyCaptureMemoryTest extends TestCase
   }
 
   /**
-   * 整组脱敏不复制大分段
+   * 关闭采集不复制大分段
    *
-   * 即使配置处理器，被隐藏正文也不应为不可调用的处理器构造输入。
+   * 即使配置处理器，未采集正文也不应为不可调用的处理器构造输入。
    *
    * @return void 断言完成
    */
   public function testRedactedBodyDoesNotCopyOversizedChunk(): void
   {
-    $options = new MonitorOptions(['max_body_bytes' => 8192, 'sensitive_keys' => ['body'],
-      'body_truncator' => static function (): array { self::fail('整组脱敏不能调用处理器'); }]);
-    $this->assertOversizedChunkIsNotCopied($options);
+    $options = new MonitorOptions(['max_body_bytes' => 8192, 'privacy' => PrivacyOptions::disableBodies(),
+      'body_truncator' => static function (): array { self::fail('关闭采集不能调用处理器'); }]);
+    $this->assertOversizedChunkIsNotCopied($options, '[CAPTURE_DISABLED]');
   }
 
   /**
@@ -86,9 +86,10 @@ final class BodyCaptureMemoryTest extends TestCase
    * 允许小额分配用于占位与元信息，禁止复制整个 16 MiB 输入片段。
    *
    * @param MonitorOptions $options 当前采集策略
+   * @param string $expectedContent 当前场景应输出的占位
    * @return void 断言完成
    */
-  private function assertOversizedChunkIsNotCopied(MonitorOptions $options): void
+  private function assertOversizedChunkIsNotCopied(MonitorOptions $options, string $expectedContent = '[BODY_LIMIT]'): void
   {
     $capture = new ResponseCapture($options, new SnapshotBudget($options->maxSnapshotBytes), new PayloadSanitizer($options));
     $capture->updateResponse(['content_type' => 'application/json']);
@@ -101,12 +102,8 @@ final class BodyCaptureMemoryTest extends TestCase
     self::assertLessThan(1024 * 1024, $extraBytes);
     $snapshot = $capture->snapshot();
     self::assertTrue($snapshot['completed']);
-    if (is_array($snapshot['body'])) {
-      self::assertSame(1000 + strlen($chunk), $snapshot['body']['bytes']);
-      self::assertSame('[BODY_LIMIT]', $snapshot['body']['content']);
-      self::assertTrue($snapshot['body']['truncated']);
-    } else {
-      self::assertSame('[REDACTED]', $snapshot['body']);
-    }
+    self::assertSame(1000 + strlen($chunk), $snapshot['body']['bytes']);
+    self::assertSame($expectedContent, $snapshot['body']['content']);
+    self::assertSame($expectedContent === '[BODY_LIMIT]', $snapshot['body']['truncated']);
   }
 }

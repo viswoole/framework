@@ -68,7 +68,7 @@ final class MonitoringBoundaryTest extends TestCase
    */
   public function testShortSensitiveWordsRequireExactMatch(): void
   {
-    $sanitizer = new PayloadSanitizer(new MonitorOptions(['sensitive_keys' => ['otp']]));
+    $sanitizer = new PayloadSanitizer(new MonitorOptions(['privacy' => PrivacyOptions::redact(['otp'])]));
     $safe = $sanitizer->sanitize(['otp' => 'synthetic', 'desktop' => 'visible']);
     self::assertSame('[REDACTED]', $safe['otp']);
     self::assertSame('visible', $safe['desktop']);

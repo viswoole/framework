@@ -6,7 +6,6 @@ declare(strict_types=1);
 
 namespace Viswoole\Tests\Monitor;
 
-use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Viswoole\Monitor\MonitorOptions;
 use Viswoole\Monitor\PayloadSanitizer;
@@ -85,16 +84,5 @@ final class SnapshotBudgetTest extends TestCase
     $trace->updateResponseHeader('X-Late', 'synthetic');
     self::assertSame($before, $trace->finish(123 + $trace->startedAt));
     self::assertNull(TraceContext::current());
-  }
-
-  /**
-   * 配置列表错误立即拒绝
-   *
-   * @return void
-   */
-  public function testInvalidSensitiveRuleFailsDuringConfiguration(): void
-  {
-    $this->expectException(InvalidArgumentException::class);
-    new MonitorOptions(['sensitive_keys' => [null]]);
   }
 }

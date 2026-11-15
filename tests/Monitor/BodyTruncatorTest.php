@@ -72,7 +72,7 @@ final class BodyTruncatorTest extends TestCase
   /** @return void 不需要裁剪或不允许采集时不调用用户代码。 */
   public function testHandlerDoesNotBypassCapturePolicies(): void
   {
-    foreach ([[], ['capture_response' => false], ['sensitive_keys' => ['body']]] as $overrides) {
+    foreach ([[], ['capture_response' => false], ['privacy' => PrivacyOptions::disableBodies()]] as $overrides) {
       $calls = 0;
       $options = new MonitorOptions($overrides + ['max_body_bytes' => 20,
         'body_truncator' => static function () use (&$calls): array { ++$calls; return ['code' => 0]; }]);

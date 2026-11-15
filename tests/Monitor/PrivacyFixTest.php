@@ -31,7 +31,7 @@ final class PrivacyFixTest extends TestCase
   public function testPathRedactionUsesEffectiveFieldPolicy(): void
   {
     $trace = new RequestTrace(new MonitorOptions([
-      'threshold_ms' => 0, 'sensitive_keys_by_path' => ['/auth/*' => ['code']],
+      'threshold_ms' => 0, 'privacy' => PrivacyOptions::paths(['/auth/*' => ['code']]),
     ]), ['path' => '/auth/synthetic-private']);
     $trace->updateRoute(['parameters' => ['code' => 'synthetic-private']]);
     self::assertSame('[REDACTED]', $trace->snapshot()->request->path);

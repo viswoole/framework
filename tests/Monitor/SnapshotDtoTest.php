@@ -71,7 +71,7 @@ final class SnapshotDtoTest extends TestCase
    */
   public function testRedactedTypeStillProducesDatabaseDto(): void
   {
-    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys' => ['type', 'body', 'status']]), []);
+    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::disableBodies(['type', 'status'])]), []);
     TraceContext::attach($trace);
     try {
       TraceContext::measure(['type' => 'database', 'sql' => 'SELECT 1'], static fn (): bool => true);
@@ -83,7 +83,7 @@ final class SnapshotDtoTest extends TestCase
       self::assertSame('[REDACTED]', $snapshot->operations[0]->type);
       self::assertSame(0, $snapshot->response->status);
       self::assertSame(\Viswoole\Monitor\Dto\CaptureState::REDACTED, $snapshot->response->fieldStates['status']);
-      self::assertTrue($snapshot->response->body->isRedacted);
+      self::assertSame(\Viswoole\Monitor\Dto\CaptureState::NOT_CAPTURED, $snapshot->response->body->state);
       self::assertNull($snapshot->response->body->content);
     } finally {
       TraceContext::clear();

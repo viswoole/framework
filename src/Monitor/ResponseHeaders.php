@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Viswoole\Monitor;
 
 use Viswoole\Monitor\Http\UriSanitizer;
+use Viswoole\Monitor\Privacy\Target;
 
-/** 响应头采集状态；预算跨更新共享，内部始终保存数组，输出时才脱敏容器。 */
+/** 响应头采集状态；预算跨更新共享，采集开关先于字段处理生效。 */
 final class ResponseHeaders
 {
   private const int MAX_HEADERS = 100;
@@ -29,7 +30,7 @@ final class ResponseHeaders
   public function __construct(MonitorOptions $options, private readonly ?SnapshotBudget $budget = null, ?PayloadSanitizer $sanitizer = null)
   {
     $this->maxBytes = min(max(4096, $options->maxBodyBytes), intdiv($options->maxSnapshotBytes, 4));
-    $this->sanitizer = $sanitizer ?? new PayloadSanitizer($options);
+    $this->sanitizer = ($sanitizer ?? new PayloadSanitizer($options))->forScope(Target::RESPONSE_HEADERS);
   }
 
   /**
@@ -40,6 +41,7 @@ final class ResponseHeaders
    */
   public function record(string $key, string $value): void
   {
+    if (!$this->sanitizer->canCapture()) { return; }
     $key = strtolower($key);
     $this->remove($key);
     // 先检查原始长度，避免为超大标头创建额外的日志副本。
@@ -65,14 +67,12 @@ final class ResponseHeaders
   }
 
   /**
-   * 生成独立日志快照；headers 规则可以隐藏整组，不改变采集器的内部类型。
+   * 生成独立日志快照；关闭采集使用明确占位，不改变内部类型。
    * @return array{headers:mixed,headers_truncated:bool} 标头摘要
    */
   public function snapshot(): array
   {
-    // 逐条记录时已完成字段级脱敏，这里仅应用 headers 整组隐藏规则，
-    // 不再递归重洗已脱敏数据（避免双重清洗开销）
-    $headers = $this->sanitizer->redactContainer('headers', $this->headers);
+    $headers = $this->sanitizer->canCapture() ? $this->headers : '[CAPTURE_DISABLED]';
     return [
       'headers' => $headers,
       'headers_truncated' => $this->hasTruncated || (is_array($headers) && isset($headers['__truncated'])),

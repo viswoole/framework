@@ -59,7 +59,7 @@ final class LocationPrivacyTest extends TestCase
   /** @return void URL 清理后仍须执行自定义字段脱敏。 */
   public function testLocationFieldCanStillBeFullyRedacted(): void
   {
-    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys' => ['location']]), []);
+    $trace = new RequestTrace(new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::redact(['location'])]), []);
     $trace->updateResponseHeader('Location', '/callback?token=private');
     self::assertSame('[REDACTED]', $trace->finish()['response']['headers']['location']);
   }

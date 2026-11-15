@@ -56,7 +56,7 @@ final class BodyTruncationContextTest extends TestCase
   {
     $contexts = [];
     $options = new MonitorOptions(['enabled' => true, 'threshold_ms' => 0, 'max_body_bytes' => 30,
-      'sensitive_keys' => ['path', 'method'],
+      'privacy' => PrivacyOptions::redact(['path', 'method']),
       'body_truncator' => static function (string $body, array $context) use (&$contexts): array {
         $contexts[] = $context;
         return ['code' => 0];

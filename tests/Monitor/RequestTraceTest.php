@@ -86,7 +86,7 @@ final class RequestTraceTest extends TestCase
    */
   public function testFormBodyAndCustomSensitiveFields(): void
   {
-    $sanitizer = new PayloadSanitizer(new MonitorOptions(['sensitive_keys' => ['identity_number']]));
+    $sanitizer = new PayloadSanitizer(new MonitorOptions(['privacy' => PrivacyOptions::redact(['identity_number'])]));
     $body = $sanitizer->sanitizeBody('password=secret&identity_number=123&name=Jane', 'application/x-www-form-urlencoded');
     self::assertSame(['password' => '[REDACTED]', 'identity_number' => '[REDACTED]', 'name' => 'Jane'], $body['content']);
     self::assertSame('[UNPARSEABLE_BODY]', $sanitizer->sanitizeBody('{"password":"secret"', 'application/json')['content']);

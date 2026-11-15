@@ -51,9 +51,9 @@ final class SuffixPolicyTest extends TestCase
   /** @return void 完整路径与去后缀规则均生效，且贯穿请求与响应。 */
   public function testBothCandidatesContributeSensitiveFields(): void
   {
-    $options = new MonitorOptions(['threshold_ms' => 0, 'sensitive_keys_by_path' => [
+    $options = new MonitorOptions(['threshold_ms' => 0, 'privacy' => PrivacyOptions::paths([
       '/private/login' => ['mobile'], '/private/login.html' => ['code'],
-    ]]);
+    ])]);
     $trace = new RequestTrace($options, ['path' => '/PRIVATE/%6cogin%2Ehtml/',
       'query' => ['mobile' => 'private-mobile', 'code' => 'private-code']]);
     $trace->updateResponse(['content_type' => 'application/json']);
@@ -68,11 +68,11 @@ final class SuffixPolicyTest extends TestCase
   public function testCandidateMatchingPreservesResourceBoundaries(): void
   {
     $options = new MonitorOptions(['enabled' => true, 'exclude_paths' => ['/private/login'],
-      'sensitive_keys_by_path' => ['/private/login' => ['mobile']]], true);
+      'privacy' => PrivacyOptions::paths(['/private/login' => ['mobile']])], true);
     self::assertFalse($options->shouldCollect('/private/login.html'));
     foreach (['/PRIVATE/login.html', '/private%2Flogin.html', '/private/%256cogin.html', '/private/login.html/child'] as $path) {
       self::assertTrue($options->shouldCollect($path), $path);
-      self::assertNotContains('mobile', $options->sensitiveKeysForPath($path));
+      self::assertFalse((new \Viswoole\Monitor\PayloadSanitizer($options, $path))->isSensitiveField('mobile'));
     }
   }
 
@@ -80,9 +80,9 @@ final class SuffixPolicyTest extends TestCase
   public function testLiteralDottedPathsReceiveConservativeProtection(): void
   {
     $options = new MonitorOptions(['enabled' => true, 'exclude_paths' => ['/user/john'],
-      'sensitive_keys_by_path' => ['/user/john' => ['mobile'], '/user/john.doe' => ['code']]]);
+      'privacy' => PrivacyOptions::paths(['/user/john' => ['mobile'], '/user/john.doe' => ['code']])]);
     self::assertFalse($options->shouldCollect('/user/john.doe'));
-    self::assertContains('mobile', $options->sensitiveKeysForPath('/user/john.doe'));
-    self::assertContains('code', $options->sensitiveKeysForPath('/user/john.doe'));
+    self::assertTrue((new \Viswoole\Monitor\PayloadSanitizer($options, '/user/john.doe'))->isSensitiveField('mobile'));
+    self::assertTrue((new \Viswoole\Monitor\PayloadSanitizer($options, '/user/john.doe'))->isSensitiveField('code'));
   }
 }

@@ -6,6 +6,7 @@ namespace Viswoole\Monitor;
 
 use Throwable;
 use Viswoole\Monitor\Http\BodyContentType;
+use Viswoole\Monitor\Privacy\Target;
 
 /** 职责：有界采集响应元数据、正文及完成时间；不执行发送，也不持久化。 */
 final class ResponseCapture
@@ -22,6 +23,8 @@ final class ResponseCapture
   /** @var array<string,mixed> 已脱敏的响应元数据 */
   private array $response = ['status' => 200, 'completed' => false];
   private readonly ResponseHeaders $responseHeaders;
+  private readonly PayloadSanitizer $sanitizer;
+  private readonly PayloadSanitizer $metadataSanitizer;
   private ?int $respondedAt = null;
   /** @var string 内部解析模式，仅为 JSON、表单或空串，不受展示字段脱敏和预算影响 */
   private string $bodyParsingType = '';
@@ -35,9 +38,11 @@ final class ResponseCapture
   public function __construct(
     private readonly MonitorOptions $options,
     private readonly SnapshotBudget $budget,
-    private readonly PayloadSanitizer $sanitizer
+    PayloadSanitizer $sanitizer
   )
   {
+    $this->sanitizer = $sanitizer->forScope(Target::RESPONSE_BODY);
+    $this->metadataSanitizer = $sanitizer->forScope(Target::RESPONSE_METADATA);
     $this->responseHeaders = new ResponseHeaders($options, $budget, $sanitizer);
   }
 
@@ -68,7 +73,7 @@ final class ResponseCapture
       return;
     }
     try {
-      // 标头快照与增量更新共用预算，容器级脱敏不能改变内部采集状态的类型。
+      // 标头快照与增量更新共用预算，分组隐私规则不改变内部采集状态的类型。
       foreach (($metadata['headers'] ?? []) as $key => $value) {
         if (!$this->options->captureResponse) { continue; }
         // Swoole 标头值允许 string|array，统一折叠为字符串，
@@ -80,7 +85,7 @@ final class ResponseCapture
       }
       unset($metadata['headers']);
       $metadata = $this->prepareContentType($metadata);
-      $safe = array_merge($this->response, $this->sanitizer->sanitize($metadata));
+      $safe = array_merge($this->response, $this->metadataSanitizer->sanitize($metadata));
       $this->retainMetadata($safe);
     } catch (Throwable $error) {
       // 监控属于旁路设施：响应采集失败只降级告警，绝不能破坏业务响应流
@@ -186,7 +191,7 @@ final class ResponseCapture
   {
     $this->responseBytes += strlen($content);
     // 超限后释放已缓存的正文，既限制内存也避免输出未经完整解析的敏感内容。
-    if (!$this->options->captureResponse) {
+    if (!$this->options->captureResponse || !$this->sanitizer->canCapture()) {
       if ($isComplete) {
         $this->completeResponse();
       }
@@ -217,7 +222,7 @@ final class ResponseCapture
   {
     if ($this->isBodyDropped) { return; }
     $limit = $this->options->bodyLimit();
-    // 未启用处理器或整组隐藏时，超限片段无需拼接，保持采集内存有界。
+    // 未启用处理器或关闭正文采集时，超限片段无需拼接，保持采集内存有界。
     if ($this->responseBytes > $limit && !$this->sanitizer->canTruncateBody()) {
       $this->dropBody();
       return;
@@ -287,7 +292,7 @@ final class ResponseCapture
   {
     $contentType = $this->response['content_type'] ?? '';
     $body = $this->sanitizer->sanitizeBody($this->responseBody, $this->bodyParsingType);
-    if (!$this->options->captureResponse) {
+    if (!$this->options->captureResponse || !$this->sanitizer->canCapture()) {
       $body = ['content' => '[CAPTURE_DISABLED]', 'bytes' => $this->responseBytes,
         'size_known' => !$this->hasFileResponse, 'truncated' => false];
     } elseif ($this->hasFileResponse) {
@@ -299,12 +304,10 @@ final class ResponseCapture
       $body = $this->bodySummary ?? ['content' => '[BODY_LIMIT]', 'truncated' => true];
       $body['bytes'] = $this->responseBytes;
     }
-    // body 的整组规则与请求保持一致，不能被结构解析或截断处理绕过。
-    $body = $this->sanitizer->redactContainer('body', $body);
     if (!$this->budget->replace('body', SnapshotBudget::size($body))) {
       // 预算耗尽时输出无 bytes 字段的最小占位再试一次；极端场景下该占位
       // （约数十字节）不计费，截断状态由 replace 内部的 hasTruncated 标记。
-      $minimal = $this->sanitizer->redactContainer('body', ['content' => '[SNAPSHOT_LIMIT]', 'truncated' => true]);
+      $minimal = ['content' => '[SNAPSHOT_LIMIT]', 'truncated' => true];
       if ($this->budget->replace('body', SnapshotBudget::size($minimal))) {
         $body = $minimal;
       }
