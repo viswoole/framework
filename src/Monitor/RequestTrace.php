@@ -51,6 +51,8 @@ final class RequestTrace
   private ?string $exception = null;
   /** @var PayloadSanitizer 脱敏器，构造时创建并贯穿整个请求生命周期 */
   private readonly PayloadSanitizer $sanitizer;
+  /** @var array{path:string,method:string} 独立于展示脱敏的请求身份，仅用于正文处理器 */
+  private readonly array $bodyContext;
 
   /**
    * 构造时完成请求元数据的采集与脱敏
@@ -73,6 +75,7 @@ final class RequestTrace
     $this->budget = new SnapshotBudget($options->maxSnapshotBytes);
     $this->summary = new OperationSummary();
     $this->sanitizer = $sanitizer ?? new PayloadSanitizer($options, (string)($request['path'] ?? '/'));
+    $this->bodyContext = ['path' => (string)($request['path'] ?? '/'), 'method' => (string)($request['method'] ?? '')];
     $this->responseCapture = new ResponseCapture($options, $this->budget, $this->sanitizer);
     if (!$options->captureRequest) {
       $request = array_intersect_key($request, array_flip(['method', 'path']));
@@ -192,7 +195,7 @@ final class RequestTrace
   /** @param string $content 成功发送的内容 @param bool $isComplete 是否完成 @return void */
   public function appendResponse(string $content, bool $isComplete = false): void
   {
-    $this->responseCapture->appendResponse($content, $isComplete);
+    $this->responseCapture->appendResponse($content, $isComplete, $this->bodyContext);
   }
 
   /** @return void 记录首次响应完成时间。 */

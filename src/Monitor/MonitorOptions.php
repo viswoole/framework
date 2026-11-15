@@ -41,8 +41,9 @@ final readonly class MonitorOptions
   public bool $captureCache;
   /** @var float 慢请求阈值（毫秒），达到该值才写入记录 */
   public float $thresholdMs;
-  /** @var int 单请求响应正文采集上限（字节），超限正文完全不输出 */
+  /** @var int 单请求响应正文采集上限（字节），超限时尝试自定义摘要，默认不输出正文 */
   public int $maxBodyBytes;
+  public BodyTruncator $bodyTruncator;
   /** @var int 单请求操作记录条数上限，超限后计入 dropped_operations */
   public int $maxOperations;
   /** @var int 请求快照 JSON 总预算，包含固定结构及汇总预留 */
@@ -80,6 +81,7 @@ final readonly class MonitorOptions
     $this->maxOperations = OptionValidator::readInteger($options, 'max_operations', 200);
     $this->maxSnapshotBytes = OptionValidator::readInteger($options, 'max_snapshot_bytes', 262144);
     $this->writer = OptionValidator::readNullableString($options, 'writer');
+    $this->bodyTruncator = new BodyTruncator($options['body_truncator'] ?? null);
     $this->requestId = new RequestIdOptions($options['request_id'] ?? []);
     $this->sensitiveKeyPolicy = new SensitiveKeyPolicy($options['sensitive_keys_by_path'] ?? [], $isRouteCaseSensitive);
     $this->recordBindings = OptionValidator::readBoolean($options, 'record_bindings', false);
@@ -98,6 +100,20 @@ final readonly class MonitorOptions
       || $this->maxBodyBytes < 0 || $this->maxOperations < 0 || $this->maxSnapshotBytes < 16384) {
       throw new InvalidArgumentException('monitor 阈值与采集上限必须非负，总快照预算至少 16384 字节');
     }
+  }
+
+  /**
+   * 单请求正文采集上限
+   *
+   * 正文缓存、超限摘要共用同一口径：除 max_body_bytes 外，还为快照总预算
+   * 预留四分之一，防止正文独占预算挤掉元数据。请求、响应与摘要三条采集
+   * 路径必须引用本方法，避免口径分叉后上限不一致。
+   *
+   * @return int 正文字节上限
+   */
+  public function bodyLimit(): int
+  {
+    return min($this->maxBodyBytes, intdiv($this->maxSnapshotBytes, 4));
   }
 
   /**

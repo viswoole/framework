@@ -39,7 +39,7 @@ final readonly class PayloadSanitizer
    */
   public function __construct(
     private MonitorOptions $options,
-    string $path = '/',
+    private string $path = '/',
     ?PathPolicyMatcher $matcher = null
   )
   {
@@ -178,22 +178,60 @@ final readonly class PayloadSanitizer
   }
 
   /**
+   * 判断是否需要为超限正文保留处理器输入
+   *
+   * 无处理器或整组隐藏时直接省略，避免为最终丢弃的内容额外复制大段正文。
+   *
+   * @return bool 当前请求策略允许执行已配置的裁剪处理器
+   */
+  public function canTruncateBody(): bool
+  {
+    return $this->options->bodyTruncator->isEnabled && !$this->isSensitiveField('body');
+  }
+
+  /**
+   * 生成有界的自定义正文摘要，原始正文绝不直接进入快照。
+   * @param string $body 超限时仍可取得的正文或前缀
+   * @param array{content_type:string,is_complete:bool,path?:string,method?:string,direction?:string} $context 正文类型、完整性及请求身份
+   * @return array{content:mixed,bytes:int,truncated:bool} 已脱敏摘要或默认占位
+   */
+  public function truncateBody(string $body, array $context): array
+  {
+    $limit = $this->options->bodyLimit();
+    $content = '[BODY_LIMIT]';
+    // 整组隐藏时不向用户处理器暴露原文，也不支付其解析成本。
+    if ($this->canTruncateBody()) {
+      $summary = $this->options->bodyTruncator->summarize($body, array_replace(['path' => $this->path, 'method' => '', 'direction' => 'response'], $context, ['max_bytes' => $limit]));
+      if ($summary !== null) {
+        $safe = $this->sanitize($summary);
+        if (SnapshotBudget::size($safe) <= $limit) { $content = $safe; }
+      }
+    }
+    return ['content' => $content, 'bytes' => strlen($body), 'truncated' => true];
+  }
+
+  /**
    * 脱敏响应正文
    *
    * 对完整结构化正文先解析后脱敏；截断正文不输出局部内容。
    *
    * @param string $body 完整正文
    * @param string $contentType MIME 类型
+   * @param array{path?:string,method?:string,direction?:string} $context 请求身份，独立使用时未知方法为空串
    * @return array{content:mixed,bytes:int,truncated:bool} 正文摘要
    */
-  public function sanitizeBody(string $body, string $contentType = ''): array
+  public function sanitizeBody(string $body, string $contentType = '', array $context = []): array
   {
     $bytes = strlen($body);
     if (!BodyContentType::canCapture($contentType)) { return BodyContentType::omitted($contentType, $bytes); }
     // 空正文（204、空 JSON 响应）不是解析失败，避免记录误导性的不可解析标记
     if ($bytes === 0) { return ['content' => null, 'bytes' => 0, 'truncated' => false]; }
-    if ($bytes > min($this->options->maxBodyBytes, intdiv($this->options->maxSnapshotBytes, 4))) {
-      return ['content' => '[BODY_LIMIT]', 'bytes' => $bytes, 'truncated' => true];
+    if ($bytes > $this->options->bodyLimit()) {
+      return $this->truncateBody($body, array_replace($context, [
+        'content_type' => BodyContentType::normalize($contentType) === 'application/x-www-form-urlencoded'
+          ? 'application/x-www-form-urlencoded' : 'application/json',
+        'is_complete' => true,
+      ]));
     }
     // 表单先按其声明类型解析，不将合法 JSON 形状的表单误识别成 JSON。
     if (BodyContentType::normalize($contentType) === 'application/x-www-form-urlencoded') {

@@ -36,7 +36,9 @@ final readonly class BodySnapshot extends SnapshotRecord
     $this->contentType = is_string($safe['content_type'] ?? null) ? $safe['content_type'] : '';
     $this->omittedReason = is_string($safe['omitted_reason'] ?? null) ? $safe['omitted_reason'] : '';
     $this->bytes = $this->isSizeKnown ? (int)$safe['bytes'] : 0;
-    $this->content = $state === CaptureState::CAPTURED ? $content : null;
+    // 仅显式超限摘要数组可与截断状态并存；旧占位及局部截断继续隐藏。
+    $hasSummary = $state === CaptureState::TRUNCATED && ($safe['truncated'] ?? false) && is_array($content);
+    $this->content = $state === CaptureState::CAPTURED || $hasSummary ? $content : null;
   }
 
   /**

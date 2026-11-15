@@ -31,9 +31,21 @@ return [
   // 排除健康检查、静态资源等无需观测的路径，避免为高 QPS 无价值请求支付采集成本
   // 完整路径及去伪静态后缀候选任一命中即排除，采集开始前采用更严格的保护并集。
   'exclude_paths' => ['/health*', '/favicon.ico', '/static/*', '/assets/*'],
-  // 单请求响应正文采集上限（字节），超限正文完全不输出。
+  // 单请求响应正文采集上限（字节），超限默认不输出正文，可配置 body_truncator 保留业务摘要。
   // 常规 JSON API 响应远小于 8KB，调低可减半每请求的正文累积内存与脱敏成本
   'max_body_bytes' => 8192,
+  // callable(string $body, array $context): ?array；仅超限时调用，返回待脱敏摘要。
+  // context: path、method、direction(request/response)、content_type、is_complete、max_bytes。
+  // 流式正文可能只有前缀，未知 method 为空串。
+  // 摘要按脱敏后实际字节校验：脱敏替换标记与编码开销可能使摘要膨胀超过 max_bytes，
+  // 此时整体回退占位而非局部截断，处理器应让摘要远小于 max_bytes。
+  // 返回 null、异常或摘要超限均回退占位。例如：
+  // static function (string $body, array $context): ?array {
+  //   if (!$context['is_complete'] || $context['content_type'] !== 'application/json') { return null; }
+  //   $decoded = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+  //   return is_array($decoded) ? array_intersect_key($decoded, ['code' => true, 'message' => true]) : null;
+  // }
+  'body_truncator' => null,
   // 单请求操作记录条数上限，超限后计入 dropped_operations
   'max_operations' => 200,
   // 请求快照总 JSON 字节预算，最低 16 KiB；包含固定结构与汇总预留。

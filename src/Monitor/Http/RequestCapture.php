@@ -88,7 +88,9 @@ final readonly class RequestCapture
       'post' => $request->post ?? [],
       // 非结构化正文不创建额外脱敏器；HTTP 入口复用监控器已解析的策略。
       'body' => $canCaptureBody ? ($this->sanitizer ?? new PayloadSanitizer($this->options, $path))
-        ->sanitizeBody($body === false ? '' : $body, $type)
+        ->sanitizeBody($body === false ? '' : $body, $type, [
+          'path' => $path, 'method' => (string)($request->server['request_method'] ?? ''), 'direction' => 'request',
+        ])
         : BodyContentType::omitted($type, null),
       'files' => array_keys($request->files ?? []),
     ];
