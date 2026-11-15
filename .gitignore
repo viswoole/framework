@@ -8,3 +8,5 @@
 /runtime/
 default.profraw
 /docs/
+# 忽略 macOS 目录元数据文件
+.DS_Store
