@@ -6,6 +6,8 @@ declare(strict_types=1);
 
 namespace Viswoole\Monitor;
 
+use InvalidArgumentException;
+
 /**
  * 请求快照共享预算
  *
@@ -45,6 +47,22 @@ final class SnapshotBudget
     $this->slots[$slot] = $bytes;
     $this->usedBytes += $bytes;
     return true;
+  }
+
+  /**
+   * 安全缩减已预留槽位，不影响其他已接纳数据或截断标记
+   * @param string $slot 已存在的槽位
+   * @param int $bytes 固定策略对应的较小上界
+   * @return void
+   * @throws InvalidArgumentException 槽位不存在或试图扩大预留
+   */
+  public function shrink(string $slot, int $bytes): void
+  {
+    if ($bytes < 0 || !isset($this->slots[$slot]) || $bytes > $this->slots[$slot]) {
+      throw new InvalidArgumentException('预算缩减只能用于已存在槽位且不能增加占用');
+    }
+    $this->usedBytes -= $this->slots[$slot] - $bytes;
+    $this->slots[$slot] = $bytes;
   }
 
   /**

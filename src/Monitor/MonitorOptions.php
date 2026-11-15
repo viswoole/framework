@@ -26,7 +26,7 @@ use Viswoole\Monitor\Privacy\Policy;
  * 职责：承载慢请求监控的全部配置项并在构造时完成校验，提供路径是否
  * 需要采集的判定。
  * 边界：仅负责校验采集边界，不持有请求状态；配置在服务启动时读取，
- * 修改后需重启服务生效。
+ * 静态选项修改需重启；全局阈值与覆盖规则由 MonitorRuntime 单独管理。
  */
 final readonly class MonitorOptions
 {
@@ -42,6 +42,8 @@ final readonly class MonitorOptions
   public bool $captureCache;
   /** @var float 慢请求阈值（毫秒），达到该值才写入记录 */
   public float $thresholdMs;
+  /** @var int 启动期分配的共享规则容量 */
+  public int $overrideCapacity;
   /** @var int 单请求响应正文采集上限（字节），超限时尝试自定义摘要，默认不输出正文 */
   public int $maxBodyBytes;
   public BodyTruncator $bodyTruncator;
@@ -69,11 +71,7 @@ final readonly class MonitorOptions
    */
   public function __construct(array $options = [], bool $isRouteCaseSensitive = false)
   {
-    foreach (['sensitive_keys', 'sensitive_keys_by_path'] as $legacyKey) {
-      if (array_key_exists($legacyKey, $options)) {
-        throw new InvalidArgumentException('monitor.' . $legacyKey . ' 已移除，请迁移至 monitor.privacy（capture 与 redact_fields 分离）');
-      }
-    }
+    $this->validateLegacyOptions($options);
     $this->isRouteCaseSensitive = $isRouteCaseSensitive;
     $this->isEnabled = OptionValidator::readBoolean($options, 'enabled', false);
     $this->captureRequest = OptionValidator::readBoolean($options, 'capture_request', true);
@@ -81,24 +79,87 @@ final readonly class MonitorOptions
     $this->captureDatabase = OptionValidator::readBoolean($options, 'capture_database', true);
     $this->captureCache = OptionValidator::readBoolean($options, 'capture_cache', true);
     $this->thresholdMs = OptionValidator::readNumber($options, 'threshold_ms', 1000);
+    $this->overrideCapacity = OptionValidator::readInteger($options, 'override_capacity', 256);
     $this->maxBodyBytes = OptionValidator::readInteger($options, 'max_body_bytes', 16384);
     $this->maxOperations = OptionValidator::readInteger($options, 'max_operations', 200);
     $this->maxSnapshotBytes = OptionValidator::readInteger($options, 'max_snapshot_bytes', 262144);
     $this->writer = OptionValidator::readNullableString($options, 'writer');
     $this->bodyTruncator = new BodyTruncator($options['body_truncator'] ?? null);
     $this->requestId = new RequestIdOptions($options['request_id'] ?? []);
-    $this->privacy = new Policy(array_key_exists('privacy', $options) ? $options['privacy'] : [], $isRouteCaseSensitive);
+    $this->privacy = new Policy(
+      array_key_exists('privacy', $options) ? $options['privacy'] : [],
+      $isRouteCaseSensitive
+    );
     $this->recordBindings = OptionValidator::readBoolean($options, 'record_bindings', false);
     $this->canRecordSql = OptionValidator::readBoolean($options, 'record_sql', false);
-    $this->validateLists($options);
-    $this->excludePaths = array_map(
-      static fn (string $pattern): string => PathNormalizer::forMatching($pattern, $isRouteCaseSensitive),
-      $options['exclude_paths'] ?? []
-    );
+    $this->excludePaths = $this->normalizeExcludedPaths($options);
+    $this->validateLimits();
+  }
+
+  /**
+   * 拒绝已移除的脱敏配置，避免错误配置被静默接受
+   * @param array<string,mixed> $options 原始配置
+   * @return void
+   */
+  private function validateLegacyOptions(array $options): void
+  {
+    foreach (['sensitive_keys', 'sensitive_keys_by_path'] as $legacyKey) {
+      if (array_key_exists($legacyKey, $options)) {
+        throw new InvalidArgumentException(
+          'monitor.' . $legacyKey . ' 已移除，请迁移至 monitor.privacy（capture 与 redact_fields 分离）'
+        );
+      }
+    }
+  }
+
+  /**
+   * 在启动期验证容量与预算边界，避免请求内分配失败
+   * @return void
+   */
+  private function validateLimits(): void
+  {
+    if ($this->overrideCapacity < 1) {
+      throw new InvalidArgumentException('monitor.override_capacity 必须大于零');
+    }
     if (!is_finite($this->thresholdMs) || $this->thresholdMs < 0
       || $this->maxBodyBytes < 0 || $this->maxOperations < 0 || $this->maxSnapshotBytes < 16384) {
-      throw new InvalidArgumentException('monitor 阈值与采集上限必须非负，总快照预算至少 16384 字节');
+      throw new InvalidArgumentException(
+        'monitor 阈值与采集上限必须非负，总快照预算至少 16384 字节'
+      );
     }
+  }
+
+  /**
+   * 验证并归一化排除路径配置
+   *
+   * 不能把列表成员错误延迟到请求内，造成每次采集都异常降级。
+   *
+   * @param array<string,mixed> $options 原始配置
+   * @return array<string> 遵循路由大小写配置的匹配模式
+   * @throws InvalidArgumentException 列表含空字符串或非字符串时抛出
+   */
+  private function normalizeExcludedPaths(array $options): array
+  {
+    $values = $options['exclude_paths'] ?? [];
+    if (!is_array($values) || !array_all(
+      $values,
+      static fn(mixed $value): bool => is_string($value) && trim($value) !== ''
+    )) {
+      throw new InvalidArgumentException('monitor.exclude_paths 必须是非空字符串列表');
+    }
+    return array_map(
+      fn(string $pattern): string => PathNormalizer::forMatching($pattern, $this->isRouteCaseSensitive),
+      $values
+    );
+  }
+
+  /**
+   * 路由策略固定前的来源预留上限，固定后由 CaptureBudget 核减
+   * @return int 不超过快照总预算四分之一的字节数
+   */
+  public function captureMetadataLimit(): int
+  {
+    return intdiv($this->maxSnapshotBytes, 4);
   }
 
   /**
@@ -124,27 +185,14 @@ final readonly class MonitorOptions
    */
   public function shouldCollect(string $path, ?PathPolicyMatcher $matcher = null): bool
   {
-    if (!$this->isEnabled) { return false; }
-    $matcher ??= new PathPolicyMatcher($path, $this->isRouteCaseSensitive);
-    return array_all($this->excludePaths, static fn (string $pattern): bool => !$matcher->matches($pattern));
-  }
-  /**
-   * 验证排除路径配置
-   *
-   * 不能把列表成员错误延迟到请求内，造成每次采集都异常降级。
-   *
-   * @param array<string,mixed> $options 原始配置
-   * @return void
-   * @throws InvalidArgumentException 列表含空字符串或非字符串时抛出
-   */
-  private function validateLists(array $options): void
-  {
-    foreach (['exclude_paths'] as $key) {
-      $values = $options[$key] ?? [];
-      if (!is_array($values) || !array_all($values, static fn (mixed $value): bool => is_string($value) && trim($value) !== '')) {
-        throw new InvalidArgumentException('monitor.' . $key . ' 必须是非空字符串列表');
-      }
+    if (!$this->isEnabled) {
+      return false;
     }
+    $matcher ??= new PathPolicyMatcher($path, $this->isRouteCaseSensitive);
+    return array_all(
+      $this->excludePaths,
+      static fn(string $pattern): bool => !$matcher->matches($pattern)
+    );
   }
 
 }

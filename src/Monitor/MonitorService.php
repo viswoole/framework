@@ -20,13 +20,15 @@ use InvalidArgumentException;
 use Viswoole\Core\Service\Provider;
 use Viswoole\Log\Drives\File;
 use Viswoole\Monitor\Contract\TraceWriterInterface;
+use Viswoole\Monitor\Runtime\RuntimeState;
 use Viswoole\Monitor\Writer\JsonTraceWriter;
+use Viswoole\Router\InterfaceCatalog;
 
 /**
  * 慢请求监控服务提供者
  *
  * 职责：注册监控配置与可替换的记录交付接口，并在启动时预热单例。
- * 边界：不在进程单例上持有请求数据；修改配置后需重启服务生效。
+ * 边界：不在进程单例上持有请求数据；全局阈值与覆盖规则由独立共享运行态管理。
  */
 final class MonitorService extends Provider
 {
@@ -42,6 +44,16 @@ final class MonitorService extends Provider
       return new MonitorOptions(
         $this->app->config->get('monitor', []),
         (bool)$this->app->config->get('router.case_sensitive', false)
+      );
+    });
+    $this->app->bind(MonitorRuntime::class, function (): MonitorRuntime {
+      return new MonitorRuntime($this->app->make(MonitorOptions::class), $this->app->make(InterfaceCatalog::class));
+    });
+    $this->app->bind(SlowRequestMonitor::class, function (): SlowRequestMonitor {
+      return new SlowRequestMonitor(
+        $this->app->make(MonitorOptions::class),
+        $this->app->make(TraceWriterInterface::class),
+        $this->app->make(MonitorRuntime::class)
       );
     });
     $this->app->bind(TraceWriterInterface::class, function (): TraceWriterInterface {
@@ -67,6 +79,9 @@ final class MonitorService extends Provider
   public function boot(): void
   {
     $options = $this->app->make(MonitorOptions::class);
+    RuntimeState::fallback($options->thresholdMs);
+    // 即使监控关闭，也确保后续管理调用不会在 worker 中私建共享表。
+    $this->app->make(MonitorRuntime::class);
     if ($options->isEnabled) { $this->app->make(SlowRequestMonitor::class); }
   }
 }

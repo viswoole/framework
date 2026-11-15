@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-/* 职责：定义交给存储方的慢请求定稿契约，保留现有 JSON 字段及版本。 */
+/* 职责：定义交给存储方的慢请求定稿契约，兼容历史字段并增加版本 2 的采集来源。 */
 
 namespace Viswoole\Monitor\Dto;
 
@@ -12,7 +12,7 @@ use Viswoole\Monitor\OperationType;
  * 慢请求不可变快照
  *
  * 仅慢请求收尾时构造，操作及嵌套记录均使用 readonly DTO。
- * toArray/JSON 保留字段是否存在及脱敏标记，不新增或重排操作明细。
+ * toArray/JSON 保留字段是否存在及脱敏标记，不重排操作明细。
  */
 final readonly class SlowRequestSnapshot extends SnapshotRecord
 {
@@ -30,6 +30,7 @@ final readonly class SlowRequestSnapshot extends SnapshotRecord
   public ?string $exception;
   public int $schemaVersion;
   public bool $snapshotTruncated;
+  public ?CaptureSnapshot $capture;
 
   /**
    * 创建已完成的慢请求快照
@@ -56,6 +57,7 @@ final readonly class SlowRequestSnapshot extends SnapshotRecord
     $this->exception = $safe['exception'];
     $this->schemaVersion = $safe['schema_version'];
     $this->snapshotTruncated = $safe['snapshot_truncated'];
+    $this->capture = isset($safe['capture']) ? new CaptureSnapshot($safe['capture']) : null;
   }
 
   /**

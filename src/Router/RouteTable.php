@@ -37,6 +37,7 @@ final class RouteTable
    *      键为 URL 路径，值为 [请求方法 => 路由引用链路]
    */
   private array $staticRoute = [];
+  public readonly InterfaceCatalog $interfaces;
   /**
    * @var array<string,array<string,array<string,string>>> 动态路由映射
    *      按路径段数分组（segment_N），第一层键为正则，值为 [请求方法 => 路由引用链路]
@@ -51,8 +52,9 @@ final class RouteTable
   /**
    * @param Config $config 框架配置实例（读取 router.case_sensitive 控制正则大小写语义）
    */
-  public function __construct(private readonly Config $config)
+  public function __construct(private readonly Config $config, ?InterfaceCatalog $interfaces = null)
   {
+    $this->interfaces = $interfaces ?? new InterfaceCatalog();
   }
 
   /**
@@ -74,9 +76,14 @@ final class RouteTable
       });
       $regex = $this->convertRegex($urlSegments, $route->getPatterns());
       $this->addDynamicRoute($urlSegments, $regex, $routeIndex, $route->getMethod());
+      $slot = "dynamic:" . $regex;
     } else {
       $this->addStaticRoute($path, $routeIndex, $route->getMethod());
+      $slot = "static:" . $path;
     }
+    $this->interfaces->register($slot, [
+      'template' => $path, 'domains' => $route->getDomain(), 'methods' => $route->getMethod(),
+    ]);
   }
 
   /**
@@ -196,7 +203,10 @@ final class RouteTable
       $this->dynamicRoute["segment_$len"][$regex] = [];
     }
     $this->registerMethodRoute(
-      $this->dynamicRoute["segment_$len"][$regex], $path, $methods, $routeIndex
+      $this->dynamicRoute["segment_$len"][$regex],
+      $path,
+      $methods,
+      $routeIndex
     );
     $fullLen = count($urlSegments);
     // 适配去掉可选参数的长度
@@ -205,7 +215,10 @@ final class RouteTable
         $this->dynamicRoute['segment_' . $fullLen][$regex] = [];
       }
       $this->registerMethodRoute(
-        $this->dynamicRoute['segment_' . $fullLen][$regex], $path, $methods, $routeIndex
+        $this->dynamicRoute['segment_' . $fullLen][$regex],
+        $path,
+        $methods,
+        $routeIndex
       );
     }
   }
@@ -232,7 +245,8 @@ final class RouteTable
     foreach ($methods as $method) {
       if (isset($methodMap[$method])) {
         trigger_error(
-          "{$path}路由规则已存在（请求方法：{$method}），重复定义即覆盖路由", E_USER_WARNING
+          "{$path}路由规则已存在（请求方法：{$method}），重复定义即覆盖路由",
+          E_USER_WARNING
         );
       }
       $methodMap[$method] = $routeIndex;

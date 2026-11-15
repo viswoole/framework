@@ -39,6 +39,7 @@ use Viswoole\Router\Route\Route;
  * @method static void server(string $serverName, Closure $closure) 定义服务级路由
  * @method static Route|Group getRoute(string $idOrCiteLink) 通过 ID 或引用链路获取路由实例
  * @method static array getRoutes() 获取所有路由列表
+ * @method static array<\Viswoole\Router\RouteIdentity> getInterfaces() 获取精确接口覆盖目录
  * @method static bool isEnableApiDoc() 判断是否启用 API 文档解析功能
  * @method static array getApiList() 获取 API 文档列表
  * @method static array getApiDetail(string $citeLink) 获取指定路由的 API 文档详情

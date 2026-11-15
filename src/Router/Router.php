@@ -19,7 +19,6 @@ namespace Viswoole\Router;
 use InvalidArgumentException;
 use RuntimeException;
 use Viswoole\Core\App;
-use Viswoole\Core\Common\PathNormalizer;
 use Viswoole\Core\Config;
 use Viswoole\Core\Event;
 use Viswoole\Core\FrameworkEvent;
@@ -37,6 +36,7 @@ use Viswoole\Router\Route\Route;
  */
 class Router extends Collector
 {
+  use RouteMatching;
   /**
    * @var RouteTable 路由表（静态/动态映射与正则编译，职责见 RouteTable）
    */
@@ -68,7 +68,7 @@ class Router extends Collector
   )
   {
     App::factory()->bind(self::class, $this);
-    $this->routeTable = new RouteTable($config);
+    $this->routeTable = new RouteTable($config, App::factory()->make(InterfaceCatalog::class));
     // 是否缓存路由
     $this->cache = $config->get('router.cache.enable', false);
     // 是否生成api文档
@@ -82,6 +82,7 @@ class Router extends Collector
     // 装载配置路由与注解路由（职责见 RouteLoader）
     RouteLoader::load($this, $config, $this->cache);
     $this->parseRoute();
+    $this->routeTable->interfaces->complete();
     $this->init = true;
     $this->event->emit(FrameworkEvent::RouterInitialized);
   }
@@ -134,6 +135,15 @@ class Router extends Collector
         $this->routeTable->insert($path, $route->getCiteLink(), $route);
       }
     }
+  }
+
+  /**
+   * 获取可用于监控覆盖的精确接口目录
+   * @return list<RouteIdentity> 每个具体方法及路径别名单独列项
+   */
+  public function getInterfaces(): array
+  {
+    return $this->routeTable->interfaces->getInterfaces();
   }
 
   /**
@@ -201,91 +211,9 @@ class Router extends Collector
     ?callable $callback = null,
   ): mixed
   {
-    $path = $path === '/' ? '/' : rtrim($path, '/');
-    // 请求路径以百分号编码到达（如空格 %20、中文），逐段解码后才能与注册路径
-    // 及参数约束匹配；逐段处理避免 %2F 解码出新的路径分隔符破坏段结构
-    // （注册侧 handlePaths 对静态段同步解码，两侧对齐）
-    $decodedPath = $this->decodeRequestPath($path);
-    $caseSensitive = $this->config->get('router.case_sensitive', false);
-    // 请求方法统一规范化为大写（方法映射表与 miss 路由表均以大写为键）
     $method = strtoupper($method);
-    // 候选路径：完整路径优先（点号属于动态参数值，如 /user/john.doe），
-    // 命中路由但伪静态后缀校验失败时再尝试剥离后缀的路径（仅按最后一个
-    // 不含 / 的点段剥离）。无点号时仅一个候选，保持原语义
-    $candidates = PathNormalizer::candidates($decodedPath);
-    $pattern = [];
-    /** @var Route|null $route 路由 */
-    $route = null;
-    // 路径已命中但请求方法均不匹配时为 true，用于区分 404 与方法不允许两种未命中语义
-    $pathMatched = false;
-    // 路由命中但伪静态后缀校验未通过时暂存的异常，所有候选穷尽后抛出（回退 miss 路由）
-    $suffixError = null;
-    foreach ($candidates as [$candPath, $ext]) {
-      // 静态路由查表用小写键（注册侧静态段已小写）；动态正则匹配用原始大小写路径，
-      // 正则静态段以内联 (?i:) 分组实现大小写不敏感，动态参数值保留原始大小写
-      $matchPath = $caseSensitive ? $candPath : strtolower($candPath);
-      // 判断是否存在静态路由
-      $methodMap = $this->routeTable->matchStatic($matchPath);
-      if ($methodMap !== null) {
-        $routeIndex = $this->selectRouteIndex($methodMap, $method);
-        if ($routeIndex !== null) {
-          $route = $this->getRoute($routeIndex);
-        } else {
-          $pathMatched = true;
-        }
-      } else {
-        // 按段数定位动态路由分组；
-        // 修复: 变量正则允许跨段（含 /）时，规则段数与请求 URL 段数不同，
-        // 按段数取桶会失配——其余动态分组作为回退候选追加在同段数桶之后，
-        // 同段桶保持优先遍历（常规命中路径零额外开销）
-        $routes = $this->routeTable->dynamicBucket(substr_count($candPath, '/'));
-        foreach ($this->routeTable->dynamicBucketsAll() as $bucket) {
-          foreach ($bucket as $regex => $methodMap) {
-            $routes[$regex] ??= $methodMap;
-          }
-        }
-        // 遍历正则匹配路由（使用原始大小写路径，保留动态参数值大小写）
-        foreach (array_keys($routes) as $regex) {
-          if (!preg_match($regex, $candPath, $matches)) { continue; }
-          $routeIndex = $this->selectRouteIndex($routes[$regex], $method);
-          if ($routeIndex === null) {
-            // 路径命中但该正则下无匹配请求方法的路由，
-            // 继续尝试后续正则（可能存在另一模式支持该方法的路由）
-            $pathMatched = true;
-            continue;
-          }
-          // 拿到路由
-          $route = $this->getRoute($routeIndex);
-          // 命名捕获组直接给出 变量名 => 值：与路由 patterns 键求交集，
-          // 数字键（PCRE 自动编号）与约束正则内部自定义的命名组均被过滤，
-          // 仅保留路径声明的变量；未匹配的可选变量不出现在结果中，
-          // 由参数注入层用方法默认值兜底。不再依赖 patterns 键序与捕获组
-          // 顺序对齐（旧实现遇约束正则含捕获组时 array_combine 会崩溃）
-          $pattern = array_intersect_key($matches, $route->getPatterns());
-          break;
-        }
-      }
-      // 未命中任何路由则尝试下一候选
-      if ($route === null) { continue; }
-      // 伪静态后缀校验不通过时不抛异常，回退下一候选：
-      // 完整路径候选可能把后缀误当作参数值的一部分（如 /article/5.html 与 {id}）
-      if (!in_array('*', $route->getSuffix()) && !in_array($ext, $route->getSuffix())) {
-        $suffixError = new RouteNotFoundException("request suffix '$ext' is not allowed");
-        $route = null;
-        $pattern = [];
-        continue;
-      }
-      break;
-    }
     try {
-      if (is_null($route)) {
-        if ($suffixError !== null) { throw $suffixError; }
-        throw new RouteNotFoundException(
-          $pathMatched
-            ? "request method '$method' is not allowed"
-            : 'routing resource not found'
-        );
-      }
+      [$route, $pattern, $selectedSlot] = $this->matchRequest($path, $method);
       // 判断请求方法（路由已按方法维度选出，此处为防御性校验；
       // OPTIONS 预检请求跳过方法校验：预检不对应真实处理器，
       // 需放行进入中间件管道，由跨域中间件短路响应，避免预检被 404 拦截）
@@ -300,6 +228,7 @@ class Router extends Collector
       $this->checkOption($route->getDomain(), $domain, "request domain '$domain' is not allowed");
       // 伪静态后缀已在候选循环中校验（不通过时回退下一候选），无需重复校验
       // 动态路由参数先交由回调处理（如 HTTP 场景并入 Request 的 GET 参数）
+      RouteCapture::matched($this->routeTable->interfaces, $selectedSlot, $method);
       RouteCapture::record($route->getCiteLink(), $route->getPaths(), $pattern, $route->getHandler());
       if (!empty($pattern) && $callback) { $callback($pattern); }
       // 修复#8: $params 必须先初始化再合并，否则未显式传参时（如 HTTP 请求）动态路由
@@ -312,6 +241,7 @@ class Router extends Collector
         return invoke($route->getHandler(), $params);
       }, $route->getMiddlewares());
     } catch (RouteNotFoundException $e) {
+      RouteCapture::unmatched();
       // 匹配miss路由
       if (isset($this->missRoutes[$method])) {
         $miss = $this->missRoutes[$method];
@@ -325,66 +255,4 @@ class Router extends Collector
     }
   }
 
-  /**
-   * 对请求路径逐段进行 URL 解码
-   *
-   * 请求路径以百分号编码形式到达（如空格 %20、中文），解码后才能与注册的
-   * 路由路径及参数约束匹配（注册侧 handlePaths 对静态段同步解码）。
-   * 按 / 分段后逐段解码；解码后包含 / 的段（如 %2F）保留编码原样，
-   * 防止编码斜杠被还原为真实路径分隔符导致路径结构被重写
-   * （如 /user/a%2Fb 被改写为 /user/a/b 而匹配到其他路由）。
-   *
-   * @param string $path 原始请求路径
-   * @return string 解码后的路径
-   */
-  private function decodeRequestPath(string $path): string
-  {
-    return PathNormalizer::decode($path);
-  }
-
-  /**
-   * 从方法映射表中选择匹配请求方法的路由引用链路
-   *
-   * 选择优先级：精确方法匹配 > '*' 通配 > （仅 OPTIONS）该路径下任意路由。
-   * OPTIONS 预检请求不对应真实处理器，回退到任意路由以放行进入中间件管道，
-   * 由跨域中间件短路响应。
-   *
-   * @param array<string,string> $methodMap [请求方法 => 路由引用链路] 映射表
-   * @param string $method 规范化后的请求方法（大写）
-   * @return string|null 路由引用链路，无匹配时返回 null
-   */
-  private function selectRouteIndex(array $methodMap, string $method): ?string
-  {
-    if (isset($methodMap[$method])) { return $methodMap[$method]; }
-    if (isset($methodMap['*'])) { return $methodMap['*']; }
-    if ($method === 'OPTIONS') {
-      // reset() 在空数组上返回 false，需显式判空
-      return $methodMap === [] ? null : reset($methodMap);
-    }
-    return null;
-  }
-
-  /**
-   * 校验请求选项（方法/域名/后缀）是否在允许列表中
-   *
-   * 允许列表中包含 '*' 时视为不限制。
-   *
-   * @param array $option 允许的值列表
-   * @param string $value 实际请求值
-   * @param string $message 不匹配时的异常消息
-   * @throws RouteNotFoundException 不匹配时抛出
-   */
-  private function checkOption(
-    array  $option,
-    string $value,
-    string $message
-  ): void
-  {
-    if (
-      !in_array('*', $option)
-      && !in_array($value, $option)
-    ) {
-      throw new RouteNotFoundException($message);
-    }
-  }
 }

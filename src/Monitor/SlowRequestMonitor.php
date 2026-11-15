@@ -34,8 +34,13 @@ final readonly class SlowRequestMonitor
    *
    * @param MonitorOptions $options 采集配置
    * @param TraceWriterInterface $writer 记录存储实现
+   * @param MonitorRuntime|null $runtime 主进程初始化的共享运行配置
    */
-  public function __construct(private MonitorOptions $options, private TraceWriterInterface $writer) {}
+  public function __construct(
+    private MonitorOptions $options,
+    private TraceWriterInterface $writer,
+    private ?MonitorRuntime $runtime = null
+  ) {}
 
   /**
    * 开始一次请求采集
@@ -57,12 +62,14 @@ final readonly class SlowRequestMonitor
       $startedAt = hrtime(true);
       // 旧回调可能是严格限制参数个数的内置 callable，不能隐式增加入参。
       $request = $canReceiveSanitizer ? $snapshot($sanitizer) : $snapshot();
-      TraceContext::attach(new RequestTrace(
+      $trace = new RequestTrace(
         $this->options,
         array_replace($request, ['path' => $path]),
         $startedAt,
         $sanitizer
-      ));
+      );
+      if ($this->runtime !== null) { $trace->attachRuntime($this->runtime); }
+      TraceContext::attach($trace);
     } catch (Throwable $error) {
       $this->reportFailure($error);
     }

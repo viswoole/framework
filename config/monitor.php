@@ -14,6 +14,8 @@ return [
   'writer' => null,
   // 慢请求阈值（毫秒），达到该值才写入记录；0 表示记录全部请求（开发调试用）
   'threshold_ms' => 1000,
+  // 共享覆盖规则容量在启动时分配，运行时可在容量内增删改规则。
+  'override_capacity' => 256,
   'request_id' => [
     // 默认 bin2hex(random_bytes(16))，重复概率极低但非零；严格唯一请传入自己的发号器。
     // 支持任何无参 PHP callable：闭包、函数名、静态方法、实例方法数组、可调用对象。
@@ -49,6 +51,7 @@ return [
   // 单请求操作记录条数上限，超限后计入 dropped_operations
   'max_operations' => 200,
   // 请求快照总 JSON 字节预算，最低 16 KiB；包含固定结构与汇总预留。
+  // 来源在路由前最多预留 1/4，匹配策略固定后按该接口候选来源上界归还空余。
   'max_snapshot_bytes' => 262144,
   // 位置绑定无法可靠推断敏感字段，默认隐藏全部绑定值
   'record_bindings' => false,

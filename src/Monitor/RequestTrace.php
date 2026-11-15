@@ -16,10 +16,11 @@ declare(strict_types=1);
 
 namespace Viswoole\Monitor;
 
-use Viswoole\Monitor\Dto\SlowRequestSnapshot;
 use Viswoole\Monitor\Http\RequestPrivacy;
 use Viswoole\Monitor\Http\RequestRecordSanitizer;
 use Viswoole\Monitor\Privacy\Target;
+use Viswoole\Monitor\Runtime\CapturePolicy;
+use Viswoole\Monitor\Runtime\RuntimeState;
 
 /**
  * 单个请求的有界采集状态
@@ -31,6 +32,7 @@ use Viswoole\Monitor\Privacy\Target;
  */
 final class RequestTrace
 {
+  use RequestFinalization;
   /** @var int 请求采集开始时钟（hrtime 单调时钟，纳秒），所有耗时以此计基准 */
   public readonly int $startedAt;
   /** @var string 请求关联标识；默认随机存在碰撞概率，严格唯一由自定义生成器负责 */
@@ -75,6 +77,9 @@ final class RequestTrace
     $this->timestamp = date('c');
     $this->requestId = $options->requestId->generate();
     $this->budget = new SnapshotBudget($options->maxSnapshotBytes);
+    // 路由前保留安全上界；匹配策略固定后立即归还未使用的来源空间。
+    $this->budget->replace('capture', $options->captureMetadataLimit());
+    $this->capturePolicy = new CapturePolicy(RuntimeState::fallback($options->thresholdMs));
     $this->summary = new OperationSummary();
     $this->sanitizer = ($sanitizer ?? new PayloadSanitizer($options, (string)($request['path'] ?? '/')))
       ->forScope(Target::REQUEST_METADATA, (string)($request['method'] ?? ''));
@@ -212,47 +217,6 @@ final class RequestTrace
       return;
     }
     $this->exception = $error::class;
-  }
-
-  /**
-   * 构建交给存储方的类型化快照
-   *
-   * 复用既有数组定稿流程，保证 JSON 字段及总预算不因 DTO 改动而变化。
-   *
-   * @param int|null $finishedAt 测试可注入的结束时钟
-   * @return SlowRequestSnapshot|null 慢请求快照，未达到阈值返回 null
-   */
-  public function snapshot(?int $finishedAt = null): ?SlowRequestSnapshot
-  {
-    $record = $this->finish($finishedAt);
-    return $record === null ? null : new SlowRequestSnapshot($record, $this->operationTypes);
-  }
-
-  /**
-   * 生成内部数组定稿
-   *
-   * 仅供采集器预算核验及测试使用；存储交付使用 snapshot() 的类型化契约。
-   *
-   * @param int|null $finishedAt 结束时钟（单调时钟），供确定性测试注入
-   * @return array<string,mixed>|null 耗时达到阈值的完整记录；未达到阈值返回 null
-   */
-  public function finish(?int $finishedAt = null): ?array
-  {
-    $durationMs = (($finishedAt ?? hrtime(true)) - $this->startedAt) / 1e6;
-    if ($durationMs < $this->options->thresholdMs) {
-      return null;
-    }
-    return [
-      'request_id' => $this->requestId,
-      'timestamp' => $this->timestamp,
-      'duration_ms' => $durationMs,
-      'response_time_ms' => $this->responseCapture->elapsedMs($this->startedAt),
-      'request' => $this->request, 'response' => $this->responseCapture->snapshot(),
-      'operations' => $this->operations, 'dropped_operations' => $this->droppedOperations,
-      'exception' => $this->exception,
-      'schema_version' => 1, 'operation_summary' => $this->summary->snapshot(),
-      'snapshot_truncated' => $this->budget->hasTruncated(),
-    ];
   }
 
   /**
