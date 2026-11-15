@@ -14,7 +14,7 @@ final class LockLease
   /**
    * 接管已持有共享锁的句柄
    * @param string $directory 实例私有目录
-   * @param resource $handle 已 LOCK_SH 的存活句柄，PHP 无 resource 属性类型
+   * @param resource $handle NativeLockStream 创建且已 LOCK_SH 的存活句柄，PHP 无 resource 属性类型
    */
   public function __construct(public readonly string $directory, private mixed $handle) {}
 
@@ -26,7 +26,7 @@ final class LockLease
   public function close(): void
   {
     if (!is_resource($this->handle)) { return; }
-    if (!fclose($this->handle)) { throw new RuntimeException('监控实例存活句柄关闭失败'); }
+    NativeLockStream::close($this->handle);
     $this->handle = null;
   }
 }

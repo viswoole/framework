@@ -58,16 +58,15 @@ final class ProcessMutex
   {
     $pid = (int)getmypid();
     if ($pid !== $this->handlePid) {
-      if (is_resource($this->handle)) { fclose($this->handle); }
-      $handle = fopen($this->path, 'r+');
-      if ($handle === false) { throw new RuntimeException('监控运行配置锁文件无法打开'); }
+      if (is_resource($this->handle)) { NativeLockStream::close($this->handle); }
+      $handle = NativeLockStream::open($this->path, 'r+');
       $this->handle = $handle;
       $this->handlePid = $pid;
       $this->isHeld = false;
     }
     // flock 对同一描述符可重入；显式保留原互斥量的非重入语义。
     if ($this->isHeld) { return false; }
-    $this->isHeld = flock($this->handle, LOCK_EX | LOCK_NB);
+    $this->isHeld = NativeLockStream::lock($this->handle, LOCK_EX | LOCK_NB);
     return $this->isHeld;
   }
 
@@ -78,7 +77,11 @@ final class ProcessMutex
    */
   public function release(): void
   {
-    if (!$this->isHeld || !is_resource($this->handle) || !flock($this->handle, LOCK_UN)) {
+    // fork 会复制本进程状态；子进程无权释放父进程仍持有的同一打开文件描述。
+    if (
+      $this->handlePid !== (int)getmypid() || !$this->isHeld || !is_resource($this->handle)
+      || !NativeLockStream::lock($this->handle, LOCK_UN)
+    ) {
       throw new RuntimeException('监控运行配置解锁失败');
     }
     $this->isHeld = false;
@@ -90,9 +93,9 @@ final class ProcessMutex
    */
   public function __destruct()
   {
-    if (is_resource($this->handle)) { fclose($this->handle); }
-    if (!isset($this->lease)) { return; }
     try {
+      if (is_resource($this->handle)) { NativeLockStream::close($this->handle); }
+      if (!isset($this->lease)) { return; }
       $this->lease->close();
       $this->registry->sweep();
     } catch (\Throwable $error) {

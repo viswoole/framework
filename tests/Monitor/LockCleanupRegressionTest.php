@@ -6,18 +6,32 @@ declare(strict_types=1);
 
 namespace Viswoole\Tests\Monitor;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use Swoole\Process;
+use Swoole\Runtime;
 use Viswoole\Monitor\Runtime\ProcessMutex;
 
 /** worker 尚未打开互斥句柄时也必须受存活租约保护。 */
 final class LockCleanupRegressionTest extends TestCase
 {
-  /** @return void creator 强杀且没有 worker 后，新实例启动应清扫遗留锁文件 */
-  public function testNextStartupSweepsKilledCreatorWithoutWorkers(): void
+  /** @return iterable<string,array{int}> 覆盖在无 Hook 及已有 Hook 的进程中初始化 */
+  public static function provideCreationHooks(): iterable
   {
-    [$creator, $path] = $this->spawnCreator(false);
+    yield 'native' => [0];
+    yield 'hook-all' => [SWOOLE_HOOK_ALL];
+  }
+
+  /**
+   * creator 强杀且没有 worker 后，新实例启动应清扫遗留锁文件
+   * @param int $hookFlags creator 初始化时的 Hook
+   * @return void
+   */
+  #[DataProvider('provideCreationHooks')]
+  public function testNextStartupSweepsKilledCreatorWithoutWorkers(int $hookFlags): void
+  {
+    [$creator, $path] = $this->spawnCreator(false, false, $hookFlags);
     $status = Process::wait(true);
     self::assertSame(SIGKILL, $status['signal']);
     self::assertFileExists($path);
@@ -27,11 +41,16 @@ final class LockCleanupRegressionTest extends TestCase
     $replacement->release();
   }
 
-  /** @return void creator 死亡但空闲 worker 存活时必须保留，最后 worker 退出后才清扫 */
-  public function testSurvivingWorkerProtectsLockEvenBeforeFirstAcquire(): void
+  /**
+   * creator 死亡但空闲 worker 存活时必须保留，最后 worker 退出后才清扫
+   * @param int $hookFlags creator 初始化时的 Hook
+   * @return void
+   */
+  #[DataProvider('provideCreationHooks')]
+  public function testSurvivingWorkerProtectsLockEvenBeforeFirstAcquire(int $hookFlags): void
   {
     foreach ([false, true] as $isGraceful) {
-      [$creator, $path, $workerPid] = $this->spawnCreator(true, $isGraceful);
+      [$creator, $path, $workerPid] = $this->spawnCreator(true, $isGraceful, $hookFlags);
       $status = Process::wait(true);
       self::assertSame($isGraceful ? 0 : SIGKILL, $status['signal']);
       try {
@@ -77,11 +96,13 @@ final class LockCleanupRegressionTest extends TestCase
    * 创建会自杀的 creator，worker 通过继承的管道与测试主进程通信
    * @param bool $withWorker 是否留下活跃 worker
    * @param bool $isGraceful creator 是否正常销毁对象后退出
+   * @param int $hookFlags creator 创建锁前的 Hook
    * @return array{Process,string,?int} 管道、锁路径及 worker PID
    */
-  private function spawnCreator(bool $withWorker, bool $isGraceful = false): array
+  private function spawnCreator(bool $withWorker, bool $isGraceful = false, int $hookFlags = 0): array
   {
-    $creator = new Process(static function (Process $process) use ($withWorker, $isGraceful): void {
+    $creator = new Process(static function (Process $process) use ($withWorker, $isGraceful, $hookFlags): void {
+      Runtime::setHookFlags($hookFlags);
       $mutex = new ProcessMutex();
       $path = (new ReflectionProperty($mutex, 'path'))->getValue($mutex);
       if ($withWorker) { self::startWorker($process, $mutex, $path); }

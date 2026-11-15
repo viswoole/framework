@@ -45,12 +45,12 @@ final class LockRegistry
       $handle = null;
       try {
         $handle = $this->createFile($directory . '/lease.lock');
-        if (!flock($handle, LOCK_SH | LOCK_NB)) { throw new RuntimeException('监控实例存活锁初始化失败'); }
+        if (!NativeLockStream::lock($handle, LOCK_SH | LOCK_NB)) { throw new RuntimeException('监控实例存活锁初始化失败'); }
         $mutex = $this->createFile($directory . '/mutex.lock');
-        fclose($mutex);
+        NativeLockStream::close($mutex);
         return new LockLease($directory, $handle);
       } catch (Throwable $error) {
-        if (is_resource($handle)) { fclose($handle); }
+        if (is_resource($handle)) { NativeLockStream::close($handle); }
         $this->removeUnused($directory);
         throw $error;
       }
@@ -75,13 +75,14 @@ final class LockRegistry
   {
     $path = $this->root . '/registry.lock';
     if (is_link($path)) { throw new RuntimeException('监控注册锁不能是符号链接'); }
-    $handle = fopen($path, 'c+');
-    if ($handle === false) { throw new RuntimeException('监控注册锁打开失败'); }
+    $handle = NativeLockStream::open($path, 'c+');
     try {
       $this->acquireGate($handle);
       try { return $action(); }
-      finally { flock($handle, LOCK_UN); }
-    } finally { fclose($handle); }
+      finally {
+        if (!NativeLockStream::lock($handle, LOCK_UN)) { throw new RuntimeException('监控注册锁释放失败'); }
+      }
+    } finally { NativeLockStream::close($handle); }
   }
 
   /**
@@ -93,7 +94,7 @@ final class LockRegistry
   private function acquireGate(mixed $handle): void
   {
     $deadline = hrtime(true) + 1_000_000_000;
-    while (!flock($handle, LOCK_EX | LOCK_NB)) {
+    while (!NativeLockStream::lock($handle, LOCK_EX | LOCK_NB)) {
       if (hrtime(true) >= $deadline) { throw new RuntimeException('监控锁资源注册等待超时（1s）'); }
       if (Coroutine::getCid() >= 0) { Coroutine::sleep(0.001); }
       else { usleep(1000); }
@@ -131,12 +132,11 @@ final class LockRegistry
     foreach ($files as $file) {
       if (is_link($directory . '/' . $file) || !is_file($directory . '/' . $file)) { return false; }
     }
-    $handle = fopen($directory . '/lease.lock', 'r+');
-    if ($handle === false) { throw new RuntimeException('监控实例存活锁打开失败'); }
+    $handle = NativeLockStream::open($directory . '/lease.lock', 'r+');
     try {
-      if (!flock($handle, LOCK_EX | LOCK_NB)) { return false; }
+      if (!NativeLockStream::lock($handle, LOCK_EX | LOCK_NB)) { return false; }
       return $this->removeFiles($directory, $files);
-    } finally { fclose($handle); }
+    } finally { NativeLockStream::close($handle); }
   }
 
   /**
@@ -163,9 +163,8 @@ final class LockRegistry
    */
   private function createFile(string $path): mixed
   {
-    $handle = fopen($path, 'x+');
-    if ($handle === false) { throw new RuntimeException('监控私有锁文件创建失败'); }
-    if (!chmod($path, 0600)) { fclose($handle); throw new RuntimeException('监控锁文件权限设置失败'); }
+    $handle = NativeLockStream::open($path, 'x+');
+    if (!chmod($path, 0600)) { NativeLockStream::close($handle); throw new RuntimeException('监控锁文件权限设置失败'); }
     return $handle;
   }
 }
