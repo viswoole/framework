@@ -20,9 +20,9 @@ use Viswoole\Core\App;
 use Viswoole\Core\Console\Output;
 use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Server;
+use Viswoole\Core\Server\Shutdown\ServiceStopper;
 use Viswoole\Core\Server\Shutdown\ShutdownPolicy;
 use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
-use Viswoole\Core\Server\Shutdown\ServiceStopper;
 use Viswoole\Core\Server\Shutdown\StopResult;
 
 /**
@@ -96,47 +96,11 @@ class Action
   }
 
   /**
-   * 判断 PID 是否为存活的本框架服务进程（信号存活 + 非僵尸态 + cmdline 匹配）
+   * 获取服务的 PID 文件路径，优先使用服务配置中的路径
    *
-   * 三重判定：kill 0 信号存活 → /proc/{pid}/cmdline 非空（空说明进程已退出
-   * 且父进程未 wait 的僵尸态，容器内父进程不 reap 时常见，kill 0 对僵尸恒真）
-   * → cmdline 匹配 viswoole 入口关键词（NUL 分隔符归一为空格，防 PID 复用
-   * 误判）；/proc 不可用（非 Linux / 权限受限）时退回仅存活校验的旧行为
-   *
-   * @param int $pid 进程ID
-   * @return bool 存活的本框架进程返回 true
-   */
-  private static function isViswooleAlive(int $pid): bool
-  {
-    if (!Process::kill($pid, 0)) return false;
-    $cmdline = @file_get_contents("/proc/{$pid}/cmdline");
-    if ($cmdline === false) return true;
-    if ($cmdline === '') return false;
-    return stripos(str_replace("\0", ' ', $cmdline), 'viswoole') !== false;
-  }
-
-  /**
-   * 普通停止与强制重启必须使用相同的退出预算和消息分类。
-   * @param int $pid 主进程 PID
    * @param string $serverName 服务名
-   * @return void
+   * @return string 与启动选项一致的 PID 文件路径
    */
-  private static function stopService(int $pid, string $serverName): void
-  {
-    $pidFile = self::getPidFile($serverName);
-    $record = ShutdownRuntime::read($pidFile, $pid);
-    $options = $record ?? array_merge(
-      config('server.options', []),
-      config("server.servers.$serverName.options", [])
-    );
-    $policy = ShutdownPolicy::fromOptions($options);
-    Output::system("⏳ 正在停止{$serverName}服务($pid)，等待在途任务退出，命令等待预算 {$policy->waitSeconds()} 秒...", 'INFO');
-    $result = ServiceStopper::stop($pid, $pidFile, $policy);
-    if ($result === StopResult::Failed) throw new ServerException($result->message($serverName));
-    Output::system($result->message($serverName), $result === StopResult::Graceful ? 'SUCCESS' : 'WARNING');
-  }
-
-  /** @param string $serverName 服务名 @return string 与启动选项一致的 PID 文件路径 */
   public static function getPidFile(string $serverName): string
   {
     return config("server.servers.$serverName.options.pid_file")
@@ -159,6 +123,26 @@ class Action
   }
 
   /**
+   * 判断 PID 是否为存活的本框架服务进程（信号存活 + 非僵尸态 + cmdline 匹配）
+   *
+   * 三重判定：kill 0 信号存活 → /proc/{pid}/cmdline 非空（空说明进程已退出
+   * 且父进程未 wait 的僵尸态，容器内父进程不 reap 时常见，kill 0 对僵尸恒真）
+   * → cmdline 匹配 viswoole 入口关键词（NUL 分隔符归一为空格，防 PID 复用
+   * 误判）；/proc 不可用（非 Linux / 权限受限）时退回仅存活校验的旧行为
+   *
+   * @param int $pid 进程ID
+   * @return bool 存活的本框架进程返回 true
+   */
+  private static function isViswooleAlive(int $pid): bool
+  {
+    if (!Process::kill($pid, 0)) return false;
+    $cmdline = @file_get_contents("/proc/{$pid}/cmdline");
+    if ($cmdline === false) return true;
+    if ($cmdline === '') return false;
+    return stripos(str_replace("\0", ' ', $cmdline), 'viswoole') !== false;
+  }
+
+  /**
    * 判断指定 PID 对应的进程是否正在运行
    *
    * @param int|false|string $pid 进程ID
@@ -172,6 +156,32 @@ class Action
     } else {
       return false;
     }
+  }
+
+  /**
+   * 普通停止与强制重启必须使用相同的退出预算和消息分类。
+   * @param int $pid 主进程 PID
+   * @param string $serverName 服务名
+   * @return void
+   */
+  private static function stopService(int $pid, string $serverName): void
+  {
+    $pidFile = self::getPidFile($serverName);
+    $record = ShutdownRuntime::read($pidFile, $pid);
+    $options = $record ?? array_merge(
+      config('server.options', []),
+      config("server.servers.$serverName.options", [])
+    );
+    $policy = ShutdownPolicy::fromOptions($options);
+    Output::system(
+      "⏳ 正在停止{$serverName}服务($pid)，等待在途任务退出，命令等待预算 {$policy->waitSeconds()} 秒...",
+      'INFO'
+    );
+    $result = ServiceStopper::stop($pid, $pidFile, $policy);
+    if ($result === StopResult::Failed) throw new ServerException($result->message($serverName));
+    Output::system(
+      $result->message($serverName), $result === StopResult::Graceful ? 'SUCCESS' : 'WARNING'
+    );
   }
 
   /**
@@ -191,7 +201,6 @@ class Action
    * 不指定服务名时尝试关闭所有服务
    *
    * @param string|null $server_name 服务名称，为 null 时关闭所有服务
-   * @throws ServerException 发送信号失败时抛出
    */
   public static function close(?string $server_name = null): void
   {
@@ -200,15 +209,22 @@ class Action
       return;
     }
     $files = glob(self::getPidStore(null) . '/*.pid') ?: [];
-    $names = array_unique(array_merge(
-      array_keys(config('server.servers', [])),
-      array_map(static fn(string $file): string => basename($file, '.pid'), $files)
-    ));
+    $names = array_unique(
+      array_merge(
+        array_keys(config('server.servers', [])),
+        array_map(static fn(string $file): string => basename($file, '.pid'), $files)
+      )
+    );
     if ($names === []) Output::system('🈚️ 没有找到任何服务进程', 'WARNING');
     foreach ($names as $name) self::closeNamedService($name);
   }
 
-  /** @param string $serverName 服务名 @return void 仅对已通过身份校验的进程发信号 */
+  /**
+   * 关闭指定服务
+   *
+   * @param string $serverName 服务名
+   * @return void 仅对已通过身份校验的进程发信号
+   */
   private static function closeNamedService(string $serverName): void
   {
     $pid = self::getServerPid($serverName);
