@@ -20,6 +20,8 @@ use Swoole\Server;
 use Viswoole\Core\Console\Output;
 use Viswoole\Core\Facade\Event;
 use Viswoole\Core\FrameworkEvent;
+use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
+use Viswoole\Core\Server\Shutdown\StopResult;
 
 /**
  * Swoole 服务端事件钩子，统一管理服务生命周期事件的注册与分发
@@ -33,6 +35,7 @@ class ServerEventHook
     'start' => [[ServerEventHook::class, 'onStart']],
     'shutdown' => [[ServerEventHook::class, 'onShutdown']],
     'beforeshutdown' => [[ServerEventHook::class, 'onBeforeShutdown']],
+    'workerexit' => [[ServerEventHook::class, 'onWorkerExit']],
     // 内置 workerStart 处理器必须排在最前：它将进程角色标记为 worker，
     // 连接池在 workerStart 中的 fill 依赖此标记判定"当前是合法的池归属进程"
     'workerstart' => [[ServerEventHook::class, 'onWorkerStart']],
@@ -73,6 +76,12 @@ class ServerEventHook
     foreach (array_keys(self::$handles) as $event) {
       $events[$event] = function (mixed ...$args) use ($event) {
         // 透传处理器返回值：Swoole 事件中仅 onTask 的返回值有语义（任务结果回传 Worker 进程）
+        if ($event === 'task') {
+          return ShutdownRuntime::runTask(fn(mixed ...$taskArgs): mixed => self::dispatch($event, $taskArgs), $args);
+        }
+        if (in_array($event, ['request', 'receive', 'packet', 'message'], true)) {
+          return ShutdownRuntime::runRequest(fn(mixed ...$requestArgs): mixed => self::dispatch($event, $requestArgs), $args);
+        }
         return self::dispatch($event, $args);
       };
     }
@@ -110,25 +119,27 @@ class ServerEventHook
    */
   private static function onBeforeShutdown(Server $server): void
   {
+    ShutdownRuntime::stopping($server);
     // 触发服务关闭前事件，允许用户在服务关闭前执行一些清理工作
     Event::emit(FrameworkEvent::ServerShuttingDown, [$server]);
   }
 
   /**
-   * 服务关闭回调，输出服务已安全关闭的提示信息
+   * 服务关闭回调，按共享任务计数输出正常退出或中断结果
    *
    * @param Server $server Swoole 服务实例
    */
   private static function onShutdown(Server $server): void
   {
+    $result = ShutdownRuntime::stopped($server);
     // 主进程id
     $pid = $server->getMasterPid();
     // 服务名称
     $SERVER_NAME = strtoupper(SERVER_NAME);
     echo_log(
-      "🚫 服务已安全关闭($pid)",
+      $result->message(SERVER_NAME) . "($pid)",
       $SERVER_NAME,
-      color    : Output::LABEL_COLOR['DEBUG'],
+      color    : Output::LABEL_COLOR[$result === StopResult::Graceful ? 'SUCCESS' : 'WARNING'],
       backtrace: 0
     );
   }
@@ -149,6 +160,12 @@ class ServerEventHook
     ProcessRole::markAsWorker();
   }
 
+  /** @return void 只移除队列恢复定时器，不能清理业务任务仍在使用的定时器。 */
+  private static function onWorkerExit(): void
+  {
+    TaskQueueRecoveryTimer::stop();
+  }
+
   /**
    * 服务启动回调，输出启动信息、监听 SIGINT 信号以安全关闭服务，并触发 ServerStarted 事件
    *
@@ -156,6 +173,7 @@ class ServerEventHook
    */
   private static function onStart(Server $server): void
   {
+    ShutdownRuntime::started($server);
     $pid = $server->getMasterPid();
     // 服务名称
     $SERVER_NAME = strtoupper(SERVER_NAME);

@@ -28,6 +28,8 @@ use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Exception\ServerNotFoundException;
 use Viswoole\Core\Server\ProcessRole;
 use Viswoole\Core\Server\ServerEventHook;
+use Viswoole\Core\Server\Shutdown\ShutdownPolicy;
+use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
 
 /**
  * Swoole 服务器代理类
@@ -153,6 +155,42 @@ class Server
   public function getConfig(): array
   {
     if (isset($this->config)) return $this->config;
+    $config = $this->loadDefinition();
+    // 判断异常处理方法
+    if (!isset($config['exception_handle'])) $config['exception_handle'] = self::DEFAULT_EXCEPTION_HANDLE;
+
+    // 服务构造参数
+    $config['construct'] = array_merge(
+      self::DEFAULT_CONSTRUCT_ARGUMENTS,
+      $config['construct'] ?? []
+    );
+    // 全局配置
+    $globalOptions = config('server.options', self::getDefaultGlobalOption());
+    // 合并配置
+    $config['options'] = ShutdownPolicy::normalizeOptions(
+      array_merge($globalOptions, $config['options'] ?? [])
+    );
+    // 添加事件
+    ServerEventHook::addEvents(
+      array_merge(config('server.events', []), $config['events'] ?? [])
+    );
+    // HOOK事件监听
+    $config['events'] = ServerEventHook::getEventHooks();
+    // 任务回调协程化
+    $config['options'][Constant::OPTION_TASK_ENABLE_COROUTINE] = true;
+    $config['options'] = $this->preparePidOptions($config['options']);
+    $this->config = $config;
+    return $config;
+  }
+
+  /**
+   * 加载服务定义并校验类型，不负责事件或进程资源初始化
+   *
+   * @return array 已校验类型的服务定义
+   * @throws ServerNotFoundException 服务未定义或 type 配置错误时抛出
+   */
+  private function loadDefinition(): array
+  {
     $config = config("server.servers.$this->serverName");
     if (empty($config)) {
       throw new ServerNotFoundException(
@@ -166,39 +204,6 @@ class Server
         "{$this->serverName}服务type属性配置错误，请检查" . BASE_PATH . '/config/server.php配置文件。'
       );
     }
-    // 判断异常处理方法
-    if (!isset($config['exception_handle'])) $config['exception_handle'] = self::DEFAULT_EXCEPTION_HANDLE;
-
-    // 服务构造参数
-    $config['construct'] = array_merge(
-      self::DEFAULT_CONSTRUCT_ARGUMENTS,
-      $config['construct'] ?? []
-    );
-    // 全局配置
-    $globalOptions = config('server.options', self::getDefaultGlobalOption());
-    // 合并配置
-    $config['options'] = array_merge($globalOptions, $config['options'] ?? []);
-    // 添加事件
-    ServerEventHook::addEvents(
-      array_merge(config('server.events', []), $config['events'] ?? [])
-    );
-    // HOOK事件监听
-    $config['events'] = ServerEventHook::getEventHooks();
-    // 任务回调协程化
-    $config['options'][Constant::OPTION_TASK_ENABLE_COROUTINE] = true;
-    // 判断PID存储路径是否设置
-    if (empty($config['options'][Constant::OPTION_PID_FILE])) {
-      $config['options'][Constant::OPTION_PID_FILE] = self::getDefaultPidStoreDir() . "/$this->serverName.pid";
-    }
-    // 判断PID存储路径是否存在，如果不存在则创建
-    $pid_file = $config['options'][Constant::OPTION_PID_FILE];
-    // 获取目录路径
-    $directory = dirname($pid_file);
-    // 检查目录是否存在，如果不存在则创建它
-    if (!is_dir($directory) && !mkdir($directory, 0755, true)) {
-      throw new Exception("无法创建PID目录: $directory");
-    }
-    $this->config = $config;
     return $config;
   }
 
@@ -214,6 +219,9 @@ class Server
       Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
       // 是否启用异步风格服务器的协程支持
       Constant::OPTION_ENABLE_COROUTINE => true,
+      // 协程任务退出时等待已有任务，窗口统一由停机策略协调
+      Constant::OPTION_RELOAD_ASYNC => true,
+      Constant::OPTION_MAX_WAIT_TIME => ShutdownPolicy::DEFAULT_GRACE_SECONDS,
       // 最大协程数
       Constant::OPTION_MAX_CONCURRENCY => 10000,
       // 进程守护运行
@@ -231,6 +239,30 @@ class Server
       // 日志输出等级
       Constant::OPTION_LOG_LEVEL => SWOOLE_LOG_WARNING
     ];
+  }
+
+  /**
+   * 补充默认 PID 文件路径并确保其目录存在
+   *
+   * @param array $options 合并后的原生选项
+   * @return array 已准备 PID 路径的选项
+   * @throws Exception PID 目录创建失败时抛出
+   */
+  private function preparePidOptions(array $options): array
+  {
+    // 判断PID存储路径是否设置
+    if (empty($options[Constant::OPTION_PID_FILE])) {
+      $options[Constant::OPTION_PID_FILE] = self::getDefaultPidStoreDir() . "/$this->serverName.pid";
+    }
+    // 判断PID存储路径是否存在，如果不存在则创建
+    $pid_file = $options[Constant::OPTION_PID_FILE];
+    // 获取目录路径
+    $directory = dirname($pid_file);
+    // 检查目录是否存在，如果不存在则创建它
+    if (!is_dir($directory) && !mkdir($directory, 0755, true)) {
+      throw new Exception("无法创建PID目录: $directory");
+    }
+    return $options;
   }
 
   /**
@@ -257,6 +289,7 @@ class Server
     $events = $this->config['events'] ?? [];
     // 设置配置
     $server->set($this->config['options']);
+    ShutdownRuntime::prepare();
     // 注册监听事件
     foreach ($events as $event_name => $handler) {
       $server->on($event_name, $handler);

@@ -17,6 +17,8 @@ namespace Viswoole\Cache;
 
 use Closure;
 use DateTime;
+use RuntimeException;
+use Viswoole\Cache\Contract\AtomicCacheDriverInterface;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Monitor\TraceContext;
@@ -31,7 +33,7 @@ use Viswoole\Monitor\TraceContext;
  *
  * @see CacheDriverInterface 被装饰的驱动接口
  */
-final class MonitoredDriver implements CacheDriverInterface
+final readonly class MonitoredDriver implements AtomicCacheDriverInterface
 {
   /**
    * 构造装饰器
@@ -39,7 +41,35 @@ final class MonitoredDriver implements CacheDriverInterface
    * @param CacheDriverInterface $driver 被包装的原始驱动
    * @param string $store 所属缓存商店名（小写），仅用于采集记录
    */
-  public function __construct(private CacheDriverInterface $driver, private string $store) {}
+  public function __construct(
+    private CacheDriverInterface $driver,
+    private string               $store
+  )
+  {
+  }
+
+  /**
+   * 委托底层的原子集合回收，并保留监控采集。
+   * @param string $key 集合键
+   * @param string $registry 注册集合键
+   * @param string|null $member 待移除成员
+   * @return void
+   */
+  public function pruneSet(string $key, string $registry, ?string $member = null): void
+  {
+    if (!$this->supportsAtomicOperations()) throw new RuntimeException(
+      '缓存驱动不支持原子集合回收'
+    );
+    $this->invoke('pruneSet', [$key, $registry, $member]);
+  }
+
+  /**
+   * @return bool 只报告底层驱动实际提供的原子能力
+   */
+  public function supportsAtomicOperations(): bool
+  {
+    return $this->driver instanceof AtomicCacheDriverInterface && $this->driver->supportsAtomicOperations();
+  }
 
   /**
    * 采集并执行驱动操作
@@ -75,7 +105,10 @@ final class MonitoredDriver implements CacheDriverInterface
    * @param Closure|string $get 反序列化方法名或闭包
    * @return static 返回当前实例，支持链式调用
    */
-  public function setSerialize(Closure|string $set = 'serialize', Closure|string $get = 'unserialize'): static
+  public function setSerialize(
+    Closure|string $set = 'serialize',
+    Closure|string $get = 'unserialize'
+  ): static
   {
     $this->driver->setSerialize($set, $get);
     return $this;
@@ -88,7 +121,9 @@ final class MonitoredDriver implements CacheDriverInterface
    * 仍由原实例管理（CacheManager 常驻持有，随进程退出释放），装饰器析构
    * 若转发 close 会与驱动自身的析构释放重复执行，导致共享连接被提前关闭。
    */
-  public function __destruct() {}
+  public function __destruct()
+  {
+  }
 
   /**
    * 自增缓存
@@ -123,7 +158,12 @@ final class MonitoredDriver implements CacheDriverInterface
    * @param bool $NX 是否仅在键不存在时写入
    * @return bool 设置成功返回 true
    */
-  public function set(string $key, mixed $value, DateTime|int|null $expire = null, bool $NX = false): bool
+  public function set(
+    string            $key,
+    mixed             $value,
+    DateTime|int|null $expire = null,
+    bool              $NX = false
+  ): bool
   {
     return $this->invoke('set', [$key, $value, $expire, $NX]);
   }
@@ -193,7 +233,10 @@ final class MonitoredDriver implements CacheDriverInterface
    * @param int|float $sleep 重试间隔（秒）
    * @return string 锁唯一标识，用于 unlock
    */
-  public function lock(string $scene, int $expire = 10, bool $autoUnlock = false, int $retry = 5, int|float $sleep = 0.2): string
+  public function lock(
+    string    $scene, int $expire = 10, bool $autoUnlock = false, int $retry = 5,
+    int|float $sleep = 0.2
+  ): string
   {
     return $this->invoke('lock', [$scene, $expire, $autoUnlock, $retry, $sleep]);
   }

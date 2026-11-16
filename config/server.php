@@ -56,6 +56,10 @@ return [
     Constant::OPTION_HOOK_FLAGS => SWOOLE_HOOK_ALL,
     // 是否启用异步风格服务器的协程支持
     Constant::OPTION_ENABLE_COROUTINE => true,
+    // 优雅退出允许已启动的任务协程完成；服务级 options 可覆盖等待秒数。
+    Constant::OPTION_RELOAD_ASYNC => true,
+    // 任务需在此窗口内结束；CLI 等待 2 倍窗口再加 5 秒，避免提前强杀。
+    Constant::OPTION_MAX_WAIT_TIME => (int)(env('server.max_wait_time') ?? 60),
     // 最大协程数
     Constant::OPTION_MAX_CONCURRENCY => 100000,
     // 进程守护运行

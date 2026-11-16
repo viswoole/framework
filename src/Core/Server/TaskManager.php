@@ -24,10 +24,9 @@ use Swoole\Server\Task as SwooleTask;
 use Throwable;
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\Contract\CacheDriverInterface;
-use Viswoole\Cache\Contract\CacheTagInterface;
 use Viswoole\Core\Config;
-use Viswoole\Core\Coroutine;
 use Viswoole\Core\Facade\Server;
+use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
 use Viswoole\Log\Facade\Log;
 
 /**
@@ -43,7 +42,7 @@ class TaskManager
   /**
    * @var string 任务队列缓存标签前缀
    */
-  const string CACHE_TAG_PREFIX = '$_TASK_QUEUE_';
+  const string CACHE_TAG_PREFIX = TaskQueue::TAG_PREFIX;
   /**
    * @var array<string,callable> 任务主题
    */
@@ -52,46 +51,78 @@ class TaskManager
    * @var CacheDriverInterface|null 任务队列专用缓存驱动（惰性解析）
    */
   protected ?CacheDriverInterface $queueDriver = null;
+  /**
+   * @var string 实例归属在 fork 前确定，恢复时仍允许其他实例接管
+   */
+  protected string $instanceId;
+  /**
+   * @var TaskQueue|null 队列存储与认领边界（惰性创建，进程级复用）
+   */
+  protected ?TaskQueue $taskQueue = null;
 
   /**
    * @param CacheManager $cache 缓存管理器，用于任务队列的持久化存储
-   * @param Config $config 框架配置实例，用于读取 task.store 队列缓存通道配置
+   * @param Config $config 框架配置实例，用于读取 task.store 队列缓存通道
+   *   与 task.lease_seconds 投递租约周期配置
    */
   public function __construct(
     protected CacheManager $cache,
     protected Config       $config
   ) {
-    // 监听启动事件，恢复未完成的任务
-    ServerEventHook::addEvent('workerStart', function (SwooleServer $server, int $workerId) {
-      if (!$server->taskworker) {
-        $store = $this->getQueueCacheStore((string)$workerId);
-        $taskQueue = $store->get();
-        foreach ($taskQueue as $queueId) {
-          go(function () use ($queueId, $store) {
-            $taskData = $this->queueStore()->get($queueId);
-            if ($taskData) {
-              $result = Server::getServer()->task($taskData);
-              if (!$result) Log::task("队列任务恢复失败：$queueId", $taskData);
-            }
-          });
-        }
-      }
+    $this->instanceId = (string)($this->config->get('task.instance_id') ?: bin2hex(random_bytes(16)));
+    ServerEventHook::addEvent('workerStart', function (SwooleServer $server, int $workerId): void {
+      $this->startQueueRecovery($server, $workerId);
     });
-    ServerEventHook::addEvent('task', function (SwooleServer $server, SwooleTask $task) {
+    ServerEventHook::addEvent('task', function (SwooleServer $server, SwooleTask $task): mixed {
       // 透传 onTask 返回值（Swoole 语义：onTask 返回值作为任务结果发送给 Worker 进程）
       return $this->onTask($server, $task);
     });
   }
 
   /**
-   * 获取指定工作进程对应的队列缓存存储
-   *
-   * @param string $workId 工作进程ID
-   * @return CacheTagInterface 带标签的缓存存储实例
+   * 启动期解析失败只留痕；emit() 实际使用队列时仍明确报告配置错误。
+   * @param SwooleServer $server 服务实例
+   * @param int $workerId 本地 Worker ID
+   * @return void
    */
-  protected function getQueueCacheStore(string $workId): CacheTagInterface
+  protected function startQueueRecovery(SwooleServer $server, int $workerId): void
   {
-    return $this->queueStore()->tag(self::CACHE_TAG_PREFIX . $workId);
+    if ($server->taskworker || $workerId !== 0) return;
+    try {
+      if (!TaskQueue::isSupported($this->queueStore())) return;
+      $taskQueue = $this->taskQueue();
+    } catch (Throwable $exception) {
+      TaskQueueLog::write('任务队列缓存商店不可用，恢复扫描已跳过', ['exception' => (string)$exception]);
+      return;
+    }
+    $recover = function () use ($server): void { $this->recoverTasks($server); };
+    $recover();
+    // 启动扫描之外持续错峰重试，才能接管持有租约时崩溃的实例。
+    TaskQueueRecoveryTimer::start($taskQueue->leaseSeconds * 1000, $recover);
+  }
+
+  /**
+   * 扫描故障与单条投递故障分别留痕，日志故障不打断周期恢复。
+   * @param SwooleServer $server 服务实例
+   * @return void
+   */
+  protected function recoverTasks(SwooleServer $server): void
+  {
+    if (ShutdownRuntime::isStopping()) return;
+    try {
+      $this->taskQueue()->recover(function (array $data) use ($server): int|false {
+        try {
+          $result = $server->task($data);
+          if ($result === false) TaskQueueLog::write('队列任务恢复投递失败：' . $data['queueId'], $data);
+          return $result;
+        } catch (Throwable $exception) {
+          TaskQueueLog::write('队列任务恢复投递异常：' . $data['queueId'], ['exception' => (string)$exception]);
+          return false;
+        }
+      });
+    } catch (Throwable $exception) {
+      TaskQueueLog::write('队列恢复异常，将于下个周期重试', ['exception' => (string)$exception]);
+    }
   }
 
   /**
@@ -130,14 +161,13 @@ class TaskManager
     if (empty($topic)) {
       throw new InvalidArgumentException('必须使用该类中的方法触发任务');
     }
-    self::has($task->data['topic']);
     $taskProxy = new TaskProxy($task);
-    if ($taskProxy->queue_id) {
-      // 队列语义为待消费队列（at-most-once）：任务被 Task Worker 消费即删除，
-      // 与执行结果无关（finish 仅向 Worker 进程回传结果，不代表任务成功）。
-      // 崩溃恢复只覆盖"已投递但未消费"的窗口。
-      self::remove($taskProxy->queue_id, (string)$taskProxy->worker_id);
+    // 原子消费先于主题校验和处理器执行：租约过期后的重复投递只有一个胜者；
+    // 主题未注册时条目也会被消费删除，避免恢复扫描将不可执行的任务无限重投。
+    if ($taskProxy->queue_id && !$this->taskQueue()->consume($task->data, (string)$taskProxy->worker_id)) {
+      return false;
     }
+    self::has($topic);
     // 过期检测：有效期在投递时按主题解析并随任务数据传递，
     // 超过有效期的任务不再执行处理器，直接返回 false 通知 Worker 进程
     if ($this->isExpired($task->data)) {
@@ -223,17 +253,6 @@ class TaskManager
   }
 
   /**
-   * 从队列缓存中移除已完成的任务记录
-   *
-   * @param string $queueId 队列唯一标识
-   * @param string $workId 工作进程ID
-   */
-  protected function remove(string $queueId, string $workId): void
-  {
-    self::getQueueCacheStore($workId)->remove($queueId);
-  }
-
-  /**
    * 投递异步任务到 Task Worker 进程
    *
    * 投递时按 task.topics / task.expire 配置解析任务有效期（秒）并随任务
@@ -250,6 +269,7 @@ class TaskManager
     mixed  $data,
     bool   $queue = true,
   ): int|false {
+    if (ShutdownRuntime::isStopping()) return false;
     self::has($topic);
     $taskData = [
       'data' => $data,
@@ -259,29 +279,28 @@ class TaskManager
       // 任务有效期（秒），null 表示长期有效，消费时由 isExpired 检测
       'expire' => $this->resolveExpire($topic),
     ];
-    if ($queue) {
-      // 获取当前workerId
-      $workId = (string)Server::getWorkerId();
-      // 获取当前协程id
-      $cid = (string)Coroutine::id();
-      // 生成一个唯一队列id
-      $queueId = $workId . '_' . md5(uniqid("$workId:$cid:$topic"));
-      $taskData['queueId'] = $queueId;
-      // 缓存商店
-      $store = $this->getQueueCacheStore($workId);
-      // 缓存结果
-      $cacheResult = $store->set($queueId, $taskData, 0);
-      if ($cacheResult) {
-        $result = Server::getServer()->task($taskData);
-        // 如果投递任务失败则删除缓存
-        if (!$result) $this->remove($queueId, $workId);
-        return $result;
-      } else {
-        throw new RuntimeException('将任务数据写入到缓存队列失败！');
-      }
-    } else {
-      return Server::getServer()->task($taskData);
+    if (!$queue) return Server::getServer()->task($taskData);
+    $taskQueue = $this->taskQueue();
+    $group = $this->instanceId . ':' . Server::getWorkerId();
+    $taskData = $taskQueue->persist($taskData, $group);
+    $result = Server::getServer()->task($taskData);
+    if ($result === false) $taskQueue->discard($taskData);
+    return $result;
+  }
+
+  /**
+   * @return TaskQueue 队列存储与认领边界；实例缓存复用，租约周期与日志通道在构造时固化
+   */
+  protected function taskQueue(): TaskQueue
+  {
+    if (!isset($this->taskQueue)) {
+      $this->taskQueue = new TaskQueue(
+        $this->queueStore(),
+        (int)($this->config->get('task.lease_seconds') ?: TaskQueue::LEASE_SECONDS),
+        fn(string $message, Throwable $exception): mixed => TaskQueueLog::write($message, ['exception' => (string)$exception])
+      );
     }
+    return $this->taskQueue;
   }
 
   /**

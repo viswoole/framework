@@ -20,6 +20,10 @@ use Viswoole\Core\App;
 use Viswoole\Core\Console\Output;
 use Viswoole\Core\Exception\ServerException;
 use Viswoole\Core\Server;
+use Viswoole\Core\Server\Shutdown\ShutdownPolicy;
+use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
+use Viswoole\Core\Server\Shutdown\ServiceStopper;
+use Viswoole\Core\Server\Shutdown\StopResult;
 
 /**
  * Swoole 服务器操作类
@@ -47,15 +51,8 @@ class Action
     if (self::checkPidStatus($pid)) {
       if ($forceStart) {
         Output::system("{$server_name}服务正在运行中，正在尝试关闭，请等待...", 'WARNING');
-        // 修复: 强制重启复用统一的「发送信号→等待退出→超时强杀→清理PID」流程，
-        // 替代原先固定 5 轮 SIGINT+sleep 的盲试
-        if (self::stopAndWait($pid, $server_name, 5)) {
-          App::factory()->make('server', [$server_name])->start($daemonize);
-        } else {
-          throw new ServerException(
-            "⚠️ {$server_name}服务强制重启失败，无法kill {$pid}进程，请手动kill进程。"
-          );
-        }
+        self::stopService($pid, $server_name);
+        App::factory()->make('server', [$server_name])->start($daemonize);
       } else {
         throw new ServerException("⚠️ {$server_name}服务正在运行中，请勿重复启动。");
       }
@@ -77,8 +74,7 @@ class Action
     if (!preg_match('/^[A-Za-z0-9_-]+$/', $server_name)) {
       throw new ServerException("非法的服务名称：{$server_name}，仅允许字母、数字、下划线和中划线");
     }
-    $pid_dir = self::getPidStore($server_name);
-    $pid_file = $pid_dir . "/$server_name.pid";
+    $pid_file = self::getPidFile($server_name);
     //读取服务进程id 判断服务是否正在运行
     $pid = null;
     $status = false;
@@ -120,33 +116,32 @@ class Action
   }
 
   /**
-   * 停止服务主进程：发送 SIGINT 触发优雅停机，等待退出；超时 SIGKILL 强杀兜底，
-   * 结束后清理 PID 文件避免残留影响下次 start 判定
-   *
-   * @param int $pid 服务主进程 PID
-   * @param string $server_name 服务名称（用于定位 PID 文件）
-   * @param int $timeout 等待优雅退出的超时秒数
-   * @return bool 进程已退出返回 true，发送信号失败返回 false
+   * 普通停止与强制重启必须使用相同的退出预算和消息分类。
+   * @param int $pid 主进程 PID
+   * @param string $serverName 服务名
+   * @return void
    */
-  private static function stopAndWait(int $pid, string $server_name, int $timeout = 10): bool
+  private static function stopService(int $pid, string $serverName): void
   {
-    if (!Process::kill($pid, SIGINT)) return false;
-    // 修复: 此前发完 SIGINT 即返回，不等待 worker 退出——worker 协程阻塞时
-    // 端口仍 LISTEN、请求全部挂起，形成僵死服务。
-    // 存活判定用 isViswooleAlive：master 退出后残留的僵尸态（容器内父进程
-    // 不 reap）会让 kill 0 恒真，等待空转 10s 后误报停止失败
-    $waited = 0;
-    while ($waited++ < $timeout && self::isViswooleAlive($pid)) {
-      sleep(1);
-    }
-    if (self::isViswooleAlive($pid)) {
-      // SIGKILL 不可捕获不可忽略，防僵死兜底
-      Process::kill($pid, SIGKILL);
-      usleep(500000); // 给内核回收进程留出时间
-    }
-    $pid_file = self::getPidStore($server_name) . "/$server_name.pid";
-    if (is_file($pid_file)) @unlink($pid_file);
-    return !self::isViswooleAlive($pid);
+    $pidFile = self::getPidFile($serverName);
+    $record = ShutdownRuntime::read($pidFile, $pid);
+    $options = $record ?? array_merge(
+      config('server.options', []),
+      config("server.servers.$serverName.options", [])
+    );
+    $policy = ShutdownPolicy::fromOptions($options);
+    Output::system("⏳ 正在停止{$serverName}服务($pid)，等待在途任务退出，命令等待预算 {$policy->waitSeconds()} 秒...", 'INFO');
+    $result = ServiceStopper::stop($pid, $pidFile, $policy);
+    if ($result === StopResult::Failed) throw new ServerException($result->message($serverName));
+    Output::system($result->message($serverName), $result === StopResult::Graceful ? 'SUCCESS' : 'WARNING');
+  }
+
+  /** @param string $serverName 服务名 @return string 与启动选项一致的 PID 文件路径 */
+  public static function getPidFile(string $serverName): string
+  {
+    return config("server.servers.$serverName.options.pid_file")
+      ?? config('server.options.pid_file')
+      ?? self::getPidStore($serverName) . "/$serverName.pid";
   }
 
   /**
@@ -200,45 +195,28 @@ class Action
    */
   public static function close(?string $server_name = null): void
   {
-    if (empty($server_name)) {
-      $pid_dir = self::getPidStore(null);
-      $files = glob($pid_dir . '/*.pid');
-      if (empty($files)) {
-        Output::system('🈚️ 没有找到任何服务进程', 'WARNING');
-      } else {
-        foreach ($files as $file) {
-          $pid = (int)file_get_contents($file);
-          $server_name = basename($file, '.pid');
-          if (self::checkPidStatus($pid)) {
-            // 修复: 发送 SIGINT 后等待服务退出（超时强杀）并清理 PID 文件，
-            // 避免发完信号即返回、worker 未退出时端口仍 LISTEN 的僵死态
-            Output::system("⏳ 正在停止{$server_name}服务主进程($pid)...");
-            if (!self::stopAndWait($pid, $server_name)) {
-              throw new ServerException("❌ {$server_name}服务主进程($pid)停止失败，请手动kill进程。");
-            }
-            Output::system("✅ {$server_name}服务已停止");
-          } else {
-            // 删除掉无效的pid文件
-            unlink($file);
-          }
-        }
-      }
-    } else {
-      $pid = self::getServerPid($server_name);
-      if (self::checkPidStatus($pid)) {
-        // 发送SIGINT信号替代掉SIGTERM，
-        // 因为无法在内部Process::signal捕获SIGTERM信号触发ServerShuttingDown事件，清理掉资源，如定时器，
-        // 所以采用SIGINT信号替代SIGTERM信号，已在服务启动事件中监听了SIGINT，并调用Server::shutdown。
-        // 修复: 发送 SIGINT 后等待服务退出（超时强杀）并清理 PID 文件，防僵死
-        Output::system("⏳ 正在停止{$server_name}服务主进程($pid)...");
-        if (!self::stopAndWait($pid, $server_name)) {
-          throw new ServerException("❌ {$server_name}服务主进程($pid)停止失败，请手动kill进程。");
-        }
-        Output::system("✅ {$server_name}服务已停止");
-      } else {
-        Output::system("🈚️ {$server_name}服务未运行", 'WARNING');
-      }
+    if (!empty($server_name)) {
+      self::closeNamedService($server_name);
+      return;
     }
+    $files = glob(self::getPidStore(null) . '/*.pid') ?: [];
+    $names = array_unique(array_merge(
+      array_keys(config('server.servers', [])),
+      array_map(static fn(string $file): string => basename($file, '.pid'), $files)
+    ));
+    if ($names === []) Output::system('🈚️ 没有找到任何服务进程', 'WARNING');
+    foreach ($names as $name) self::closeNamedService($name);
+  }
+
+  /** @param string $serverName 服务名 @return void 仅对已通过身份校验的进程发信号 */
+  private static function closeNamedService(string $serverName): void
+  {
+    $pid = self::getServerPid($serverName);
+    if ($pid === false) {
+      Output::system("🈚️ {$serverName}服务未运行", 'WARNING');
+      return;
+    }
+    self::stopService($pid, $serverName);
   }
 
   /**
