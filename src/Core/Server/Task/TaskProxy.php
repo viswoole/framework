@@ -1,4 +1,7 @@
 <?php
+/**
+ * 职责：提供处理器数据访问、Swoole 结果回传和主动续租；不提前确认队列任务。
+ */
 /*
  *  +----------------------------------------------------------------------
  *  | visual-swoole [Visual and efficient development]
@@ -13,7 +16,7 @@
 
 declare(strict_types=1);
 
-namespace Viswoole\Core\Server;
+namespace Viswoole\Core\Server\Task;
 
 use Exception;
 use Swoole\Server\Task as SwooleTask;
@@ -37,7 +40,7 @@ class TaskProxy
    */
   public readonly mixed $data;
   /**
-   * @var string|null 队列唯一标识，非队列任务为 null；任务被 Task Worker 消费时即从缓存队列中移除
+   * @var string|null 队列唯一标识，非队列任务为 null；处理器正常结束并 ACK 后才从队列移除
    */
   public readonly string|null $queue_id;
   /**
@@ -46,10 +49,19 @@ class TaskProxy
   public readonly string $topic;
 
   /**
+   * 初始化任务代理并缓存任务数据访问入口
    * @param SwooleTask $swooleTask Swoole 原始任务对象
+   * @param \Closure|null $renew 当前执行者的主动续租入口
    */
   public function __construct(
-    private readonly SwooleTask $swooleTask
+    /**
+     * @var SwooleTask 当前投递的原始任务对象
+     */
+    private readonly SwooleTask $swooleTask,
+    /**
+     * @var \Closure|null 当前任务的租约续期入口
+     */
+    private readonly ?\Closure $renew = null
   ) {
     // 修复: 使用 null 合并运算符，避免数据访问无验证导致未定义键警告
     $this->data = $this->swooleTask->data['data'] ?? null;
@@ -58,6 +70,16 @@ class TaskProxy
     if (isset($this->swooleTask->data['dispatch_time'])) {
       $this->swooleTask->dispatch_time = $this->swooleTask->data['dispatch_time'];
     }
+  }
+
+  /**
+   * 主动延长当前执行租约；失去执行权时返回 false。
+   * @return bool 是否续期成功，非持久化任务返回 false
+   * @throws \Throwable 续租存储操作失败时抛出
+   */
+  public function renewLease(): bool
+  {
+    return $this->renew !== null && ($this->renew)();
   }
 
   /**
@@ -89,7 +111,7 @@ class TaskProxy
    * @return mixed 属性值
    * @throws Exception 属性不存在时抛出
    */
-  public function __get(string $name)
+  public function __get(string $name): mixed
   {
     if (property_exists($this->swooleTask, $name)) {
       return $this->swooleTask->{$name};

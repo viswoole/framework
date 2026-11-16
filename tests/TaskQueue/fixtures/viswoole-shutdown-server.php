@@ -8,7 +8,7 @@ require __DIR__ . '/shutdown-bootstrap.php';
 use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Core\Server\Shutdown\ShutdownPolicy;
 use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
-use Viswoole\Core\Server\TaskQueueRecoveryTimer;
+use Viswoole\Core\Server\Task\TaskQueueRecoveryTimer;
 
 $directory = $argv[1];
 $duration = (float)$argv[2];

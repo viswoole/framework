@@ -1,4 +1,7 @@
 <?php
+/**
+ * 职责：提供 Redis 缓存及原子能力，按运行上下文管理连接；不决定任务重试策略。
+ */
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -19,9 +22,13 @@ use DateTime;
 use Override;
 use RedisException;
 use Swoole\Coroutine\System;
-use Viswoole\Cache\Contract\AtomicCacheDriverInterface;
+use Viswoole\Cache\Contract\QueueStoreInterface;
 use Viswoole\Cache\Driver;
 use Viswoole\Cache\Driver\Redis\AtomicOperations;
+use Viswoole\Cache\Driver\Redis\QueueOperations;
+use Viswoole\Cache\Driver\Redis\QueueQuarantine;
+use Viswoole\Cache\Driver\Redis\QueueRecord;
+use Viswoole\Cache\Driver\Redis\QueueSchedule;
 use Viswoole\Cache\Exception\CacheErrorException;
 use Viswoole\Cache\RedisConfig;
 use Viswoole\Cache\RedisPool;
@@ -37,9 +44,12 @@ use Viswoole\Core\Server\ProcessRole;
  * @see Driver
  * @see RedisPool
  */
-class Redis extends Driver implements AtomicCacheDriverInterface
+class Redis extends Driver implements QueueStoreInterface
 {
   use AtomicOperations;
+  use QueueOperations;
+  use QueueSchedule;
+  use QueueQuarantine;
 
   /**
    * 协程上下文键：当前协程持有的连接实例
@@ -321,6 +331,9 @@ class Redis extends Driver implements AtomicCacheDriverInterface
    */
   #[Override] protected function unserialize(mixed $data): mixed
   {
+    if (QueueRecord::isEncoded($data)) {
+      return $this->unpackQueueRecord($data);
+    }
     // Redis 的 get/set 操作：serialize 对整数直接返回（不序列化），Redis 将其存为字符串。
     // unserialize 时，从 Redis 取出的数据始终为字符串，需要判断是否为数字字符串
     // （对应 serialize 中跳过序列化的整数），如果是则转为数值类型，否则正常反序列化

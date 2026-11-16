@@ -1,13 +1,18 @@
 <?php
+/**
+ * 职责：提供队列日志兜底出口，隔离日志后端故障；不执行任务或修改队列状态。
+ */
 
 declare(strict_types=1);
 
-namespace Viswoole\Core\Server;
+namespace Viswoole\Core\Server\Task;
 
 use Throwable;
 use Viswoole\Log\Facade\Log;
 
-/** 队列兜底日志出口；日志后端故障不能中断启动、恢复扫描或已认领任务的执行。 */
+/**
+ * 队列兜底日志出口；日志后端故障不能中断启动、恢复扫描或已认领任务的执行。
+ */
 final class TaskQueueLog
 {
   /**

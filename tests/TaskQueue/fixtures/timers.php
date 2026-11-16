@@ -12,10 +12,10 @@ $logPath = tempnam(sys_get_temp_dir(), 'queue-timer-');
 $previousLog = ini_set('error_log', $logPath);
 $results = [];
 try {
-  Viswoole\Core\Server\TaskQueueRecoveryTimer::start(0, static function (): void {});
+  Viswoole\Core\Server\Task\TaskQueueRecoveryTimer::start(0, static function (): void {});
   $results['invalidTimerContained'] = true;
   $calls = 0;
-  Viswoole\Core\Server\TaskQueueRecoveryTimer::start(10, static function () use (&$calls): void {
+  Viswoole\Core\Server\Task\TaskQueueRecoveryTimer::start(10, static function () use (&$calls): void {
     $calls++;
     Swoole\Timer::clearAll();
   });

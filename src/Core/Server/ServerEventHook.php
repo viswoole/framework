@@ -1,4 +1,7 @@
 <?php
+/**
+ * 职责：协调服务事件和退出清理；具体队列状态由任务模块管理。
+ */
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -22,6 +25,7 @@ use Viswoole\Core\Facade\Event;
 use Viswoole\Core\FrameworkEvent;
 use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
 use Viswoole\Core\Server\Shutdown\StopResult;
+use Viswoole\Core\Server\Task\TaskQueueRecoveryTimer;
 
 /**
  * Swoole 服务端事件钩子，统一管理服务生命周期事件的注册与分发

@@ -1,4 +1,7 @@
 <?php
+/**
+ * 职责：监控并透传缓存操作与底层原子能力；不采集业务载荷。
+ */
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -21,6 +24,7 @@ use RuntimeException;
 use Viswoole\Cache\Contract\AtomicCacheDriverInterface;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\CacheTagInterface;
+use Viswoole\Cache\Contract\QueueStoreInterface;
 use Viswoole\Monitor\TraceContext;
 
 /**
@@ -33,7 +37,7 @@ use Viswoole\Monitor\TraceContext;
  *
  * @see CacheDriverInterface 被装饰的驱动接口
  */
-final readonly class MonitoredDriver implements AtomicCacheDriverInterface
+final readonly class MonitoredDriver implements QueueStoreInterface
 {
   /**
    * 构造装饰器
@@ -42,7 +46,13 @@ final readonly class MonitoredDriver implements AtomicCacheDriverInterface
    * @param string $store 所属缓存商店名（小写），仅用于采集记录
    */
   public function __construct(
+    /**
+     * @var CacheDriverInterface 被包装的底层驱动
+     */
     private CacheDriverInterface $driver,
+    /**
+     * @var string 当前商店的监控名称
+     */
     private string               $store
   )
   {
@@ -64,11 +74,129 @@ final readonly class MonitoredDriver implements AtomicCacheDriverInterface
   }
 
   /**
+   * 判定底层驱动是否支持原子操作
    * @return bool 只报告底层驱动实际提供的原子能力
    */
   public function supportsAtomicOperations(): bool
   {
     return $this->driver instanceof AtomicCacheDriverInterface && $this->driver->supportsAtomicOperations();
+  }
+
+  /**
+   * 判定底层驱动是否支持可靠队列
+   * @return bool 底层驱动是否支持可靠队列，装饰器不提升能力
+   */
+  public function supportsQueueOperations(): bool
+  {
+    return $this->driver instanceof QueueStoreInterface
+      && $this->driver->supportsQueueOperations();
+  }
+
+  /**
+   * 委托队列原子提交，不能将普通缓存提升为可靠队列驱动。
+   * @param string $key 任务键
+   * @param array $change 条件与状态变更
+   * @return bool 是否提交成功
+   * @throws RuntimeException 底层驱动不支持可靠队列时抛出
+   * @throws \Throwable 底层存储操作失败时抛出
+   */
+  public function updateQueue(string $key, array $change): bool
+  {
+    if (!$this->supportsQueueOperations()) {
+      throw new RuntimeException('缓存驱动不支持可靠队列原子状态提交');
+    }
+    return $this->invoke('updateQueue', [$key, $change]);
+  }
+
+  /**
+   * 透传到期任务查询
+   * @param int $limit 单轮数量上限
+   * @return array 底层驱动结果
+   * @throws \Throwable 底层存储失败时抛出
+   */
+  public function getDueQueue(int $limit = 100): array
+  {
+    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列调度');
+    return $this->invoke('getDueQueue', [$limit]);
+  }
+
+  /**
+   * 透传任务元数据查询
+   * @param string $key 任务标识
+   * @return ?array 底层驱动结果
+   * @throws \Throwable 底层存储失败时抛出
+   */
+  public function getQueueMetadata(string $key): ?array
+  {
+    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列调度');
+    return $this->invoke('getQueueMetadata', [$key]);
+  }
+
+  /**
+   * 透传残留调度入口清理
+   * @param string $key 任务标识
+   * @return void 底层驱动结果
+   * @throws \Throwable 底层存储失败时抛出
+   */
+  public function pruneMissingQueue(string $key): void
+  {
+    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列调度');
+    $this->invoke('pruneMissingQueue', [$key]);
+  }
+
+  /**
+   * 透传不恢复业务对象的投递信封读取。
+   * @param string $key 任务标识
+   * @return array|null 投递信封
+   * @throws \Throwable 底层存储失败时抛出
+   */
+  public function getQueueDelivery(string $key): ?array
+  {
+    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列');
+    return $this->invoke('getQueueDelivery', [$key]);
+  }
+
+  /**
+   * 透传消费边界的业务载荷解码。
+   * @param array $delivery 投递信封
+   * @return array 完整任务
+   * @throws \Throwable 解码失败时抛出
+   */
+  public function decodeQueueDelivery(array $delivery): array
+  {
+    if (!$this->supportsQueueOperations()) {
+      throw new RuntimeException('缓存驱动不支持可靠队列');
+    }
+    // 解码不是缓存 I/O，不能将二进制信封作为监控键交给 invoke()。
+    return $this->driver->decodeQueueDelivery($delivery);
+  }
+
+  /**
+   * 透传存储端时钟读取，供队列租约与调度统一时钟域。
+   * @return float 存储端当前时间戳（浮点秒）
+   * @throws \Throwable 存储操作失败时抛出
+   */
+  public function now(): float
+  {
+    if (!$this->supportsQueueOperations()) {
+      throw new RuntimeException('缓存驱动不支持可靠队列');
+    }
+    // 时钟读取非缓存 I/O，且调用频率高，不进入监控采集。
+    return $this->driver->now();
+  }
+
+  /**
+   * 透传按快照校验的损坏任务隔离。
+   * @param string $key 任务标识
+   * @param string $snapshot 原始字节
+   * @param string $reason 解析失败原因
+   * @return bool 是否隔离成功
+   * @throws \Throwable 存储操作失败时抛出
+   */
+  public function quarantineQueue(string $key, string $snapshot, string $reason): bool
+  {
+    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列');
+    return $this->invoke('quarantineQueue', [$key, $snapshot, $reason]);
   }
 
   /**

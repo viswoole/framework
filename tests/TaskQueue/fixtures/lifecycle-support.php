@@ -20,7 +20,7 @@ namespace Viswoole\Log\Facade {
   }
 }
 
-namespace Viswoole\Core\Server {
+namespace Viswoole\Core\Server\Task {
   /**
    * 固定随机边界，确保测试正延时的下界，而不是依赖随机抽中。
    * @param int $minimum 随机下界
@@ -74,14 +74,16 @@ namespace {
   }
 
   /**
-   * 不连接 Redis，模拟恢复扫描入口故障。
+   * 不连接 Redis，模拟到期索引查询故障。
    */
   final class LifecycleBrokenRedis extends \Viswoole\Cache\Driver\Redis
   {
     /**
-     * @return array|false 始终抛出扫描错误
+     * @param int $limit 单轮查询上限
+     * @return array 始终抛出索引查询错误
+     * @throws \RuntimeException 固定注入的查询故障
      */
-    public function getTags(): array|false
+    public function getDueQueue(int $limit = 100): array
     {
       throw new \RuntimeException('injected scan failure');
     }
@@ -95,7 +97,7 @@ namespace {
    */
   function invokeWorkerStart(LifecycleCache $cache, \Swoole\Server $server): void
   {
-    new \Viswoole\Core\Server\TaskManager($cache, new LifecycleConfig());
+    new \Viswoole\Core\Server\Task\TaskManager($cache, new LifecycleConfig());
     $hooks = (new \ReflectionProperty(\Viswoole\Core\Server\ServerEventHook::class, 'handles'))->getValue();
     $callback = end($hooks['workerstart']);
     $callback($server, 0);

@@ -1,4 +1,7 @@
 <?php
+/**
+ * 职责：暴露任务管理器门面；不保存消费状态或执行处理器。
+ */
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -17,7 +20,7 @@ namespace Viswoole\Core\Facade;
 
 use Override;
 use Viswoole\Core\Facade;
-use Viswoole\Core\Server\TaskManager;
+use Viswoole\Core\Server\Task\TaskManager;
 
 /**
  * 任务管理门面，静态代理 TaskManager 核心方法
@@ -26,6 +29,8 @@ use Viswoole\Core\Server\TaskManager;
  * `Constant::OPTION_TASK_USE_OBJECT => true` 或 `Constant::OPTION_TASK_ENABLE_COROUTINE => true`
  *
  * @method static int|false emit(string $topic, mixed $data, bool $queue = true) 异步任务投递
+ * @method static \Viswoole\Core\Server\Task\TaskFailedQueue failedQueue() 获取失败任务管理入口
+ * @method static \Viswoole\Core\Server\Task\TaskQuarantinedQueue quarantinedQueue() 查询损坏记录原始快照
  * @method static void has(string $topic) 判断是否存在任务主题
  * @method static void register(string $topic, callable|string $handle) 注册任务主题
  * @method static mixed|false emitWait(string $topic, mixed $data, float $timeout = 0.5) 同步阻塞等待任务执行完成，返回执行结果。返回false为执行失败
