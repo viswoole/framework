@@ -42,7 +42,15 @@ Task::register('report.build', function (TaskProxy $task): array {
 
 自动续租依赖 Swoole 事件循环能够调度，阻塞代码和密集 CPU 计算可能推迟续期；应按实际最长不可调度区间设置租约，必要时在阶段之间主动续租。租约丢失不能撤销已经发生的业务副作用。
 
-**投递契约变更：** `emit()` 在持久化成功后，Swoole 首次投递返回 `false` 时保留任务并安排恢复，返回 `false` 不代表任务已经取消。调用方不能据此无条件创建同一业务的新任务。
+**投递受理契约（破坏性变更）：**
+
+- `emit(..., queue: true): string|false`：持久化提交得到确认后返回稳定队列 ID（48 位十六进制字符串），不再返回 Swoole 整数 ID。首次 IPC 返回 false、抛异常、提交后的信封读取失败或补偿写入失败，均不改变已受理结果；框架保留恢复入口。
+- 停机期间返回 `false`，表示本次调用未受理；未知主题、配置、序列化及提交前读取错误仍抛普通异常，尚未受理。
+- Redis 原子命令未取得可靠回执时抛 `Viswoole\Core\Server\Task\TaskAcceptanceUnknownException`，`queueId` 保存本次尝试身份，原始故障保留在异常链中。此时可能已受理，禁止按普通失败同步降级或创建新任务；应保留业务身份进行核对。原任务可能已完成并 ACK，查不到队列记录也不能单独证明未受理。
+- `emit(..., queue: false): int|false` 保持原生 Swoole 投递结果（包括任务 ID 0）及异常，不提供持久化恢复。
+- 调用方必须同步调整返回类型，且先识别受理未知异常，再处理普通的明确失败。稳定队列 ID 只标识这次入队，不提供跨调用业务去重；至少一次执行仍需业务幂等。
+
+低层 `TaskQueue::enqueue()` 仅返回已确认持久化的 ID，`delivery()` 单独读取 IPC 信封。组合接口 `persist()` 保留供底层调用使用，其读取阶段异常不表示入队失败。自定义 QueueStoreInterface 实现必须将可能已提交的故障报告为 QueueCommitUnknownException，不能以普通异常伪装明确拒绝。
 
 类名注册只扫描公开的非魔术方法。静态方法直接调用，实例方法在每次任务调用时通过容器 `invokeClass()` 解析构造依赖，不缓存处理器对象。恢复投递失败日志只记录任务标识、主题与执行次数，不写入业务载荷。
 
@@ -131,3 +139,7 @@ docker run --rm --network none -v "$PWD:/workspace:ro" --entrypoint php viswoole
 ```
 
 运行 PHPUnit 时使用 `viswoole-shutdown-test:swoole-6.2.5` 镜像和上面的容器命令，无需额外配置 PHP 子进程命令或场景路径。该镜像仅用于停机行为验证；生产升级前仍需对照现有镜像保留 Swoole 的编译功能，并在预发布环境验证业务。没有执行业务镜像替换或发布。
+
+`AcceptanceTest.php` 覆盖首次 IPC 返回 false/异常、提交后读取失败、补偿写失败、真实 Lua 提交后的响应丢失、提交前断线、无确认返回、序列化拒绝、停机拒收以及恢复后的单次认领和 ACK。
+
+连接获取失败与命令回执丢失分别验证：TIME、GET 成功后获取 EVAL 连接失败时，保留普通 RedisException，并断言 EVAL 未调用且存储没有新增记录；进入 EVAL 后发生故障仍保守报告受理结果未知。

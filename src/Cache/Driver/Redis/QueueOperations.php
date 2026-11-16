@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：原子提交队列状态与集合索引；沿用缓存连接生命周期并保留载荷原始字节。
  */
@@ -9,6 +10,8 @@ namespace Viswoole\Cache\Driver\Redis;
 use JsonException;
 use RedisException;
 use RuntimeException;
+use Throwable;
+use Viswoole\Cache\Exception\QueueCommitUnknownException;
 use Viswoole\Cache\Contract\QueueStoreInterface;
 
 /**
@@ -30,7 +33,8 @@ trait QueueOperations
    * @param string $key 任务键
    * @param array $change 期望值、新值与索引变更
    * @return bool 是否成功提交
-   * @throws RedisException Redis 读取或脚本执行失败时抛出
+   * @throws RedisException 提交前 Redis 读取或获取连接失败时抛出
+   * @throws QueueCommitUnknownException 原子提交回执不确定时抛出
    * @throws RuntimeException 脚本读取、信封解析或提交失败时抛出
    * @throws JsonException 状态元数据编码失败时抛出
    */
@@ -38,13 +42,23 @@ trait QueueOperations
   {
     static $script = null;
     $script ??= file_get_contents(__DIR__ . '/queue-update.lua');
-    if ($script === false) throw new RuntimeException('读取队列原子脚本失败');
-    $raw = $this->withConnection(fn(\Redis $redis): mixed => $redis->get($this->getCacheKey($key)));
-    if ($change['expected'] !== null && $raw === false) return false;
-    if ($change['expected'] === null && $raw !== false) return false;
+    if ($script === false) { throw new RuntimeException('读取队列原子脚本失败'); }
+    $raw = $this->withConnection(fn (\Redis $redis): mixed => $redis->get($this->getCacheKey($key)));
+    if ($change['expected'] !== null && $raw === false) { return false; }
+    if ($change['expected'] === null && $raw !== false) { return false; }
     $arguments = $this->queueArguments($key, $change, $raw);
-    $result = $this->withConnection(fn(\Redis $redis): mixed => $redis->eval($script, $arguments, 7));
-    if ($result === false) throw new RuntimeException('队列原子状态提交失败：' . $key);
+    $isCommandStarted = false;
+    // 获取连接失败可以证明未提交；进入 EVAL 后的执行或连接归还故障必须保守处理。
+    try {
+      $result = $this->withConnection(function (\Redis $redis) use ($script, $arguments, &$isCommandStarted): mixed {
+        $isCommandStarted = true;
+        return $redis->eval($script, $arguments, 7);
+      });
+    } catch (Throwable $exception) {
+      if (!$isCommandStarted) { throw $exception; }
+      throw new QueueCommitUnknownException('队列原子提交结果未知：' . $key, 0, $exception);
+    }
+    if ($result === false) { throw new QueueCommitUnknownException('队列原子提交未取得确认：' . $key); }
     return $result === 1;
   }
 
@@ -63,8 +77,10 @@ trait QueueOperations
     $add = $change['add'] ?? '';
     $payload = $raw === false ? null : $this->decodeStoredQueue($key, $raw)['payload'];
     $value = $change['value'];
-    $encoded = $value === null ? '' : QueueRecord::encode($value,
-      $payload ?? $this->encodeQueuePayload($value));
+    $encoded = $value === null ? '' : QueueRecord::encode(
+      $value,
+      $payload ?? $this->encodeQueuePayload($value)
+    );
     return [$this->getCacheKey($key), $this->getCacheKey($remove),
       $this->getCacheKey($add), $this->getCacheKey($this->getTagStoreName()),
       $this->getCacheKey($change['target'] ?? $key), $this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY),
@@ -86,7 +102,7 @@ trait QueueOperations
   private function encodeQueuePayload(array $value): string
   {
     $payload = $this->serialize($value);
-    if (!is_string($payload)) throw new RuntimeException('队列载荷序列化器必须返回字符串');
+    if (!is_string($payload)) { throw new RuntimeException('队列载荷序列化器必须返回字符串'); }
     return $payload;
   }
 
@@ -110,11 +126,11 @@ trait QueueOperations
    */
   public function decodeQueueDelivery(array $delivery): array
   {
-    if (!is_string($delivery['queuePayload'] ?? null)) throw new RuntimeException('缺少队列投递载荷字节');
+    if (!is_string($delivery['queuePayload'] ?? null)) { throw new RuntimeException('缺少队列投递载荷字节'); }
     $original = $this->unserialize($delivery['queuePayload']);
-    if (!is_array($original)) throw new RuntimeException('队列原始载荷必须为数组');
+    if (!is_array($original)) { throw new RuntimeException('队列原始载荷必须为数组'); }
     $record = QueueRecord::restoreError(QueueRecord::metadata($delivery));
-    if (array_key_exists('data', $original)) $record['data'] = $original['data'];
+    if (array_key_exists('data', $original)) { $record['data'] = $original['data']; }
     return $record;
   }
 }

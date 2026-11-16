@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：协调主题、持久化投递和消费入口；存储状态与执行生命周期委托专用模块。
  */
@@ -25,8 +26,8 @@ use Swoole\Server\Task as SwooleTask;
 use Throwable;
 use Viswoole\Cache\CacheManager;
 use Viswoole\Cache\Contract\CacheDriverInterface;
+use Viswoole\Cache\Contract\QueueStoreInterface;
 use Viswoole\Core\Config;
-use Viswoole\Core\Facade\Server;
 use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
 
@@ -42,6 +43,7 @@ class TaskManager
 {
   use TaskTopicRegistry;
   use TaskSynchronousDispatch;
+  use TaskAsynchronousDispatch;
 
   /**
    * @var array<string,callable> 任务主题
@@ -68,12 +70,10 @@ class TaskManager
   public function __construct(
     /**
      * @var CacheManager 缓存商店解析入口
-     */
-    protected CacheManager $cache,
+     */ protected CacheManager $cache,
     /**
      * @var Config 任务配置读取入口
-     */
-    protected Config       $config
+     */ protected Config       $config
   )
   {
     $this->instanceId = (string)($this->config->get('task.instance_id') ?: bin2hex(
@@ -90,19 +90,25 @@ class TaskManager
 
   /**
    * 启动期解析失败只留痕；emit() 实际使用队列时仍明确报告配置错误。
+   *
    * @param SwooleServer $server 服务实例
    * @param int $workerId 本地 Worker ID
    * @return void
    */
   protected function startQueueRecovery(SwooleServer $server, int $workerId): void
   {
-    if ($server->taskworker || $workerId !== 0) return;
+    if ($server->taskworker || $workerId !== 0) {
+      return;
+    }
     try {
-      if (!TaskQueue::isSupported($this->queueStore())) return;
+      if (!TaskQueue::isSupported($this->queueStore())) {
+        return;
+      }
       $this->taskQueue();
     } catch (Throwable $exception) {
       TaskQueueLog::write(
-        '任务队列缓存商店不可用，恢复扫描已跳过', ['exception' => (string)$exception]
+        '任务队列缓存商店不可用，恢复扫描已跳过',
+        ['exception' => (string)$exception]
       );
       return;
     }
@@ -159,18 +165,23 @@ class TaskManager
    */
   protected function recoverTasks(SwooleServer $server): void
   {
-    if (ShutdownRuntime::isStopping()) return;
+    if (ShutdownRuntime::isStopping()) {
+      return;
+    }
     try {
       $this->taskQueue()->recover(function (array $data) use ($server): int|false {
         try {
           $result = $server->task($data);
-          if ($result === false) TaskQueueLog::write('队列任务恢复投递失败：' . $data['queueId'], [
-            'topic' => $data['topic'], 'attempts' => $data['attempts'] ?? 0,
-          ]);
+          if ($result === false) {
+            TaskQueueLog::write('队列任务恢复投递失败：' . $data['queueId'], [
+              'topic' => $data['topic'], 'attempts' => $data['attempts'] ?? 0,
+            ]);
+          }
           return $result;
         } catch (Throwable $exception) {
           TaskQueueLog::write(
-            '队列任务恢复投递异常：' . $data['queueId'], ['exception' => (string)$exception]
+            '队列任务恢复投递异常：' . $data['queueId'],
+            ['exception' => (string)$exception]
           );
           return false;
         }
@@ -190,14 +201,16 @@ class TaskManager
    * @param SwooleServer $server Swoole 服务实例
    * @param SwooleTask $task Swoole 任务对象
    * @return mixed 处理器返回值；任务已过期或处理器抛出异常时返回 false
-   * @throws InvalidArgumentException 投递主题不是非空字符串时抛出
+   * @throws InvalidArgumentException|Throwable 投递主题不是非空字符串时抛出
    */
   protected function onTask(SwooleServer $server, SwooleTask $task): mixed
   {
     $topic = TaskTopicName::validate($task->data['topic'] ?? null);
     if (empty($task->data['queueId'])) {
       $this->has($topic);
-      if ($this->isExpired($task->data)) return false;
+      if ($this->isExpired($task->data)) {
+        return false;
+      }
       try {
         return ($this->topics[strtolower($topic)])(new TaskProxy($task), $server);
       } catch (Throwable $exception) {
@@ -208,66 +221,34 @@ class TaskManager
     return new TaskQueueConsumer($this->taskQueue())->execute($task, $server, [
       'validate' => function () use ($topic, $task): void {
         $this->has($topic);
-        if ($this->isExpired($task->data)) throw new RuntimeException('任务已过期');
+        if ($this->isExpired($task->data)) {
+          throw new RuntimeException('任务已过期');
+        }
       },
       'handle' => fn(TaskProxy $proxy, SwooleServer $server): mixed => ($this->topics[strtolower(
         $topic
       )])(
-        $proxy, $server
+        $proxy,
+        $server
       ),
     ]);
   }
 
   /**
-   * 投递异步任务到 Task Worker 进程
-   *
-   * 投递时按 task.topics / task.expire 配置解析任务有效期（秒）并随任务
-   * 数据传递，任务被消费时检测，已过期的任务不会执行处理器。
-   *
-   * @param string $topic 已注册的任务主题名称
-   * @param mixed $data 传递给任务处理器的业务数据
-   * @param bool $queue 是否持久化到队列，启用后服务重启可自动恢复未执行的任务
-   * @return int|false 投递成功返回任务 ID；返回 false 时已持久化的任务仍会恢复重投
-   * @throws Throwable 队列缓存写入失败时抛出
-   */
-  public function emit(
-    string $topic,
-    mixed  $data,
-    bool   $queue = true,
-  ): int|false
-  {
-    if (ShutdownRuntime::isStopping()) return false;
-    self::has($topic);
-    $taskData = [
-      'data' => $data,
-      'topic' => $topic,
-      'queueId' => null,
-      'dispatch_time' => microtime(true),
-      // 任务有效期（秒），null 表示长期有效，消费时由 isExpired 检测
-      'expire' => $this->resolveExpire($topic),
-    ];
-    if (!$queue) return Server::getServer()->task($taskData);
-    $taskQueue = $this->taskQueue();
-    $group = $this->instanceId . ':' . Server::getWorkerId();
-    $taskData = $taskQueue->persist($taskData, $group);
-    try {
-      $result = Server::getServer()->task($taskData);
-    } catch (Throwable $exception) {
-      $taskQueue->deliveryFailed($taskData, $exception->getMessage());
-      throw $exception;
-    }
-    if ($result === false) $taskQueue->deliveryFailed($taskData, 'Swoole 首次投递失败');
-    return $result;
-  }
-
-  /**
    * 获取失败队列管理入口，使用与消费者相同的商店。
    * @return TaskFailedQueue 失败任务管理器
+   * @throws RuntimeException 缓存驱动未实现队列存储接口时抛出
+   * @throws Throwable 队列初始化失败时抛出
    */
   public function failedQueue(): TaskFailedQueue
   {
+    $store = $this->queueStore();
+    // 在使用处收窄类型，静态分析无法从 taskQueue() 的内部校验推导驱动类型。
+    if (!$store instanceof QueueStoreInterface) {
+      throw new RuntimeException('失败任务队列要求缓存驱动实现 QueueStoreInterface');
+    }
     $this->taskQueue();
-    return new TaskFailedQueue($this->queueStore());
+    return new TaskFailedQueue($store);
   }
 
   /**

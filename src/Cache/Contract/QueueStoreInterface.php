@@ -98,7 +98,8 @@ interface QueueStoreInterface extends AtomicCacheDriverInterface
    * @param string $key 任务键
    * @param array{expected: ?array, value: ?array, remove?: string, add?: string, target?: string, deadline?: float|int} $change 状态与索引；deadline > 0 时按令牌、状态和存储中当前期限校验执行权；target 用于原子重放
    * @return bool 版本或执行权匹配且提交成功
-   * @throws \RuntimeException 存储提交失败时抛出
+   * @throws \Viswoole\Cache\Exception\QueueCommitUnknownException 命令可能已提交但未取得可靠回执时必须抛出
+   * @throws \RuntimeException 提交前准备失败或明确拒绝时抛出
    * @throws \RedisException Redis 操作失败时抛出
    */
   public function updateQueue(string $key, array $change): bool;

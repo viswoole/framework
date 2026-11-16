@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：暴露任务管理器门面；不保存消费状态或执行处理器。
  */
@@ -28,7 +29,7 @@ use Viswoole\Core\Server\Task\TaskManager;
  * 注意：使用任务管理服务必须配置服务选项：
  * `Constant::OPTION_TASK_USE_OBJECT => true` 或 `Constant::OPTION_TASK_ENABLE_COROUTINE => true`
  *
- * @method static int|false emit(string $topic, mixed $data, bool $queue = true) 异步任务投递
+ * @method static string|int|false emit(string $topic, mixed $data, bool $queue = true) 持久化返回稳定队列 ID，直投返回 Swoole ID；false 表示明确拒收，提交未知抛 TaskAcceptanceUnknownException
  * @method static \Viswoole\Core\Server\Task\TaskFailedQueue failedQueue() 获取失败任务管理入口
  * @method static \Viswoole\Core\Server\Task\TaskQuarantinedQueue quarantinedQueue() 查询损坏记录原始快照
  * @method static void has(string $topic) 判断是否存在任务主题
@@ -40,7 +41,6 @@ use Viswoole\Core\Server\Task\TaskManager;
  */
 class Task extends Facade
 {
-
   /**
    * 获取门面代理的目标类名
    */

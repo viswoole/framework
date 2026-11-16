@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：管理持久化任务状态、租约和恢复；不执行业务处理器。
  */
@@ -6,17 +7,18 @@ declare(strict_types=1);
 
 namespace Viswoole\Core\Server\Task;
 
-use Closure;
 use RuntimeException;
 use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\QueueStoreInterface;
-use Viswoole\Cache\Exception\QueueRecordException;
 
 /**
  * 通过带令牌的条件提交实现至少一次消费，成功后才删除任务。
  */
 final class TaskQueue
 {
+  use TaskQueueSubmission;
+  use TaskQueueRecovery;
+
   /**
    * @var string 活跃任务分组前缀
    */
@@ -49,8 +51,7 @@ final class TaskQueue
     CacheDriverInterface $store,
     /**
      * @var int 投递与执行租约秒数
-     */
-    public readonly int  $leaseSeconds = self::LEASE_SECONDS,
+     */ public readonly int $leaseSeconds = self::LEASE_SECONDS,
   )
   {
     // 在当前作用域内做 instanceof 守卫，使 PHP 原生类型收窄生效，避免静态分析器将
@@ -61,7 +62,7 @@ final class TaskQueue
     ) {
       throw new RuntimeException('可靠任务队列要求 Redis 原子状态提交能力');
     }
-    if ($leaseSeconds < 1) throw new \InvalidArgumentException('任务租约必须不小于 1 秒');
+    if ($leaseSeconds < 1) { throw new \InvalidArgumentException('任务租约必须不小于 1 秒'); }
     $this->store = $store;
   }
 
@@ -86,31 +87,12 @@ final class TaskQueue
     $validated = $this->retry;
     foreach ($validated as $name => $default) {
       $value = $retry[$name] ?? $default;
-      if (!is_int($value) || $value < 1) throw new \InvalidArgumentException(
+      if (!is_int($value) || $value < 1) { throw new \InvalidArgumentException(
         '无效队列重试配置：' . $name
-      );
+      ); }
       $validated[$name] = $value;
     }
     $this->retry = $validated;
-  }
-
-  /**
-   * 生成投递令牌并原子写入初始队列状态
-   * @param array $data 业务载荷
-   * @param string $group 原始实例分组
-   * @return array 包含元数据、令牌和未解码字节的投递信封
-   * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
-   */
-  public function persist(array $data, string $group): array
-  {
-    TaskTopicName::validate($data['topic'] ?? null);
-    $data['queueId'] = bin2hex(random_bytes(24));
-    $data['queueGroup'] = $group;
-    $data['attempts'] = 0;
-    $data = $this->lease($data, 'dispatched');
-    if (!$this->commit(null, $data)) throw new RuntimeException('持久化队列任务失败');
-    return $this->store->getQueueDelivery($data['queueId'])
-      ?? throw new RuntimeException('读取已持久化的任务投递信封失败');
   }
 
   /**
@@ -171,7 +153,7 @@ final class TaskQueue
   public function consume(array $data): ?array
   {
     $before = $this->owned($data, 'dispatched');
-    if ($before === null) return null;
+    if ($before === null) { return null; }
     $after = $this->lease($before, 'running');
     $after['attempts'] = ($before['attempts'] ?? 0) + 1;
     return $this->commit($before, $after, true) ? $after : null;
@@ -187,8 +169,8 @@ final class TaskQueue
   private function owned(array $data, string $state = 'running'): ?array
   {
     $current = $this->store->getQueueMetadata($data['queueId']);
-    if (!is_array($current) || ($current['queueState'] ?? '') !== $state) return null;
-    if (($current['queueToken'] ?? null) !== ($data['queueToken'] ?? null)) return null;
+    if (!is_array($current) || ($current['queueState'] ?? '') !== $state) { return null; }
+    if (($current['queueToken'] ?? null) !== ($data['queueToken'] ?? null)) { return null; }
     return ($current['leaseUntil'] ?? 0) > $this->store->now() ? $current : null;
   }
 
@@ -213,7 +195,7 @@ final class TaskQueue
   public function renew(array $data): bool
   {
     $before = $this->owned($data);
-    if ($before === null) return false;
+    if ($before === null) { return false; }
     $after = $before;
     $after['leaseUntil'] = $this->store->now() + $this->leaseSeconds;
     return $this->commit($before, $after, true);
@@ -269,80 +251,6 @@ final class TaskQueue
   }
 
   /**
-   * 每轮限量恢复到期任务，单条任务异常不阻止本轮其他任务
-   * @param Closure $dispatch 投递回调
-   * @return void
-   * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
-   */
-  public function recover(Closure $dispatch): void
-  {
-    foreach ($this->store->getDueQueue() as $id) {
-      try {
-        $this->dispatch($id, $dispatch);
-      } catch (QueueRecordException $exception) {
-        $this->isolateRecord($exception);
-      } catch (\Throwable $exception) {
-        TaskQueueLog::write('队列任务恢复异常：' . $id, ['exception' => (string)$exception]);
-      }
-    }
-  }
-
-  /**
-   * 投递队列任务，仅在租约与状态允许时执行
-   * @param string $queueId 任务 ID
-   * @param Closure $dispatch Swoole 投递回调
-   * @return int|false 投递结果
-   * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
-   */
-  public function dispatch(string $queueId, Closure $dispatch): int|false
-  {
-    $before = $this->store->getQueueMetadata($queueId);
-    if (!is_array($before)) {
-      $this->store->pruneMissingQueue($queueId);
-      return false;
-    }
-    if (($before['queueState'] ?? '') === 'failed') return false;
-    // 到期判定使用存储端时钟，与 Redis TIME 的调度扫描保持一致
-    $now = $this->store->now();
-    if (($before['leaseUntil'] ?? 0) > $now || ($before['retryAt'] ?? 0) > $now) return false;
-    $data = $before;
-    if (($data['queueState'] ?? '') === 'running') {
-      $this->transitionFailure($before, '执行租约到期，消费者可能已退出', ['isExpired' => true]);
-      return false;
-    }
-    $data = $this->lease($data, 'dispatched');
-    if (!$this->commit($before, $data)) return false;
-    try {
-      $delivery = $this->store->getQueueDelivery($queueId);
-      if (!is_array($delivery) || $delivery['queueToken'] !== $data['queueToken']) return false;
-      $result = $dispatch($delivery);
-    } catch (\Throwable $exception) {
-      $this->deliveryFailed($data, $exception->getMessage());
-      throw $exception;
-    }
-    if ($result === false) $this->deliveryFailed($data, 'Swoole 投递失败');
-    return $result;
-  }
-
-  /**
-   * 标记投递失败并安排退避重试
-   * @param array $data 投递载荷
-   * @param string $reason 投递失败原因
-   * @return void
-   * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
-   */
-  public function deliveryFailed(array $data, string $reason): void
-  {
-    $before = $this->owned($data, 'dispatched');
-    if ($before === null) return;
-    $after = $before;
-    $after['queueState'] = 'retry';
-    $after['leaseUntil'] = 0;
-    $after['retryAt'] = $this->store->now() + $this->delay(1);
-    $after['lastError'] = $reason;
-    $this->commit($before, $after, true);
-  }
-  /**
    * 在取得执行租约之后恢复业务数据，首次和重试使用同一字节载荷。
    * @param array $delivery 投递信封
    * @return array 已解码任务
@@ -353,27 +261,5 @@ final class TaskQueue
     return $this->store->decodeQueueDelivery($delivery);
   }
 
-  /**
-   * 隔离只接受异常携带的原始快照，不能误处理并发修复的新版本。
-   * @param QueueRecordException $exception 解析失败快照
-   * @return void
-   */
-  private function isolateRecord(QueueRecordException $exception): void
-  {
-    try {
-      $isQuarantined = $this->store->quarantineQueue($exception->queueId, $exception->snapshot, $exception->getMessage());
-      $message = $isQuarantined ? '损坏任务已隔离：' : '损坏任务快照已变化，跳过隔离：';
-      TaskQueueLog::write($message . $exception->queueId, ['exception' => (string)$exception]);
-    } catch (\Throwable $failure) {
-      TaskQueueLog::write('隔离任务失败，保留原记录等待重试：' . $exception->queueId, ['exception' => (string)$failure]);
-    }
-  }
-  /**
-   * 获取只读隔离记录入口。
-   * @return TaskQuarantinedQueue 隔离记录查询器
-   */
-  public function quarantined(): TaskQuarantinedQueue
-  {
-    return new TaskQuarantinedQueue($this->store);
-  }
+
 }
