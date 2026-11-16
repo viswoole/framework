@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：提供 Redis 缓存及原子能力，按运行上下文管理连接；不决定任务重试策略。
  */
@@ -26,6 +27,7 @@ use Viswoole\Cache\Contract\QueueStoreInterface;
 use Viswoole\Cache\Driver;
 use Viswoole\Cache\Driver\Redis\AtomicOperations;
 use Viswoole\Cache\Driver\Redis\QueueOperations;
+use Viswoole\Cache\Driver\Redis\QueueInspection;
 use Viswoole\Cache\Driver\Redis\QueueQuarantine;
 use Viswoole\Cache\Driver\Redis\QueueRecord;
 use Viswoole\Cache\Driver\Redis\QueueSchedule;
@@ -48,6 +50,7 @@ class Redis extends Driver implements QueueStoreInterface
 {
   use AtomicOperations;
   use QueueOperations;
+  use QueueInspection;
   use QueueSchedule;
   use QueueQuarantine;
 
@@ -87,19 +90,19 @@ class Redis extends Driver implements QueueStoreInterface
    * @param int $pool_fill_size 连接池最小填充连接数，0 表示不预填充
    */
   public function __construct(
-    string           $host = '127.0.0.1',
-    int              $port = 6379,
-    string           $password = '',
-    int              $db_index = 0,
-    float            $timeout = 0,
-    int              $retry_interval = 1000,
-    float            $read_timeout = 0,
+    string $host = '127.0.0.1',
+    int $port = 6379,
+    string $password = '',
+    int $db_index = 0,
+    float $timeout = 0,
+    int $retry_interval = 1000,
+    float $read_timeout = 0,
     protected string $prefix = '',
     protected string $tag_prefix = 'tag:',
-    protected int    $expire = 0,
+    protected int $expire = 0,
     protected string $tag_store = 'TAG_STORE',
-    int              $pool_max_size = 10,
-    int              $pool_fill_size = 0
+    int $pool_max_size = 10,
+    int $pool_fill_size = 0
   ) {
     $this->pool = new RedisPool(
       new RedisConfig(
@@ -133,7 +136,7 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function inc(string $key, int $step = 1): false|int
   {
     $key = $this->getCacheKey($key);
-    return $this->withConnection(fn(\Redis $redis) => $redis->incrBy($key, $step));
+    return $this->withConnection(fn (\Redis $redis) => $redis->incrBy($key, $step));
   }
 
   /**
@@ -159,11 +162,11 @@ class Redis extends Driver implements QueueStoreInterface
       $redis = $context[self::CONTEXT_CONNECTION_KEY];
       // 协程环境：连接生命周期 = 协程生命周期（defer 自动归还），
       // 借出时池已做过健康检测，复用前不再 ping，避免每次操作多一次 RTT
-      if (Coroutine::isCoroutine()) return $redis;
+      if (Coroutine::isCoroutine()) { return $redis; }
       // 非协程 CLI：连接被进程级上下文长期持有（无 defer 归还），
       // 复用前必须检测存活——Redis 重启/空闲踢线后旧连接已失效，
       // 直接复用会抛 RedisException。关闭失效连接并落入下方重建流程
-      if ($this->isAlive($redis)) return $redis;
+      if ($this->isAlive($redis)) { return $redis; }
       try {
         $redis->close();
       } catch (RedisException) {
@@ -236,7 +239,7 @@ class Redis extends Driver implements QueueStoreInterface
   {
     try {
       $result = $redis->ping();
-      if ($result !== true && $result !== '+PONG') return false;
+      if ($result !== true && $result !== '+PONG') { return false; }
       // db_index 为 0 时无需恢复（phpredis 透明重连默认落在 db 0）
       if ($this->pool->getConfig()->db_index !== 0) {
         $redis->select($this->pool->getConfig()->db_index);
@@ -305,7 +308,7 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function dec(string $key, int $step = 1): false|int
   {
     $key = $this->getCacheKey($key);
-    return $this->withConnection(fn(\Redis $redis) => $redis->decrBy($key, $step));
+    return $this->withConnection(fn (\Redis $redis) => $redis->decrBy($key, $step));
   }
 
   /**
@@ -315,8 +318,8 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function get(string $key, mixed $default = null): mixed
   {
     $key = $this->getCacheKey($key);
-    $value = $this->withConnection(fn(\Redis $redis) => $redis->get($key));
-    if (false === $value) return $default;
+    $value = $this->withConnection(fn (\Redis $redis) => $redis->get($key));
+    if (false === $value) { return $default; }
     return $this->unserialize($value);
   }
 
@@ -337,7 +340,7 @@ class Redis extends Driver implements QueueStoreInterface
     // Redis 的 get/set 操作：serialize 对整数直接返回（不序列化），Redis 将其存为字符串。
     // unserialize 时，从 Redis 取出的数据始终为字符串，需要判断是否为数字字符串
     // （对应 serialize 中跳过序列化的整数），如果是则转为数值类型，否则正常反序列化
-    if (is_int($data) || is_float($data)) return $data;
+    if (is_int($data) || is_float($data)) { return $data; }
     if (is_string($data) && is_numeric($data)) {
       // 数字字符串：对应 serialize 中跳过序列化的整数/浮点数
       // 判断是否为浮点数格式（含小数点或科学计数法）
@@ -355,11 +358,11 @@ class Redis extends Driver implements QueueStoreInterface
    */
   #[Override] public function delete(array|string $keys): false|int
   {
-    if (is_string($keys)) $keys = [$keys];
+    if (is_string($keys)) { $keys = [$keys]; }
     foreach ($keys as $index => $key) {
       $keys[$index] = $this->getCacheKey($key);
     }
-    return $this->withConnection(fn(\Redis $redis) => $redis->del(...$keys));
+    return $this->withConnection(fn (\Redis $redis) => $redis->del(...$keys));
   }
 
   /**
@@ -369,7 +372,7 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function has(string $key): bool
   {
     $key = $this->getCacheKey($key);
-    return (bool)$this->withConnection(fn(\Redis $redis) => $redis->exists($key));
+    return (bool)$this->withConnection(fn (\Redis $redis) => $redis->exists($key));
   }
 
   /**
@@ -378,7 +381,7 @@ class Redis extends Driver implements QueueStoreInterface
    */
   #[Override] public function clear(): bool
   {
-    return (bool)$this->withConnection(fn(\Redis $redis) => $redis->flushDB());
+    return (bool)$this->withConnection(fn (\Redis $redis) => $redis->flushDB());
   }
 
   /**
@@ -386,20 +389,20 @@ class Redis extends Driver implements QueueStoreInterface
    * @throws RedisException
    */
   #[Override] public function lock(
-    string    $scene,
-    int       $expire = 10,
-    bool      $autoUnlock = false,
-    int       $retry = 5,
+    string $scene,
+    int $expire = 10,
+    bool $autoUnlock = false,
+    int $retry = 5,
     float|int $sleep = 0.2
   ): string {
-    if ($retry <= 0) $retry = 1;
+    if ($retry <= 0) { $retry = 1; }
     $result = false;
     $key = $this->getLockKey($scene);
     $lockId = md5(uniqid("{$key}_", true) . '_' . Coroutine::getCid());
     while ($retry-- > 0) {
       // 设置锁/取锁
       $result = $this->withConnection(
-        fn(\Redis $redis) => $redis->set($key, $lockId, ['NX', 'EX' => $expire])
+        fn (\Redis $redis) => $redis->set($key, $lockId, ['NX', 'EX' => $expire])
       );
       if ($result) {
         // 加入到当前协程的锁列表中
@@ -414,7 +417,7 @@ class Redis extends Driver implements QueueStoreInterface
       // 未获得锁，休眠重试
       System::sleep($sleep);
     }
-    if ($result === false) throw new CacheErrorException('数据系统繁忙，请稍后重试');
+    if ($result === false) { throw new CacheErrorException('数据系统繁忙，请稍后重试'); }
     return $lockId;
   }
 
@@ -423,19 +426,19 @@ class Redis extends Driver implements QueueStoreInterface
    * @throws RedisException 无法到达 Redis 服务器
    */
   #[Override] public function set(
-    string       $key,
-    mixed        $value,
+    string $key,
+    mixed $value,
     DateTime|int|null $expire = null,
-    bool         $NX = false
+    bool $NX = false
   ): bool {
-    if (is_null($expire)) $expire = $this->expire;
+    if (is_null($expire)) { $expire = $this->expire; }
     $key = $this->getCacheKey($key);
     $expire = $this->formatExpireTime($expire);
     $value = $this->serialize($value);
     $options = [];
-    if ($NX) $options[] = 'NX';
-    if ($expire > 0) $options['EX'] = $expire;
-    return $this->withConnection(fn(\Redis $redis) => $redis->set($key, $value, $options));
+    if ($NX) { $options[] = 'NX'; }
+    if ($expire > 0) { $options['EX'] = $expire; }
+    return $this->withConnection(fn (\Redis $redis) => $redis->set($key, $value, $options));
   }
 
   /**
@@ -447,7 +450,7 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] protected function serialize(mixed $data): mixed
   {
     // 如果是整数则直接返回
-    if (is_int($data)) return $data;
+    if (is_int($data)) { return $data; }
     return parent::serialize($data);
   }
 
@@ -458,8 +461,8 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function ttl(string $key): false|int
   {
     $key = $this->getCacheKey($key);
-    $result = $this->withConnection(fn(\Redis $redis) => $redis->ttl($key));
-    if ($result === -2 || $result === false) return false;
+    $result = $this->withConnection(fn (\Redis $redis) => $redis->ttl($key));
+    if ($result === -2 || $result === false) { return false; }
     return $result;
   }
 
@@ -490,7 +493,7 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function unlock(string $id): bool
   {
     $lockList = $this->getLockList();
-    if (!isset($lockList[$id])) return false;
+    if (!isset($lockList[$id])) { return false; }
     $lockInfo = $lockList[$id];
     $scene = $this->getLockKey($lockInfo['scene']);
     $script = <<<LUA
@@ -502,8 +505,8 @@ class Redis extends Driver implements QueueStoreInterface
                 end
                 LUA;
     $value = $lockInfo['secretKey'];
-    $result = $this->withConnection(fn(\Redis $redis) => $redis->eval($script, [$scene, $value], 1));
-    if ($result) $this->removeLock($id);
+    $result = $this->withConnection(fn (\Redis $redis) => $redis->eval($script, [$scene, $value], 1));
+    if ($result) { $this->removeLock($id); }
     return (bool)$result;
   }
 
@@ -513,12 +516,12 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function sAddArray(string $key, array|string $values): false|int
   {
     $key = $this->getCacheKey($key);
-    if (is_string($values)) $values = [$values];
+    if (is_string($values)) { $values = [$values]; }
     // 修复：sAddArray 必须对所有值使用 parent::serialize() 进行完整序列化，
     // 因为 Redis Set 存储的是字符串，$this->serialize 对整数会跳过序列化直接返回 int，
     // 但 Redis sAdd 会将 int 转为字符串，后续 unserialize 无法正确反序列化原始字符串
     $values = array_map('serialize', $values);
-    return $this->withConnection(fn(\Redis $redis) => $redis->sAdd($key, ...$values));
+    return $this->withConnection(fn (\Redis $redis) => $redis->sAdd($key, ...$values));
   }
 
   /**
@@ -528,8 +531,8 @@ class Redis extends Driver implements QueueStoreInterface
   #[Override] public function getArray(string $key): array|false
   {
     $name = $this->getCacheKey($key);
-    $result = $this->withConnection(fn(\Redis $redis) => $redis->sMembers($name));
-    if ($result === false) return false;
+    $result = $this->withConnection(fn (\Redis $redis) => $redis->sMembers($name));
+    if ($result === false) { return false; }
     // 修复：与 sAddArray 保持一致，使用 unserialize() 而非 $this->unserialize()
     // 因为 sAddArray 使用 serialize() 存入，getArray 必须使用 unserialize() 取出
     return array_map('unserialize', $result);
@@ -540,10 +543,10 @@ class Redis extends Driver implements QueueStoreInterface
    */
   #[Override] public function sRemoveArray(string $key, array|string $values): false|int
   {
-    if (is_string($values)) $values = [$values];
+    if (is_string($values)) { $values = [$values]; }
     // 修复：与 sAddArray 保持一致，使用 serialize() 而非 $this->serialize()
     $values = array_map('serialize', $values);
     $name = $this->getCacheKey($key);
-    return $this->withConnection(fn(\Redis $redis) => $redis->sRem($name, ...$values));
+    return $this->withConnection(fn (\Redis $redis) => $redis->sRem($name, ...$values));
   }
 }

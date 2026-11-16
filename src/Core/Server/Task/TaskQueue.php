@@ -146,16 +146,26 @@ final class TaskQueue
 
   /**
    * 认领任务执行权并推进执行租约
+   *
+   * 执行实例与租约同一 CAS 提交，跨实例接管时不改写投递实例。
+   *
    * @param array $data 投递载荷
+   * @param string|null $instanceId 实际认领的实例身份，低层调用未提供时明确为未知
+   * @param int|null $workerId 当前执行 Worker
    * @return array|null 执行租约；重复或失效投递返回 null
    * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
    */
-  public function consume(array $data): ?array
+  public function consume(array $data, ?string $instanceId = null, ?int $workerId = null): ?array
   {
+    if ($instanceId === '' || ($workerId !== null && $workerId < 0)) {
+      throw new \InvalidArgumentException('执行实例或 Worker 身份无效');
+    }
     $before = $this->owned($data, 'dispatched');
     if ($before === null) { return null; }
     $after = $this->lease($before, 'running');
     $after['attempts'] = ($before['attempts'] ?? 0) + 1;
+    $after['executionInstanceId'] = $instanceId;
+    $after['executionWorkerId'] = $workerId;
     return $this->commit($before, $after, true) ? $after : null;
   }
 
@@ -231,6 +241,8 @@ final class TaskQueue
     // 失败时间与重试时间同取存储端时钟，与恢复扫描的到期判定保持同一时钟域
     $after['failedAt'] = $now = $this->store->now();
     $after['leaseUntil'] = 0;
+    $after['executionInstanceId'] = null;
+    $after['executionWorkerId'] = null;
     $after['retryAt'] = $now + $this->delay($before['attempts']);
     return $this->commit($before, $after, !($options['isExpired'] ?? false));
   }

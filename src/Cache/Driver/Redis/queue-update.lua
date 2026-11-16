@@ -36,6 +36,11 @@ local scheduleKind = redis.call('TYPE', KEYS[6]).ok
 if scheduleKind ~= 'none' and scheduleKind ~= 'zset' then
   return redis.error_reply('Queue schedule must be a sorted set')
 end
+for index = 8, 9 do
+  local expectedType = index == 8 and 'hash' or 'zset'
+  local kind = redis.call('TYPE', KEYS[index]).ok
+  if kind ~= 'none' and kind ~= expectedType then return redis.error_reply('Invalid queue query index type') end
+end
 if KEYS[5] ~= KEYS[1] and redis.call('EXISTS', KEYS[5]) == 1 then return 0 end
 local value = ARGV[2]
 local nextValue = nil
@@ -48,6 +53,13 @@ if nextValue ~= nil and stored ~= nil then
     after.leaseUntil = math.max(after.leaseUntil, before.leaseUntil)
   end
   value = prefix .. cjson.encode(nextValue)
+end
+-- 查询投影和业务状态同一原子提交，ACK、删除及重放不得留下旧身份。
+redis.call('HDEL', KEYS[8], ARGV[3])
+redis.call('ZREM', KEYS[9], ARGV[3])
+if nextValue ~= nil then
+  redis.call('HSET', KEYS[8], ARGV[6], cjson.encode(nextValue.metadata))
+  redis.call('ZADD', KEYS[9], 0, ARGV[6])
 end
 if KEYS[5] ~= KEYS[1] then redis.call('DEL', KEYS[1]) end
 if value == '' then redis.call('DEL', KEYS[1])

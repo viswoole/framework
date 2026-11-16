@@ -54,6 +54,42 @@ Task::register('report.build', function (TaskProxy $task): array {
 
 类名注册只扫描公开的非魔术方法。静态方法直接调用，实例方法在每次任务调用时通过容器 `invokeClass()` 解析构造依赖，不缓存处理器对象。恢复投递失败日志只记录任务标识、主题与执行次数，不写入业务载荷。
 
+## 只读元数据查询
+
+```php
+use Viswoole\Core\Facade\Task;
+use Viswoole\Core\Server\Task\TaskQueueFilter;
+use Viswoole\Core\Server\Task\TaskQueueState;
+
+$query = Task::queue();
+$filter = new TaskQueueFilter([
+  'producerInstanceId' => Task::instanceId(),
+  'topic' => 'sms.send',
+  'state' => TaskQueueState::Retry,
+]);
+$page = $query->list($filter, cursor: '', limit: 20);
+if ($page['cursor'] !== '') {
+  $nextPage = $query->list($filter, cursor: $page['cursor'], limit: 20);
+}
+$counts = $query->count($filter);
+$detail = $query->get($queueId);
+
+// 当前实例正在执行的任务；可与投递实例条件组合。
+$executing = $query->list(new TaskQueueFilter([
+  'executionInstanceId' => Task::instanceId(),
+]));
+```
+
+条件按 AND 匹配；实例身份区分大小写，主题不区分大小写。空条件查询同商店全部实例的持久化任务。`producerInstanceId` 始终保留首次投递实例；`executionInstanceId`、`executionWorkerId` 在认领执行权时随租约原子更新，跨实例接管后体现实际消费者，不沿用投递实例。低层 `consume()` 未提供执行身份时，查询中的执行归属字段为 null，不猜测归属。
+
+等待投递、重试、失败任务的执行归属为 null。运行租约到期但尚未恢复扫描时，持久化 `state` 仍为 running，`executionLeaseExpired=true`，查询中的执行归属为 null，按执行实例筛选也排除该记录。`leaseUntil`、`observedAt` 使用 Redis 时间；此信息表示租约有效性，不是实例存活探针。重放保留原投递身份、生成新队列 ID，并清空执行归属。
+
+列表返回 `list` 和 `cursor`，每页上限 100；每次最多扫描 1000 个索引成员。稀疏条件可能得到空列表及非空 cursor，必须继续翻页直到 cursor 为空。游标只能配合同一筛选条件使用；不要把空 cursor 再当“下一页”查询，否则会从头开始。列表及统计不提供跨页一致性快照；并发新增、删除和状态变化可能影响结果。数量统计返回 total、dispatched、running、retry、failed，按同一筛选条件分批扫描，复杂度 O(商店任务数)，适用于管理查询，不宜每次业务请求都调用。
+
+详情和列表只读取独立元数据 Hash 与有序 ID 索引，不读取业务载荷键、不调用反序列化器，不返回业务 data、queuePayload、执行令牌或比较版本。失败原因属于元数据，仍可能含异常消息，展示给终端用户前须按应用权限和脱敏规则处理。ACK、失败删除、重放、损坏隔离和缺失数据回收均在生产 Lua 中同步维护查询索引。已完成、已删除及隔离任务不在此查询入口中保留；隔离记录仍使用独立入口查询。非持久化任务不在列表中。
+
+查询索引从此版本的入队及状态提交开始建立，不扫描或回填旧存储。启用前按既有协议切换约束排空旧队列或使用独立商店前缀，不能将新索引查询为空作为旧队列已排空的依据。QueueStoreInterface 新增 queryQueueMetadata/inspectQueueMetadata，自定义存储实现须同步提供只读查询能力。
+
 ## 失败任务管理
 
 ```php
@@ -143,3 +179,13 @@ docker run --rm --network none -v "$PWD:/workspace:ro" --entrypoint php viswoole
 `AcceptanceTest.php` 覆盖首次 IPC 返回 false/异常、提交后读取失败、补偿写失败、真实 Lua 提交后的响应丢失、提交前断线、无确认返回、序列化拒绝、停机拒收以及恢复后的单次认领和 ACK。
 
 连接获取失败与命令回执丢失分别验证：TIME、GET 成功后获取 EVAL 连接失败时，保留普通 RedisException，并断言 EVAL 未调用且存储没有新增记录；进入 EVAL 后发生故障仍保守报告受理结果未知。
+
+`QueryTest.php` 验证投递与执行实例区分、组合筛选、数量统计、游标分页、过期租约归属、元数据只读、监控装饰器透传，以及 ACK、重放、删除、隔离和缺失回收的索引一致性。
+
+### 查询索引损坏时的只读降级
+
+列表额外返回 `errors: list<{queueId, reason}>` 与 `isComplete`。单条 JSON、结构、身份或失败原因编码损坏，以及 ID 索引有成员但缺少元数据时，跳过该条并报告身份，游标继续前进；健康任务仍可查看。`isComplete` 只表示本次扫描没有发现损坏，不表示已经翻完所有页，也不提供并发快照保证。调用方遍历分页时须汇总所有页的 errors。
+
+统计同样返回 errors 和 isComplete，数量只包含可正确读取且匹配的任务；isComplete=false 时是已知有效记录数量，不能展示成精确总数。损坏记录无法可靠判断筛选归属时也会报告，不静默假定其不匹配。单条详情损坏仍抛出包含 queueId 的明确异常，不把损坏伪装成不存在。查询不会删除、隔离或重建数据，存储连接故障仍正常抛出。
+
+`QueryCorruptionTest.php` 覆盖损坏 JSON、非对象、非有限数字、未知状态、非法租约、失败原因编码损坏、身份不一致、元数据缺失、统计不完整、游标继续及查询前后 Redis 字节不变。

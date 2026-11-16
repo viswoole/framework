@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace Viswoole\Core\Server\Task;
 
 use RuntimeException;
+use InvalidArgumentException;
 use Viswoole\Cache\Exception\QueueCommitUnknownException;
 
 /**
@@ -19,6 +20,7 @@ trait TaskQueueSubmission
    * 原子受理任务并返回稳定身份
    *
    * 序列化和参数错误发生在提交前；命令回执丢失使用专用异常表示未知。
+   * 投递实例由分组最后一个冒号前的身份确定，Worker 后缀不参与实例筛选。
    *
    * @param array $data 业务载荷
    * @param string $group 原始实例分组
@@ -31,6 +33,11 @@ trait TaskQueueSubmission
     TaskTopicName::validate($data['topic'] ?? null);
     $data['queueId'] = bin2hex(random_bytes(24));
     $data['queueGroup'] = $group;
+    $separator = strrpos($group, ':');
+    $data['producerInstanceId'] = $separator === false ? $group : substr($group, 0, $separator);
+    if ($data['producerInstanceId'] === '') { throw new InvalidArgumentException('投递实例身份不能为空'); }
+    $data['executionInstanceId'] = null;
+    $data['executionWorkerId'] = null;
     $data['attempts'] = 0;
     $data = $this->lease($data, 'dispatched');
     try {

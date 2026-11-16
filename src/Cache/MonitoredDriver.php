@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：监控并透传缓存操作与底层原子能力；不采集业务载荷。
  */
@@ -48,14 +49,40 @@ final readonly class MonitoredDriver implements QueueStoreInterface
   public function __construct(
     /**
      * @var CacheDriverInterface 被包装的底层驱动
-     */
-    private CacheDriverInterface $driver,
+     */ private CacheDriverInterface $driver,
     /**
      * @var string 当前商店的监控名称
-     */
-    private string               $store
+     */ private string $store
   )
   {
+  }
+
+  /**
+   * 透传只读元数据分页
+   *
+   * @param array $filter 筛选条件
+   * @param string $cursor 前页游标
+   * @param int $limit 返回上限
+   * @return array{list:list<array>,cursor:string,errors:list<array{queueId:string,reason:string}>,isComplete:bool} 元数据页
+   * @throws \Throwable 底层不支持队列或读取失败
+   */
+  public function queryQueueMetadata(array $filter = [], string $cursor = '', int $limit = 20): array
+  {
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持队列查询'); }
+    return $this->invoke('queryQueueMetadata', [$filter, $cursor, $limit]);
+  }
+
+  /**
+   * 透传只读元数据详情
+   *
+   * @param string $queueId 队列身份
+   * @return array|null 元数据详情
+   * @throws \Throwable 底层不支持队列或读取失败
+   */
+  public function inspectQueueMetadata(string $queueId): ?array
+  {
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持队列查询'); }
+    return $this->invoke('inspectQueueMetadata', [$queueId]);
   }
 
   /**
@@ -67,9 +94,9 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    */
   public function pruneSet(string $key, string $registry, ?string $member = null): void
   {
-    if (!$this->supportsAtomicOperations()) throw new RuntimeException(
+    if (!$this->supportsAtomicOperations()) { throw new RuntimeException(
       '缓存驱动不支持原子集合回收'
-    );
+    ); }
     $this->invoke('pruneSet', [$key, $registry, $member]);
   }
 
@@ -116,7 +143,7 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    */
   public function getDueQueue(int $limit = 100): array
   {
-    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列调度');
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列调度'); }
     return $this->invoke('getDueQueue', [$limit]);
   }
 
@@ -128,7 +155,7 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    */
   public function getQueueMetadata(string $key): ?array
   {
-    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列调度');
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列调度'); }
     return $this->invoke('getQueueMetadata', [$key]);
   }
 
@@ -140,7 +167,7 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    */
   public function pruneMissingQueue(string $key): void
   {
-    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列调度');
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列调度'); }
     $this->invoke('pruneMissingQueue', [$key]);
   }
 
@@ -152,7 +179,7 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    */
   public function getQueueDelivery(string $key): ?array
   {
-    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列');
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列'); }
     return $this->invoke('getQueueDelivery', [$key]);
   }
 
@@ -195,7 +222,7 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    */
   public function quarantineQueue(string $key, string $snapshot, string $reason): bool
   {
-    if (!$this->supportsQueueOperations()) throw new RuntimeException('缓存驱动不支持可靠队列');
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列'); }
     return $this->invoke('quarantineQueue', [$key, $snapshot, $reason]);
   }
 
@@ -211,7 +238,7 @@ final readonly class MonitoredDriver implements QueueStoreInterface
     return TraceContext::measure([
       'type' => 'cache', 'store' => $this->store, 'operation' => $method,
       'key' => $arguments[0] ?? null,
-    ], fn(): mixed => $this->driver->$method(...$arguments));
+    ], fn (): mixed => $this->driver->$method(...$arguments));
   }
 
   /**
@@ -287,10 +314,10 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    * @return bool 设置成功返回 true
    */
   public function set(
-    string            $key,
-    mixed             $value,
+    string $key,
+    mixed $value,
     DateTime|int|null $expire = null,
-    bool              $NX = false
+    bool $NX = false
   ): bool
   {
     return $this->invoke('set', [$key, $value, $expire, $NX]);
@@ -362,7 +389,10 @@ final readonly class MonitoredDriver implements QueueStoreInterface
    * @return string 锁唯一标识，用于 unlock
    */
   public function lock(
-    string    $scene, int $expire = 10, bool $autoUnlock = false, int $retry = 5,
+    string $scene,
+    int $expire = 10,
+    bool $autoUnlock = false,
+    int $retry = 5,
     int|float $sleep = 0.2
   ): string
   {

@@ -73,7 +73,7 @@ class TaskManager
      */ protected CacheManager $cache,
     /**
      * @var Config 任务配置读取入口
-     */ protected Config       $config
+     */ protected Config $config
   )
   {
     $this->instanceId = (string)($this->config->get('task.instance_id') ?: bin2hex(
@@ -218,20 +218,45 @@ class TaskManager
         return false;
       }
     }
-    return new TaskQueueConsumer($this->taskQueue())->execute($task, $server, [
+    return new TaskQueueConsumer($this->taskQueue(), $this->instanceId)->execute($task, $server, [
       'validate' => function () use ($topic, $task): void {
         $this->has($topic);
         if ($this->isExpired($task->data)) {
           throw new RuntimeException('任务已过期');
         }
       },
-      'handle' => fn(TaskProxy $proxy, SwooleServer $server): mixed => ($this->topics[strtolower(
+      'handle' => fn (TaskProxy $proxy, SwooleServer $server): mixed => ($this->topics[strtolower(
         $topic
       )])(
         $proxy,
         $server
       ),
     ]);
+  }
+
+  /**
+   * 获取当前启动实例的身份
+   *
+   * fork 前生成，Worker 与 Task Worker 共享同一启动身份。
+   *
+   * @return string 配置或 fork 前生成的实例 ID
+   */
+  public function instanceId(): string { return $this->instanceId; }
+
+  /**
+   * 获取同商店的只读任务查询入口
+   *
+   * 默认查询全部实例，调用方可使用 instanceId 构造投递或执行实例筛选。
+   *
+   * @return TaskQueueQuery 元数据查询器
+   * @throws \Throwable 队列初始化失败
+   */
+  public function queue(): TaskQueueQuery
+  {
+    $this->taskQueue();
+    $store = $this->queueStore();
+    if (!$store instanceof QueueStoreInterface) { throw new RuntimeException('任务查询要求队列存储接口'); }
+    return new TaskQueueQuery($store);
   }
 
   /**

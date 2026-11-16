@@ -14,6 +14,11 @@ for index = 3, 6 do
     if kind ~= 'none' and kind ~= expected then return redis.error_reply('Invalid queue quarantine index type') end
   end
 end
+for index = 7, 8 do
+  local expectedType = index == 7 and 'hash' or 'zset'
+  local kind = redis.call('TYPE', KEYS[index]).ok
+  if kind ~= 'none' and kind ~= expectedType then return redis.error_reply('Invalid queue query index type') end
+end
 local groupKey = redis.call('HGET', KEYS[6], ARGV[3])
 local groupTag = redis.call('HGET', KEYS[6], ARGV[3] .. ':tag')
 if groupKey then
@@ -26,6 +31,8 @@ if not isMissing then
   redis.call('SADD', KEYS[3], ARGV[4])
   redis.call('SADD', KEYS[4], ARGV[5])
 end
+redis.call('HDEL', KEYS[7], ARGV[3])
+redis.call('ZREM', KEYS[8], ARGV[3])
 redis.call('DEL', KEYS[1])
 redis.call('ZREM', KEYS[5], ARGV[3])
 redis.call('HDEL', KEYS[6], ARGV[3], ARGV[3] .. ':tag')

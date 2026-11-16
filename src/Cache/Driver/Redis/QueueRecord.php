@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：编码队列元数据与不可变载荷的存储信封；不恢复业务对象或决定状态转换。
  */
@@ -39,7 +40,7 @@ final class QueueRecord
   {
     unset($record['data'], $record['queuePayload']);
     if (array_key_exists('lastError', $record)) {
-      if (!is_string($record['lastError'])) throw new RuntimeException('队列失败原因必须为字符串');
+      if (!is_string($record['lastError'])) { throw new RuntimeException('队列失败原因必须为字符串'); }
       // 异常消息可能包含任意字节，不能直接进入 JSON 元数据。
       $record['lastErrorBase64'] = base64_encode($record['lastError']);
       unset($record['lastError']);
@@ -55,11 +56,11 @@ final class QueueRecord
    */
   public static function restoreError(array $metadata): array
   {
-    if (!array_key_exists('lastErrorBase64', $metadata)) return $metadata;
+    if (!array_key_exists('lastErrorBase64', $metadata)) { return $metadata; }
     $encoded = $metadata['lastErrorBase64'];
     $reason = is_string($encoded) ? base64_decode($encoded, true) : false;
     // 规范编码保证管理读取后重新编码仍可参与同一版本的条件提交。
-    if ($reason === false || base64_encode($reason) !== $encoded) throw new RuntimeException('队列失败原因编码无效');
+    if ($reason === false || base64_encode($reason) !== $encoded) { throw new RuntimeException('队列失败原因编码无效'); }
     unset($metadata['lastErrorBase64']);
     $metadata['lastError'] = $reason;
     return $metadata;
@@ -99,7 +100,7 @@ final class QueueRecord
       throw new RuntimeException('队列存储信封结构无效');
     }
     $payload = base64_decode($envelope['payload'], true);
-    if ($payload === false) throw new RuntimeException('队列载荷编码无效');
+    if ($payload === false) { throw new RuntimeException('队列载荷编码无效'); }
     self::validateMetadata($envelope['metadata']);
     return ['metadata' => $envelope['metadata'], 'payload' => $payload];
   }
@@ -109,16 +110,24 @@ final class QueueRecord
    * @return void
    * @throws RuntimeException 元数据不符合当前协议时抛出
    */
-  private static function validateMetadata(array $metadata): void
+  public static function validateMetadata(array $metadata): void
   {
     if (array_key_exists('data', $metadata) || array_key_exists('queuePayload', $metadata)) {
       throw new RuntimeException('队列元数据不能包含业务载荷字段');
     }
     foreach (['queueId', 'queueGroup', 'queueToken', 'queueRevision', 'topic'] as $field) {
-      if (!is_string($metadata[$field] ?? null)) throw new RuntimeException('队列元数据字段无效：' . $field);
+      if (!is_string($metadata[$field] ?? null)) { throw new RuntimeException('队列元数据字段无效：' . $field); }
     }
-    if ($metadata['topic'] === '') throw new RuntimeException('队列主题不能为空');
-    if (array_key_exists('lastError', $metadata)) throw new RuntimeException('队列失败原因必须使用字节编码');
+    foreach (['producerInstanceId', 'executionInstanceId'] as $field) {
+      if (isset($metadata[$field]) && (!is_string($metadata[$field]) || $metadata[$field] === '')) {
+        throw new RuntimeException('队列实例身份无效：' . $field);
+      }
+    }
+    if (isset($metadata['executionWorkerId']) && (!is_int($metadata['executionWorkerId']) || $metadata['executionWorkerId'] < 0)) {
+      throw new RuntimeException('队列执行 Worker 身份无效');
+    }
+    if ($metadata['topic'] === '') { throw new RuntimeException('队列主题不能为空'); }
+    if (array_key_exists('lastError', $metadata)) { throw new RuntimeException('队列失败原因必须使用字节编码'); }
     self::restoreError($metadata);
     if (!in_array($metadata['queueState'] ?? null, ['dispatched', 'running', 'retry', 'failed'], true)) {
       throw new RuntimeException('队列状态无效');

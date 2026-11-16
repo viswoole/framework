@@ -52,7 +52,7 @@ trait QueueOperations
     try {
       $result = $this->withConnection(function (\Redis $redis) use ($script, $arguments, &$isCommandStarted): mixed {
         $isCommandStarted = true;
-        return $redis->eval($script, $arguments, 7);
+        return $redis->eval($script, $arguments, 9);
       });
     } catch (Throwable $exception) {
       if (!$isCommandStarted) { throw $exception; }
@@ -85,6 +85,7 @@ trait QueueOperations
       $this->getCacheKey($add), $this->getCacheKey($this->getTagStoreName()),
       $this->getCacheKey($change['target'] ?? $key), $this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY),
       $this->getCacheKey(QueueStoreInterface::DIRECTORY_KEY),
+      $this->getCacheKey(QueueStoreInterface::QUERY_METADATA_KEY), $this->getCacheKey(QueueStoreInterface::QUERY_IDS_KEY),
       json_encode($change['expected'] === null ? null : QueueRecord::metadata($change['expected']), JSON_THROW_ON_ERROR), $encoded,
       serialize($key), $remove === '' ? '' : serialize($remove),
       $add === '' ? '' : serialize($add), serialize($change['target'] ?? $key),

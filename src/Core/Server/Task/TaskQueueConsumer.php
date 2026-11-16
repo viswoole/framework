@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：协调单次消费、续租、ACK 和失败处理；不负责恢复扫描。
  */
@@ -18,13 +19,19 @@ final readonly class TaskQueueConsumer
 {
   /**
    * 绑定当前进程的队列边界
+   *
+   * 实例身份来自实际消费者所在进程，不从投递信封推断。
+   *
    * @param TaskQueue $queue 当前进程的队列边界
+   * @param string|null $instanceId 实际执行实例身份
    */
   public function __construct(
     /**
      * @var TaskQueue 当前进程的队列边界
-     */
-    private TaskQueue $queue
+     */ private TaskQueue $queue,
+    /**
+     * @var string|null 实际执行实例，低层调用未指定时不推断投递归属
+     */ private ?string $instanceId = null
   )
   {
   }
@@ -39,8 +46,8 @@ final readonly class TaskQueueConsumer
    */
   public function execute(Task $task, Server $server, array $callbacks): mixed
   {
-    $lease = $this->queue->consume($task->data);
-    if ($lease === null) return false;
+    $lease = $this->queue->consume($task->data, $this->instanceId, $server->worker_id);
+    if ($lease === null) { return false; }
     try {
       ($callbacks['validate'])();
     } catch (Throwable $exception) {
@@ -50,7 +57,7 @@ final readonly class TaskQueueConsumer
     $timer = $this->startRenewal($lease);
     try {
       $task->data = $this->queue->decodeDelivery($task->data);
-      $proxy = new TaskProxy($task, fn(): bool => $this->queue->renew($lease));
+      $proxy = new TaskProxy($task, fn (): bool => $this->queue->renew($lease));
       $result = ($callbacks['handle'])($proxy, $server);
       if (!$this->queue->ack($lease)) {
         TaskQueueLog::write('任务完成但 ACK 未提交，租约已失效：' . $lease['queueId']);
@@ -61,7 +68,7 @@ final readonly class TaskQueueConsumer
       $this->recordFailure($lease, $exception);
       return false;
     } finally {
-      if ($timer !== false && Timer::exists($timer)) Timer::clear($timer);
+      if ($timer !== false && Timer::exists($timer)) { Timer::clear($timer); }
     }
   }
 
@@ -82,12 +89,13 @@ final readonly class TaskQueueConsumer
           }
         } catch (Throwable $exception) {
           TaskQueueLog::write(
-            '任务续租异常：' . $lease['queueId'], ['exception' => (string)$exception]
+            '任务续租异常：' . $lease['queueId'],
+            ['exception' => (string)$exception]
           );
         }
       }
     );
-    if ($timer === false) TaskQueueLog::write('任务自动续租定时器创建失败：' . $lease['queueId']);
+    if ($timer === false) { TaskQueueLog::write('任务自动续租定时器创建失败：' . $lease['queueId']); }
     return $timer;
   }
 
@@ -103,7 +111,8 @@ final readonly class TaskQueueConsumer
       $this->queue->fail($lease, $exception::class . ': ' . $exception->getMessage());
     } catch (Throwable $storageFailure) {
       TaskQueueLog::write(
-        '记录任务失败状态异常，等待租约恢复', ['exception' => (string)$storageFailure]
+        '记录任务失败状态异常，等待租约恢复',
+        ['exception' => (string)$storageFailure]
       );
     }
     TaskQueueLog::write('任务执行异常：' . $lease['queueId'], ['exception' => (string)$exception]);

@@ -9,9 +9,9 @@ declare(strict_types=1);
 use Viswoole\Cache\Driver\Redis as RedisDriver;
 
 spl_autoload_register(static function (string $class): void {
-  if (!str_starts_with($class, 'Viswoole\\')) return;
+  if (!str_starts_with($class, 'Viswoole\\')) { return; }
   $path = dirname(__DIR__, 3) . '/src/' . str_replace('\\', '/', substr($class, 9)) . '.php';
-  if (is_file($path)) require_once $path;
+  if (is_file($path)) { require_once $path; }
 });
 
 /**
@@ -57,7 +57,7 @@ final class QueueTestRedis extends RedisDriver
    */
   public function quarantineQueue(string $key, string $snapshot, string $reason): bool
   {
-    if ($this->hasQuarantineFailure) throw new RedisException('injected quarantine failure');
+    if ($this->hasQuarantineFailure) { throw new RedisException('injected quarantine failure'); }
     if ($this->beforeQuarantine !== null) {
       $callback = $this->beforeQuarantine;
       $this->beforeQuarantine = null;
@@ -75,7 +75,7 @@ final class QueueTestRedis extends RedisDriver
    */
   public function updateQueue(string $key, array $change): bool
   {
-    if ($this->hasUpdateFailure) throw new RedisException('injected queue update failure');
+    if ($this->hasUpdateFailure) { throw new RedisException('injected queue update failure'); }
     if ($this->beforeUpdate !== null) {
       $callback = $this->beforeUpdate;
       $this->beforeUpdate = null;
@@ -110,7 +110,7 @@ final class QueueTestRedis extends RedisDriver
    */
   public function pruneSet(string $key, string $registry, ?string $member = null): void
   {
-    if ($this->hasPruneFailure) throw new RedisException('injected prune failure');
+    if ($this->hasPruneFailure) { throw new RedisException('injected prune failure'); }
     parent::pruneSet($key, $registry, $member);
   }
 
@@ -120,7 +120,7 @@ final class QueueTestRedis extends RedisDriver
    */
   public function close(): void
   {
-    if (isset($this->connection)) $this->connection->close();
+    if (isset($this->connection)) { $this->connection->close(); }
   }
 }
 
@@ -138,11 +138,11 @@ final class QueueTestManager extends \Viswoole\Core\Server\Task\TaskManager
     \Viswoole\Cache\Contract\CacheDriverInterface $store,
     /**
      * @var int 测试执行租约秒数
-     */
-    private readonly int $leaseSeconds = 30
+     */ private readonly int $leaseSeconds = 30
   )
   {
     $this->queueDriver = $store;
+    $this->instanceId = 'queue-test-executor';
   }
 
   /**
@@ -163,6 +163,8 @@ final class QueueTestManager extends \Viswoole\Core\Server\Task\TaskManager
    */
   public function accept(array $data, \Swoole\Server $server): mixed
   {
+    // 未启动的模拟 Server 使用 -1，补齐合法 Task Worker 上下文。
+    if ($server->worker_id < 0) { $server->worker_id = 7; }
     $task = new \Swoole\Server\Task();
     $task->data = $data;
     $task->worker_id = 7;

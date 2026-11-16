@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：定义可靠队列的条件写入边界；不负责消费策略。
  */
@@ -27,6 +28,35 @@ interface QueueStoreInterface extends AtomicCacheDriverInterface
    * @var string 隔离记录标签
    */
   public const string QUARANTINE_TAG = '$_TASK_QUARANTINE_';
+
+  /**
+   * @var string 只读查询的独立元数据 Hash
+   */
+  public const string QUERY_METADATA_KEY = '$_TASK_QUERY_METADATA_';
+  /**
+   * @var string 按队列 ID 排序的查询游标索引
+   */
+  public const string QUERY_IDS_KEY = '$_TASK_QUERY_IDS_';
+
+  /**
+   * 分批查询元数据，禁止读取或反序列化业务载荷
+   *
+   * @param array $filter 已校验筛选条件
+   * @param string $cursor 前页游标
+   * @param int $limit 返回上限
+   * @return array{list:list<array>,cursor:string,errors:list<array{queueId:string,reason:string}>,isComplete:bool} 有界扫描结果
+   * @throws \Throwable 查询失败或参数无效
+   */
+  public function queryQueueMetadata(array $filter = [], string $cursor = '', int $limit = 20): array;
+
+  /**
+   * 读取查询索引中的单任务元数据
+   *
+   * @param string $queueId 队列身份
+   * @return array|null 元数据及存储端观测时间
+   * @throws \Throwable 查询失败
+   */
+  public function inspectQueueMetadata(string $queueId): ?array;
 
   /**
    * 判定当前驱动是否提供可靠队列操作

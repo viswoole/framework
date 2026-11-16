@@ -30,6 +30,8 @@ use Viswoole\Core\Server\Task\TaskManager;
  * `Constant::OPTION_TASK_USE_OBJECT => true` 或 `Constant::OPTION_TASK_ENABLE_COROUTINE => true`
  *
  * @method static string|int|false emit(string $topic, mixed $data, bool $queue = true) 持久化返回稳定队列 ID，直投返回 Swoole ID；false 表示明确拒收，提交未知抛 TaskAcceptanceUnknownException
+ * @method static string instanceId() 获取当前启动实例身份
+ * @method static \Viswoole\Core\Server\Task\TaskQueueQuery queue() 获取只读元数据查询入口
  * @method static \Viswoole\Core\Server\Task\TaskFailedQueue failedQueue() 获取失败任务管理入口
  * @method static \Viswoole\Core\Server\Task\TaskQuarantinedQueue quarantinedQueue() 查询损坏记录原始快照
  * @method static void has(string $topic) 判断是否存在任务主题

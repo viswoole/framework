@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：查询、重放及删除失败任务；不直接执行或投递业务任务。
  */
@@ -20,8 +21,7 @@ final readonly class TaskFailedQueue
   public function __construct(
     /**
      * @var QueueStoreInterface 与活跃队列共享的原子存储
-     */
-    private QueueStoreInterface $store
+     */ private QueueStoreInterface $store
   )
   {
   }
@@ -36,15 +36,15 @@ final readonly class TaskFailedQueue
    */
   public function list(int $page = 1, int $pageSize = 20): array
   {
-    if ($page < 1 || $pageSize < 1 || $pageSize > 100) throw new \InvalidArgumentException(
+    if ($page < 1 || $pageSize < 1 || $pageSize > 100) { throw new \InvalidArgumentException(
       '失败任务分页参数无效'
-    );
+    ); }
     $ids = $this->store->getArray($this->store->getTagKey(TaskQueue::FAILED_TAG)) ?: [];
     sort($ids, SORT_STRING);
     $records = [];
     foreach (array_slice($ids, ($page - 1) * $pageSize, $pageSize) as $id) {
       $record = $this->get($id);
-      if ($record !== null) $records[] = $record;
+      if ($record !== null) { $records[] = $record; }
     }
     return $records;
   }
@@ -70,11 +70,13 @@ final readonly class TaskFailedQueue
   public function retry(string $id): string|false
   {
     $before = $this->get($id);
-    if ($before === null) return false;
+    if ($before === null) { return false; }
     $after = $before;
     $after['originalQueueId'] = $before['originalQueueId'] ?? $id;
     $after['queueId'] = bin2hex(random_bytes(24));
     $after['queueState'] = 'retry';
+    $after['executionInstanceId'] = null;
+    $after['executionWorkerId'] = null;
     $after['queueToken'] = '';
     $after['attempts'] = 0;
     $after['retryAt'] = 0;
