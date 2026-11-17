@@ -43,7 +43,6 @@ use Viswoole\Database\Raw;
  * ```
  *
  * @template TEntity of Entity
- * @extends Query
  * @see Entity
  */
 class EntityQuery extends Query
@@ -52,7 +51,8 @@ class EntityQuery extends Query
    * {@inheritDoc}
    *
    * @param bool $allowEmpty 是否允许空结果
-   * @return TEntity|Raw|null 单条实体；查询为空且允许空时返回 null
+   * @return mixed 实际返回实体、SQL 预览或 null；避免 IDE 错误绑定魔术入口的泛型
+   * @phpstan-return TEntity|Raw|null
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws InvalidArgumentException 实体水合失败（行数据与属性类型不匹配）时抛出
    * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
@@ -69,7 +69,8 @@ class EntityQuery extends Query
    *
    * @param int|string|null $value 主键值，为 null 时需配合 where 条件
    * @param bool $allowEmpty 是否允许空结果，为 false 且结果为空时抛出异常
-   * @return TEntity|Raw|null 单条实体；查询为空且允许空时返回 null
+   * @return mixed 实际返回实体、SQL 预览或 null；避免 IDE 错误绑定魔术入口的泛型
+   * @phpstan-return TEntity|Raw|null
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws InvalidArgumentException 实体水合失败（行数据与属性类型不匹配）时抛出
    * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
@@ -168,7 +169,9 @@ class EntityQuery extends Query
    */
   public function toEntity(array $row): Entity
   {
-    /** @var Entity $class */
+    /**
+     * @var class-string<TEntity> 实体类名，供静态水合入口使用
+     */
     $class = get_class($this->model);
     /** @var TEntity */
     return $class::fromRow($row);

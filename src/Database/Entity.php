@@ -71,8 +71,8 @@ use Viswoole\Database\Model\Query;
  *
  * @method static EntityCollection<static>|Raw select(bool $allowEmpty = true) 执行查询并返回实体集合
  * @method static EntityCollection<static>|Raw get(bool $allowEmpty = true) 执行查询并返回实体集合
- * @method static static|Raw|null find(int|string|null $value = null, bool $allowEmpty = true) 按主键查询单条实体（空结果且允许空时返回 null）
- * @method static static|Raw|null first(bool $allowEmpty = true) 查询单条实体（空结果且允许空时返回 null）
+ * @method static mixed find(int|string|null $value = null, bool $allowEmpty = true) 按主键查询单条实体（空结果且允许空时返回 null）
+ * @method static mixed first(bool $allowEmpty = true) 查询单条实体（空结果且允许空时返回 null）
  * @see EntityQuery
  * @see Model
  */

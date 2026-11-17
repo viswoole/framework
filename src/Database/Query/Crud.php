@@ -529,7 +529,8 @@ trait Crud
    * 查询单条记录
    *
    * @param bool $allowEmpty 是否允许空结果
-   * @return DataSet|Entity|Raw|null 单行数据集（实体查询返回 Entity，空结果返回 null）
+   * @return mixed 实际返回单行数据、SQL 预览或 null；避免 IDE 将共享查询出口误报为具体实体不兼容
+   * @phpstan-return DataSet|Entity|Raw|null
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws InvalidArgumentException 实体查询水合失败（行数据与属性类型不匹配）时抛出
    * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
@@ -548,8 +549,8 @@ trait Crud
    *
    * @param int|string|null $value 主键值，为 null 时需配合 where 条件
    * @param bool $allowEmpty 是否允许空结果，为 false 且结果为空时抛出异常
-   * @return DataSet|Entity|Raw|null 单行数据集（实体查询返回 Entity），
-   *   空结果且允许空时返回 null
+   * @return mixed 实际返回单行数据、SQL 预览或 null；保留原生签名约束运行时返回值
+   * @phpstan-return DataSet|Entity|Raw|null
    * @throws DataNotFoundException 查询为空且不允许空时抛出
    * @throws InvalidArgumentException 实体查询水合失败（行数据与属性类型不匹配）时抛出
    * @throws RuntimeException 实体属性声明不支持的字段类型或 readonly 时抛出
