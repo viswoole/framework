@@ -1,6 +1,4 @@
 <?php
-
-/** @noinspection PhpUnused */
 /*
  *  +----------------------------------------------------------------------
  *  | Viswoole [基于swoole开发的高性能快速开发框架]
@@ -261,9 +259,15 @@ abstract class Model
     bool         $many = false
   ): RelationQuery
   {
-    if (empty($localKey)) $localKey = $this->pk;
-    if (empty($foreignKey)) $foreignKey = $this->table . '_' . $localKey;
-    if (is_string($relationModel)) $relationModel = new $relationModel;
+    if (empty($localKey)) {
+      $localKey = $this->pk;
+    }
+    if (empty($foreignKey)) {
+      $foreignKey = $this->table . '_' . $localKey;
+    }
+    if (is_string($relationModel)) {
+      $relationModel = new $relationModel();
+    }
     return new RelationQuery($relationModel, $foreignKey, $localKey, $many);
   }
 
@@ -320,17 +324,28 @@ abstract class Model
     ?string           $relatedKey = null
   ): BelongsToMany
   {
-    if (is_string($relationModel)) $relationModel = new $relationModel;
-    if (empty($localKey)) $localKey = $this->pk;
-    if (empty($relatedKey)) $relatedKey = $relationModel->pk;
-    if (empty($foreignPivotKey)) $foreignPivotKey = $this->table . '_' . $localKey;
-    if (empty($relatedPivotKey)) $relatedPivotKey = $relationModel->table . '_' . $relatedKey;
+    if (is_string($relationModel)) {
+      $relationModel = new $relationModel();
+    }
+    if (empty($localKey)) {
+      $localKey = $this->pk;
+    }
+    if (empty($relatedKey)) {
+      $relatedKey = $relationModel->pk;
+    }
+    if (empty($foreignPivotKey)) {
+      $foreignPivotKey = $this->table . '_' . $localKey;
+    }
+    if (empty($relatedPivotKey)) {
+      $relatedPivotKey = $relationModel->table . '_' . $relatedKey;
+    }
     // 中间表：模型实例直接复用；字符串为已存在的类时实例化，否则视为表名创建匿名模型
     $pivotModel = match (true) {
       $pivot instanceof Model => $pivot,
       is_string($pivot) && class_exists($pivot) => new $pivot(),
       default => $this->createPivotModel(
-        $pivot ?? $this->table . '_' . $relationModel->table, $this->channelName
+        $pivot ?? $this->table . '_' . $relationModel->table,
+        $this->channelName
       ),
     };
     return new BelongsToMany(

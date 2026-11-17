@@ -11,7 +11,6 @@
  *  +----------------------------------------------------------------------
  */
 
-/** @noinspection PhpUnused */
 declare(strict_types=1);
 
 namespace Viswoole\Database;
@@ -102,7 +101,9 @@ abstract class Entity extends Model implements JsonSerializable
     parent::__construct();
     // 构造传参 ≠ 已持久化：数据仅填充属性，不记录快照，
     // save() 将走整体插入；数据库行水合须走 static::fromRow()
-    if ($data !== []) $this->hydrateRow($data, false);
+    if ($data !== []) {
+      $this->hydrateRow($data, false);
+    }
   }
 
   /**
@@ -145,8 +146,12 @@ abstract class Entity extends Model implements JsonSerializable
     // 行数据中也纳入快照基线，使 updateDirty 仅将「水合后新赋值」的
     // 属性视为变更，避免默认值被误判为脏数据写入数据库
     foreach (EntityHydrator::metasByColumn(static::class) as $meta) {
-      if (isset($original[$meta->column])) continue;
-      if (!$meta->prop->isInitialized($this)) continue;
+      if (isset($original[$meta->column])) {
+        continue;
+      }
+      if (!$meta->prop->isInitialized($this)) {
+        continue;
+      }
       $original[$meta->column] = EntityHydrator::dehydrate($meta, $meta->prop->getValue($this));
     }
     $this->original = $persisted ? $original : [];
@@ -203,7 +208,9 @@ abstract class Entity extends Model implements JsonSerializable
   {
     $row = [];
     foreach (EntityHydrator::metasByColumn(static::class) as $meta) {
-      if (!$meta->prop->isInitialized($this)) continue;
+      if (!$meta->prop->isInitialized($this)) {
+        continue;
+      }
       $value = $meta->prop->getValue($this);
       $row[$meta->column] = $forDatabase
         ? EntityHydrator::dehydrate($meta, $value)
@@ -279,7 +286,9 @@ abstract class Entity extends Model implements JsonSerializable
   public function save(): bool
   {
     $row = $this->dehydrate();
-    if (!$this->isPersisted) return $this->insertNew($row);
+    if (!$this->isPersisted) {
+      return $this->insertNew($row);
+    }
     return $this->updateDirty($row);
   }
 
@@ -300,7 +309,9 @@ abstract class Entity extends Model implements JsonSerializable
     // 声明默认值且值仍等于默认值的列过滤：与脱水归一化后的默认值
     // 严格比较（元数据构建时已预脱水，枚举/日期默认值可直接比较）
     foreach (EntityHydrator::metasByColumn(static::class) as $meta) {
-      if (!$meta->hasDeclaredDefault) continue;
+      if (!$meta->hasDeclaredDefault) {
+        continue;
+      }
       if (array_key_exists($meta->column, $row) && $row[$meta->column] === $meta->declaredDefault) {
         unset($row[$meta->column]);
       }
@@ -361,7 +372,9 @@ abstract class Entity extends Model implements JsonSerializable
     $dirty = array_filter($row, function ($value, $column) {
       return !array_key_exists($column, $this->original) || $value !== $this->original[$column];
     }, ARRAY_FILTER_USE_BOTH);
-    if ($dirty === []) return false;
+    if ($dirty === []) {
+      return false;
+    }
     $pkColumn = $this->pk;
     // 用原始主键定位行：主键被业务修改时，新值进入 $dirty 一起更新
     $pkValue = $this->original[$pkColumn] ?? null;
@@ -371,7 +384,9 @@ abstract class Entity extends Model implements JsonSerializable
     $count = $this->query->strict(false)->where($pkColumn, $pkValue)->update($dirty);
     // toRaw 场景 SQL 未真正执行（返回 Raw）：不重置变更基准，保留脏数据
     // 待恢复后重试；否则快照被误刷新，未落库的变更会静默丢失
-    if ($count instanceof Raw) return false;
+    if ($count instanceof Raw) {
+      return false;
+    }
     $this->markSynced();
     return $count === 1;
   }
@@ -427,7 +442,9 @@ abstract class Entity extends Model implements JsonSerializable
     // 与 save 落库路径（编码为 JSON 字符串）区分，避免 JSON 响应双重编码
     $rows = $this->dehydrate(false) + $this->extras;
     foreach ($rows as $key => $value) {
-      if ($hidden && in_array($key, $this->hidden, true)) continue;
+      if ($hidden && in_array($key, $this->hidden, true)) {
+        continue;
+      }
       if ($value instanceof BaseCollection) {
         // 关联数据为集合/数据集时递归转换，深度用尽置空防无限递归
         $value = $maxDepth > 0 ? $value->toArray($withAttr, $hidden, $maxDepth - 1) : [];
