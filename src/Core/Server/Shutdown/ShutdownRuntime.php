@@ -74,17 +74,21 @@ final class ShutdownRuntime
    *
    * @param Server $server 要注册进程的原生服务
    * @param Closure(Process, UserProcessShutdown): void $handler 用户进程入口
+   * @param UserProcessOptions $options 原生进程构造选项
    * @return int|false 原生进程编号，注册失败时返回 false
    * @throws ServerException 停机状态尚未初始化
    */
-  public static function registerUserProcess(Server $server, Closure $handler): int|false
-  {
+  public static function registerUserProcess(
+    Server $server,
+    Closure $handler,
+    UserProcessOptions $options = new UserProcessOptions()
+  ): int|false {
     $registry = self::$userProcesses ?? throw new ServerException('请先初始化服务停机状态');
     $receipt = new UserProcessShutdown();
     $id = $server->addProcess(new Process(static function (Process $process) use ($handler, $receipt): void {
       $receipt->started();
       $handler($process, $receipt);
-    }));
+    }, $options->redirectStdio, $options->pipeType, $options->enableCoroutine));
     if ($id !== false) {
       $receipts = $registry[$server] ?? [];
       $receipts[] = $receipt;

@@ -8,6 +8,7 @@ require __DIR__ . '/shutdown-bootstrap.php';
 use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Core\Server\Shutdown\ShutdownPolicy;
 use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
+use Viswoole\Core\Server\Shutdown\UserProcessOptions;
 use Viswoole\Core\Server\Shutdown\UserProcessShutdown;
 use Viswoole\Core\Server\Task\TaskQueueRecoveryTimer;
 
@@ -50,11 +51,34 @@ function createUserProcessHandler(string $directory, string $name, bool $isStubb
   };
 }
 
+/**
+ * 检查无管道的进程仍可在入口协程挂起并恢复。
+ *
+ * @param Closure $handler 执行停机排空的入口
+ * @return Closure 带运行环境断言的入口
+ */
+function requireCoroutineWithoutPipe(Closure $handler): Closure
+{
+  return static function (Swoole\Process $process, UserProcessShutdown $receipt) use ($handler): void {
+    if (Swoole\Coroutine::getCid() < 0 || ($process->pipe ?? -1) > 0) {
+      throw new RuntimeException('测试用户进程需要启用协程并禁用管道');
+    }
+    Swoole\Coroutine::sleep(0.01);
+    $handler($process, $receipt);
+  };
+}
+
 if ($userProcessMode !== '') {
   $handler = createUserProcessHandler($directory, 'user', $userProcessMode === 'stubborn');
-  $id = $userProcessMode === 'untracked'
-    ? $server->addProcess(new Swoole\Process($handler))
-    : ShutdownRuntime::registerUserProcess($server, $handler);
+  $id = match ($userProcessMode) {
+    'untracked' => $server->addProcess(new Swoole\Process($handler)),
+    'coroutine' => ShutdownRuntime::registerUserProcess(
+      $server,
+      requireCoroutineWithoutPipe($handler),
+      new UserProcessOptions(pipeType: 0, enableCoroutine: true)
+    ),
+    default => ShutdownRuntime::registerUserProcess($server, $handler),
+  };
   if ($id === false) throw new RuntimeException('测试用户进程注册失败');
 }
 if ($userProcessMode === 'mixed') {

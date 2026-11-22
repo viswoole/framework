@@ -140,5 +140,6 @@ $results = ['counters' => observeCallbackCounters(), 'policy' => ['defaults' => 
   'userProcessGraceful' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'tracked']),
   'userProcessUntracked' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'untracked']),
   'userProcessMixed' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'mixed']),
+  'userProcessCoroutine' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'coroutine']),
   'unconfirmedMessage' => StopResult::Unconfirmed->message('legacy')];
 echo json_encode($results, JSON_THROW_ON_ERROR);

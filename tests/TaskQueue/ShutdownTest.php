@@ -170,6 +170,20 @@ final class ShutdownTest extends TestCase
     }
 
     /**
+     * 验证无管道的协程用户进程进入回调、排空工作并确认退出。
+     *
+     * @return void 校验真实进程的停机回执
+     */
+    public function testCoroutineUserProcessShutdown(): void
+    {
+        $process = self::$observations['userProcessCoroutine'];
+        self::assertTrue($process['userCompleted']);
+        self::assertFalse($process['hasAliveProcesses']);
+        self::assertSame([1, 1, 0], $process['userCounts']);
+        self::assertSame('graceful', $process['status']);
+    }
+
+    /**
      * 旧实例缺少回执时明确表达无法确认任务状态。
      * @return void
      */
