@@ -132,6 +132,44 @@ final class ShutdownTest extends TestCase
     }
 
     /**
+     * 区分用户进程排空、超时中断和未参与停机确认。
+     *
+     * @return void 用真实 Swoole 停机回执验证三个分支
+     */
+    public function testUserProcessShutdown(): void
+    {
+        $timedOut = self::$observations['userProcessTimeout'];
+        self::assertSame(0, $timedOut['activeTasks']);
+        self::assertFalse($timedOut['userCompleted']);
+        self::assertSame('forced', $timedOut['status']);
+        self::assertFalse($timedOut['hasAliveProcesses']);
+
+        $graceful = self::$observations['userProcessGraceful'];
+        self::assertTrue($graceful['userCompleted']);
+        self::assertSame('graceful', $graceful['status']);
+
+        $untracked = self::$observations['userProcessUntracked'];
+        self::assertTrue($untracked['userCompleted']);
+        self::assertSame('unconfirmed', $untracked['status']);
+    }
+
+    /**
+     * 已登记进程确认后，另一个未登记进程超时仍只能报告无法确认。
+     *
+     * @return void 验证同一服务的登记数和结果
+     */
+    public function testMixedUserProcessShutdown(): void
+    {
+        $mixed = self::$observations['userProcessMixed'];
+        self::assertSame(0, $mixed['activeTasks']);
+        self::assertTrue($mixed['userCompleted']);
+        self::assertFalse($mixed['untrackedCompleted']);
+        self::assertFalse($mixed['hasAliveProcesses']);
+        self::assertSame([2, 1, 0], $mixed['userCounts']);
+        self::assertSame('unconfirmed', $mixed['status']);
+    }
+
+    /**
      * 旧实例缺少回执时明确表达无法确认任务状态。
      * @return void
      */

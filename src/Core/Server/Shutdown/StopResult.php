@@ -21,7 +21,7 @@ namespace Viswoole\Core\Server\Shutdown;
 enum StopResult: string
 {
   /**
-   * 优雅退出，在途任务和请求均已结束
+   * 优雅退出，在途任务、请求和用户进程均已排空
    */
   case Graceful = 'graceful';
   /**
@@ -46,9 +46,9 @@ enum StopResult: string
   public function message(string $name): string
   {
     return match ($this) {
-      self::Graceful => "✅ {$name}服务已正常停止，已进入处理器的任务和请求均已结束（不代表业务成功）",
-      self::Forced => "⚠️ {$name}服务已超时强停或存在被中断的任务，不能确认任务全部完成",
-      self::Unconfirmed => "⚠️ {$name}服务进程已退出，但缺少停机回执，无法确认在途任务全部完成",
+      self::Graceful => "✅ {$name}服务已正常停止，已进入处理器的任务、请求和用户进程均已排空（不代表业务成功）",
+      self::Forced => "⚠️ {$name}服务已超时强停或存在未排空的工作，无法确认全部工作完成",
+      self::Unconfirmed => "⚠️ {$name}服务进程已退出，但缺少停机回执或用户进程未接入确认，无法确认全部工作完成",
       self::Failed => "❌ {$name}服务停止失败，退出状态未能确认，PID 文件已保留",
     };
   }

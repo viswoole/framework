@@ -14,12 +14,15 @@ use Viswoole\Core\Server\Shutdown\StopResult;
 /**
  * 等待任务已进入处理器，避免停止时序碰巧提前
  * @param string $directory 场景路径
+ * @param string $userProcessMode 用户进程场景，空字符串表示无自定义进程
  * @return void
  */
-function awaitTaskStart(string $directory): void
+function awaitTaskStart(string $directory, string $userProcessMode): void
 {
   $deadline = microtime(true) + 5;
-  while (!is_file($directory . '/task-started') || !is_file($directory . '/stop_test.pid')) {
+  while (!is_file($directory . '/task-started') || !is_file($directory . '/stop_test.pid')
+    || ($userProcessMode !== '' && !is_file($directory . '/user-started'))
+    || ($userProcessMode === 'mixed' && !is_file($directory . '/untracked-started'))) {
     if (microtime(true) > $deadline) throw new RuntimeException('等待测试服务启动超时：' . $directory);
     usleep(10000);
   }
@@ -36,13 +39,20 @@ function observeStop(array $scenario): array
   mkdir($directory);
   $fixture = ($scenario['legacy'] ?? false) ? 'viswoole-legacy-server.php' : 'viswoole-shutdown-server.php';
   if ($scenario['stubborn']) $fixture = 'viswoole-stubborn-server.php';
-  $command = [PHP_BINARY, __DIR__ . '/' . $fixture, $directory, (string)$scenario['duration'], (string)$scenario['grace']];
+  $userProcessMode = $scenario['userProcess'] ?? '';
+  $command = [PHP_BINARY, __DIR__ . '/' . $fixture, $directory, (string)$scenario['duration'],
+    (string)$scenario['grace'], $userProcessMode];
   $process = proc_open($command, [0 => ['file', '/dev/null', 'r'], 1 => ['file', $directory . '/stdout.log', 'w'],
     2 => ['file', $directory . '/stderr.log', 'w']], $pipes);
   if (!is_resource($process)) throw new RuntimeException('创建测试服务失败');
   $tree = null;
   try {
-    awaitTaskStart($directory);
+    awaitTaskStart($directory, $userProcessMode);
+    if ($userProcessMode !== '') {
+      // 排除 Task 计数的影响，覆盖只剩用户进程未退出的场景。
+      $deadline = microtime(true) + 2;
+      while (!is_file($directory . '/task-completed') && microtime(true) < $deadline) usleep(10000);
+    }
     $pid = (int)file_get_contents($directory . '/stop_test.pid');
     $tree = new ServerProcessTree($pid);
     // 当前配置故意比运行服务的窗口短，验证停止采用实际启动回执，而不是部署后新配置。
@@ -73,7 +83,10 @@ function stopObservations(string $directory, ServerProcessTree $tree, float $ela
   $path = $directory . '/stop_test.pid.shutdown.json';
   $record = is_file($path) ? json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR) : [];
   return ['elapsed' => $elapsed, 'restarted' => $GLOBALS['shutdownRestarted'], 'completed' => is_file($directory . '/task-completed'),
-    'status' => $record['status'] ?? null, 'activeTasks' => $record['active_tasks'] ?? null,
+    'status' => $record['status'] ?? null, 'userCompleted' => is_file($directory . '/user-completed'), 'activeTasks' => $record['active_tasks'] ?? null,
+    'userCounts' => [$record['expected_user_processes'] ?? null, $record['tracked_user_processes'] ?? null,
+      $record['pending_user_processes'] ?? null],
+    'untrackedCompleted' => is_file($directory . '/untracked-completed'),
     'messages' => $GLOBALS['shutdownMessages'], 'hasAliveProcesses' => $tree->isAlive(),
     'hasPidFile' => is_file($directory . '/stop_test.pid'),
     'nativeMessages' => is_file($directory . '/messages.log') ? file_get_contents($directory . '/messages.log') : '',
@@ -123,5 +136,9 @@ $results = ['counters' => observeCallbackCounters(), 'policy' => ['defaults' => 
   'swooleTimeout' => observeStop(['duration' => 20, 'grace' => 1, 'stubborn' => false]),
   'frameworkTimeout' => observeStop(['duration' => 0, 'grace' => 1, 'stubborn' => true]),
   'legacy' => observeStop(['duration' => 0, 'grace' => 1, 'stubborn' => false, 'legacy' => true]),
+  'userProcessTimeout' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'stubborn']),
+  'userProcessGraceful' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'tracked']),
+  'userProcessUntracked' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'untracked']),
+  'userProcessMixed' => observeStop(['duration' => 0.01, 'grace' => 1, 'stubborn' => false, 'userProcess' => 'mixed']),
   'unconfirmedMessage' => StopResult::Unconfirmed->message('legacy')];
 echo json_encode($results, JSON_THROW_ON_ERROR);

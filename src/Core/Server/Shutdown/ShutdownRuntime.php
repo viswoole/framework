@@ -17,12 +17,14 @@ namespace Viswoole\Core\Server\Shutdown;
 
 use Closure;
 use Swoole\Atomic;
+use Swoole\Process;
 use Swoole\Server;
 use Throwable;
 use Viswoole\Core\Exception\ServerException;
+use WeakMap;
 
 /**
- * fork 前分配共享计数，在停机后保存回执；跟踪已进入 Task 和请求回调的工作，不判断业务成败
+ * 为在途回调和用户进程保存共享停机状态，汇总退出结果
  */
 final class ShutdownRuntime
 {
@@ -44,6 +46,15 @@ final class ShutdownRuntime
   private static ?string $runId = null;
 
   /**
+   * @var WeakMap<Server, list<UserProcessShutdown>>|null 各原生服务已登记的用户进程槽位
+   */
+  private static ?WeakMap $userProcesses = null;
+  /**
+   * @var int|null 停机开始时 Swoole 登记的用户进程数量
+   */
+  private static ?int $expectedUserProcesses = null;
+
+  /**
    * @return void 必须在 Swoole fork 前初始化，供 master 和 Task Worker 共享
    */
   public static function prepare(): void
@@ -52,6 +63,34 @@ final class ShutdownRuntime
     self::$activeRequests = new Atomic(0);
     self::$isStopping = new Atomic(0);
     self::$runId = bin2hex(random_bytes(16));
+    self::$userProcesses = new WeakMap();
+    self::$expectedUserProcesses = null;
+  }
+
+  /**
+   * 注册带停机确认的用户进程
+   *
+   * 在服务初始化后、启动前调用。只有原生注册成功才将回执计入对应服务。
+   *
+   * @param Server $server 要注册进程的原生服务
+   * @param Closure(Process, UserProcessShutdown): void $handler 用户进程入口
+   * @return int|false 原生进程编号，注册失败时返回 false
+   * @throws ServerException 停机状态尚未初始化
+   */
+  public static function registerUserProcess(Server $server, Closure $handler): int|false
+  {
+    $registry = self::$userProcesses ?? throw new ServerException('请先初始化服务停机状态');
+    $receipt = new UserProcessShutdown();
+    $id = $server->addProcess(new Process(static function (Process $process) use ($handler, $receipt): void {
+      $receipt->started();
+      $handler($process, $receipt);
+    }));
+    if ($id !== false) {
+      $receipts = $registry[$server] ?? [];
+      $receipts[] = $receipt;
+      $registry[$server] = $receipts;
+    }
+    return $id;
   }
 
   /**
@@ -124,6 +163,7 @@ final class ShutdownRuntime
   public static function stopping(Server $server): void
   {
     self::$isStopping?->set(1);
+    self::$expectedUserProcesses = $server->stats()['user_worker_num'] ?? null;
     self::write($server, 'stopping');
   }
 
@@ -131,13 +171,30 @@ final class ShutdownRuntime
    * 停机结束时落盘最终回执
    *
    * @param Server $server 原生服务
-   * @return StopResult 剩余任务意味着 Swoole 退出期间发生了中断
+   * @return StopResult 根据在途工作和用户进程确认判定的退出结果
    */
   public static function stopped(Server $server): StopResult
   {
     $hasActiveCallbacks = (self::$activeTasks?->get() ?? 0) + (self::$activeRequests?->get() ?? 0) > 0;
-    $result = $hasActiveCallbacks ? StopResult::Forced : StopResult::Graceful;
+    $result = match (true) {
+      $hasActiveCallbacks, self::pendingUserProcesses($server) > 0 => StopResult::Forced,
+      self::$expectedUserProcesses !== count(self::$userProcesses[$server] ?? []) => StopResult::Unconfirmed,
+      default => StopResult::Graceful,
+    };
     return self::write($server, $result->value) ? $result : StopResult::Unconfirmed;
+  }
+
+  /**
+   * 统计未确认排空的已登记进程
+   *
+   * 共享标记缺失表示用户进程尚未完成退出协议，不能将停机判为优雅完成。
+   *
+   * @param Server $server 原生服务
+   * @return int 未确认排空的已登记进程数
+   */
+  private static function pendingUserProcesses(Server $server): int
+  {
+    return count(array_filter(self::$userProcesses[$server] ?? [], static fn (UserProcessShutdown $process): bool => !$process->isAcknowledged()));
   }
 
   /**
@@ -177,7 +234,11 @@ final class ShutdownRuntime
     $data = ['pid' => $server->getMasterPid(), 'run_id' => self::$runId,
       'identity' => ServerProcessTree::identity($server->getMasterPid()), 'max_wait_time' => $server->setting['max_wait_time'],
       'reload_async' => $server->setting['reload_async'], 'status' => $status,
-      'active_tasks' => self::$activeTasks?->get() ?? 0, 'active_requests' => self::$activeRequests?->get() ?? 0];
+      'active_tasks' => self::$activeTasks?->get() ?? 0, 'active_requests' => self::$activeRequests?->get() ?? 0,
+      'expected_user_processes' => self::$expectedUserProcesses,
+      'tracked_user_processes' => count(self::$userProcesses[$server] ?? []),
+      'pending_user_processes' => self::pendingUserProcesses($server),
+    ];
     $path = $pidFile . '.shutdown.json';
     $temporary = $path . '.' . bin2hex(random_bytes(8)) . '.tmp';
     try {

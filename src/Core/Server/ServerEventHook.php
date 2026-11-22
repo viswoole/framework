@@ -129,7 +129,7 @@ class ServerEventHook
   }
 
   /**
-   * 服务关闭回调，按共享任务计数输出正常退出或中断结果
+   * 服务关闭回调，按在途回调计数和用户进程确认输出停机结果
    *
    * @param Server $server Swoole 服务实例
    */
