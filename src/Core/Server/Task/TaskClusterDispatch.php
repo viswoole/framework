@@ -101,8 +101,10 @@ trait TaskClusterDispatch
   private function queueCapacity(SwooleServer $server): int
   {
     $workers = (int)($server->setting['task_worker_num'] ?? 0);
-    $concurrency = $this->config->get('task.concurrency_per_worker', 8);
-    if (!is_int($concurrency) || $concurrency < 1 || $concurrency > 1024) {
+    $value = $this->config->get('task.concurrency_per_worker', 8);
+    // 环境变量与部分配置来源产生数字字符串，统一归一化为整数后再校验范围。
+    $concurrency = is_numeric($value) ? (int)$value : 0;
+    if ($concurrency < 1 || $concurrency > 1024) {
       throw new InvalidArgumentException('任务协程预算必须为1到1024的整数');
     }
     return $workers * (!empty($server->setting['task_enable_coroutine']) ? $concurrency : 1);

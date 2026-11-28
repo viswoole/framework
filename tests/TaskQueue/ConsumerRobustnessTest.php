@@ -15,6 +15,9 @@ use Viswoole\Cache\Contract\QueueStoreInterface;
 use Viswoole\Core\Server\Task\TaskManager;
 use Viswoole\Core\Server\Task\TaskQueue;
 use Viswoole\Core\Server\Task\TaskQueueConsumer;
+use Viswoole\Tests\TaskQueue\Support\ServerStub;
+
+require_once __DIR__ . '/Support/ServerStub.php';
 
 /**
  * 暴露 onTask 入口并绕过服务事件注册，供存储时钟域判定测试使用。
@@ -54,10 +57,6 @@ final class ConsumerRobustnessTest extends TestCase
    * @var string|null 兜底日志重定向文件，避免 error_log 污染测试输出
    */
   private ?string $logFile = null;
-  /**
-   * @var SwooleServer|null 共享服务模拟，Swoole 每进程只允许创建一个 Server 实例
-   */
-  private static ?SwooleServer $server = null;
 
   /**
    * 将兜底日志输出重定向到临时文件。
@@ -97,18 +96,12 @@ final class ConsumerRobustnessTest extends TestCase
   }
 
   /**
-   * 构造带 shadow worker_id 的服务实例，避免启动真实服务；
-   * Swoole 每进程仅允许一个 Server 实例，故跨用例共享。
-   * @return SwooleServer 服务模拟
+   * 获取共享服务桩（Worker 3），避免启动真实服务。
+   * @return SwooleServer 服务桩
    */
   private function mockServer(): SwooleServer
   {
-    if (self::$server === null) {
-      self::$server = new class('127.0.0.1', 0) extends SwooleServer {
-        public $worker_id = 3;
-      };
-    }
-    return self::$server;
+    return ServerStub::get(workerId: 3);
   }
 
   /**

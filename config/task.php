@@ -22,7 +22,8 @@ return [
   // 实例崩溃后，租约到期的任务由每秒恢复扫描接管，再按失败退避重试；租约过短会放大重复投递窗口，建议不低于 10。
   // 协程任务按 Task Worker 数 × 此预算计算节点持久化任务上限；非协程模式固定每进程1个。
   // 容量包括投递中和执行中任务，不包括 emitWait 与非持久化直投。
-  'concurrency_per_worker' => 8,
+  // 有效取值为 1 到 1024 的整数；通过环境变量设置时由框架归一化为整数后校验。
+  'concurrency_per_worker' => (int)(env('task.concurrency_per_worker') ?: 8),
 
   'lease_seconds' => (int)(env('task.lease_seconds') ?: 30),
 
