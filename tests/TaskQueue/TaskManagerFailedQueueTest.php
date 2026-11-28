@@ -28,8 +28,8 @@ final class TaskManagerFailedQueueTest extends TestCase
     $store = $this->createMock(QueueStoreInterface::class);
     $store->method('supportsQueueOperations')->willReturn(true);
     $store->method('supportsAtomicOperations')->willReturn(true);
-    $record = ['queueState' => 'failed', 'queueId' => 'failed-task'];
-    $store->expects(self::once())->method('get')->with('failed-task')->willReturn($record);
+    $record = ['queueState' => 'failed', 'queueId' => str_repeat('a', 48)];
+    $store->expects(self::once())->method('get')->with(str_repeat('a', 48))->willReturn($record);
     $manager = $this->getMockBuilder(TaskManager::class)->disableOriginalConstructor()
       ->onlyMethods(['queueStore', 'taskQueue'])->getMock();
     $manager->expects(self::once())->method('queueStore')->willReturn($store);
@@ -37,7 +37,7 @@ final class TaskManagerFailedQueueTest extends TestCase
       new TaskQueue($store)
     );
 
-    self::assertSame($record, $manager->failedQueue()->get('failed-task'));
+    self::assertSame($record, $manager->failedQueue()->get(str_repeat('a', 48)));
   }
 
   /**

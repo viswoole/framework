@@ -21,6 +21,10 @@ trait TaskClusterDispatch
    */
   private bool $isQueueDispatching = false;
   /**
+   * @var bool 并发预算配置校验失败后停用本进程领取，避免每轮重复记日志
+   */
+  private bool $isCapacityConfigInvalid = false;
+  /**
    * @var float 当前 Worker 下一次允许查询共享队列的时间
    */
   private float $nextQueueScanAt = 0;
@@ -60,7 +64,8 @@ trait TaskClusterDispatch
    */
   protected function recoverTasks(SwooleServer $server): void
   {
-    if ($this->isQueueDispatching || ShutdownRuntime::isStopping() || microtime(true) < $this->nextQueueScanAt) { return; }
+    if ($this->isQueueDispatching || $this->isCapacityConfigInvalid
+      || ShutdownRuntime::isStopping() || microtime(true) < $this->nextQueueScanAt) { return; }
     $this->isQueueDispatching = true;
     $this->nextQueueScanAt = microtime(true) + 1;
     try {
@@ -73,6 +78,10 @@ trait TaskClusterDispatch
         'canContinue' => static fn (): bool => !ShutdownRuntime::isStopping(),
       ]);
       if ($active > 0 || $processed > 0) { $this->nextQueueScanAt = microtime(true) + 0.1; }
+    } catch (InvalidArgumentException $error) {
+      // 配置错误无法自行恢复，记录一次并停用本进程领取，避免周期日志洪泛。
+      $this->isCapacityConfigInvalid = true;
+      TaskQueueLog::write('任务并发预算配置无效，本进程领取已停用', ['exception' => (string)$error]);
     } catch (Throwable $error) {
       TaskQueueLog::write('队列恢复异常，将于下个周期重试', ['exception' => (string)$error]);
     } finally {

@@ -31,10 +31,13 @@ final readonly class TaskQuarantinedQueue
    * 读取原始快照，不反序列化快照内的业务对象。
    * @param string $id 原始任务标识
    * @return array|null 包含 queueId、raw、reason、quarantinedAt 的记录
+   * @throws \InvalidArgumentException 队列 ID 格式无效时抛出
    * @throws \Throwable 存储读取失败时抛出
    */
   public function get(string $id): ?array
   {
+    // 与 TaskQueueQuery::get 对齐：先校验身份格式，避免任意字符串直接参与缓存键读取。
+    if (!preg_match('/^[a-f0-9]{48}$/D', $id)) { throw new InvalidArgumentException('队列 ID 格式无效'); }
     $record = $this->store->get(QueueStoreInterface::QUARANTINE_PREFIX . $id);
     return is_array($record) ? $this->restoreRecord($record) : null;
   }

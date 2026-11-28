@@ -53,10 +53,13 @@ final readonly class TaskFailedQueue
    * 读取单条失败任务记录
    * @param string $id 失败任务 ID
    * @return array|null 完整失败记录
+   * @throws \InvalidArgumentException 队列 ID 格式无效时抛出
    * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
    */
   public function get(string $id): ?array
   {
+    // 与 TaskQueueQuery::get 对齐：先校验身份格式，避免任意字符串直接参与缓存键读取。
+    if (!preg_match('/^[a-f0-9]{48}$/D', $id)) { throw new \InvalidArgumentException('队列 ID 格式无效'); }
     $data = $this->store->get($id);
     return is_array($data) && ($data['queueState'] ?? '') === 'failed' ? $data : null;
   }
