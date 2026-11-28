@@ -77,7 +77,8 @@ trait TaskClusterDispatch
         'instanceId' => $this->instanceId, 'capacity' => $capacity, 'topics' => array_keys($this->topics),
         'canContinue' => static fn (): bool => !ShutdownRuntime::isStopping(),
       ]);
-      if ($active > 0 || $processed > 0) { $this->nextQueueScanAt = microtime(true) + 0.1; }
+      // 活跃节拍只由100ms定时器控制；再从轮末等待100ms会跳过下一拍，实际退化为约200ms。
+      if ($active > 0 || $processed > 0) { $this->nextQueueScanAt = 0; }
     } catch (InvalidArgumentException $error) {
       // 配置错误无法自行恢复，记录一次并停用本进程领取，避免周期日志洪泛。
       $this->isCapacityConfigInvalid = true;
