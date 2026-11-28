@@ -86,12 +86,17 @@ namespace {
     public function getQueueAssignmentCount(string $instanceId): int { return 0; }
 
     /**
-     * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
-   * @param int $limit 单轮查询上限
+     * 注入到期扫描故障
+     *
+     * 接受完整驱动窗口参数，保持真实恢复入口的失败语义。
+     *
+     * @param int $limit 单轮查询上限
+     * @param int $offset 扫描偏移
+     * @param float|null $dueBefore 固定窗口上界
      * @return array 始终抛出索引查询错误
      * @throws \RuntimeException 固定注入的查询故障
      */
-    public function getDueQueue(int $limit = 100, int $offset = 0): array
+    public function getDueQueue(int $limit = 100, int $offset = 0, ?float $dueBefore = null): array
     {
       throw new \RuntimeException('injected scan failure');
     }

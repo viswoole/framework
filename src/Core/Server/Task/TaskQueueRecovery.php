@@ -16,12 +16,19 @@ use Viswoole\Cache\Exception\QueueRecordException;
 trait TaskQueueRecovery
 {
   /**
-   * @var int 到期集合扫描位置，仅在当前消费进程内保留，重启后从头扫描
+   * @var int 固定窗口内已绕过的成员数，本机成功移出的成员不计入后续排名
    */
   private int $recoveryOffset = 0;
+  /**
+   * @var float|null 当前绕行窗口的存储端时间上界，防止新入队记录无限延长本轮扫描
+   */
+  private ?float $recoveryDueBefore = null;
 
   /**
-   * 每轮限量恢复到期任务，单条任务异常不阻止本轮其他任务
+   * 每轮有界恢复到期任务
+   *
+   * 单条异常不阻止其余任务；固定绕行窗口避免持续入队让旧记录无限等待。
+   *
    * @param Closure $dispatch 投递回调
    * @param array $options 本机节点、容量、主题及停机检查
    * @return int 本轮成功交给本机 Swoole 的任务数
@@ -32,7 +39,9 @@ trait TaskQueueRecovery
     $deadline = $options === [] ? PHP_INT_MAX : hrtime(true) + 50_000_000;
     $processed = 0;
     $remaining = isset($options['capacity']) ? min(32, $options['capacity'] - $this->assignedCount($options['instanceId'])) : 100;
-    $ids = $this->store->getDueQueue(100, $options === [] ? 0 : $this->recoveryOffset);
+    if ($remaining <= 0) { return 0; }
+    if ($options !== []) { $this->recoveryDueBefore ??= $this->store->now(); }
+    $ids = $this->store->getDueQueue(100, $options === [] ? 0 : $this->recoveryOffset, $options === [] ? null : $this->recoveryDueBefore);
     $examined = 0;
     foreach ($ids as $id) {
       if (hrtime(true) >= $deadline || (isset($options['canContinue']) && !$options['canContinue']())) { break; }
@@ -49,12 +58,30 @@ trait TaskQueueRecovery
         TaskQueueLog::write('队列任务恢复异常：' . $id, ['exception' => (string)$exception]);
       }
     }
-    // 无法消费的主题不修改共享调度时间；本机游标继续推进，到集合末尾后重新扫描。
-    // 并发移除可能暂时跳过成员，但每次绕回都会重新覆盖，不会永久阻塞后续主题。
-    if ($options !== []) {
-      $this->recoveryOffset = $ids === [] || ($examined === count($ids) && count($ids) < 100) ? 0 : $this->recoveryOffset + $examined;
-    }
+    if ($options !== []) { $this->advanceRecoveryCursor($ids, $examined, $processed); }
     return $processed;
+  }
+
+  /**
+   * 推进有界绕行窗口
+   *
+   * 成功领取会将成员移出当前到期窗口，因此偏移只增加仍被绕过的成员数，不重复扫描稳定的未知主题前缀。
+   * 其他节点移除或失败投递可能让排名暂时变化，固定窗口结束后重新覆盖，持续新入队不能阻止回绕。
+   *
+   * @param array $ids 当前窗口页
+   * @param int $examined 本页已检查数量
+   * @param int $processed 成功交接数量
+   * @return void 本机扫描位置已更新，不修改任何任务的共享到期时间
+   */
+  private function advanceRecoveryCursor(array $ids, int $examined, int $processed): void
+  {
+    if ($ids === [] || ($examined === count($ids) && count($ids) < 100)) {
+      $this->recoveryOffset = 0;
+      $this->recoveryDueBefore = null;
+      return;
+    }
+    // 只扣除已经确认离开当前窗口的本机成功领取，不能假设并发节点也移除了多少成员。
+    $this->recoveryOffset += $examined - $processed;
   }
 
   /**

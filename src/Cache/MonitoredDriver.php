@@ -152,15 +152,19 @@ final readonly class MonitoredDriver implements QueueStoreInterface
 
   /**
    * 透传到期任务查询
-   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   *
+   * 固定窗口与偏移必须原样交给驱动，避免监控包装改变扫描公平性。
+   *
    * @param int $limit 单轮数量上限
+   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   * @param float|null $dueBefore 固定到期扫描上界，null 使用存储端当前时间
    * @return array 底层驱动结果
    * @throws \Throwable 底层存储失败时抛出
    */
-  public function getDueQueue(int $limit = 100, int $offset = 0): array
+  public function getDueQueue(int $limit = 100, int $offset = 0, ?float $dueBefore = null): array
   {
     if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列调度'); }
-    return $this->invoke('getDueQueue', [$limit, $offset]);
+    return $this->invoke('getDueQueue', [$limit, $offset, $dueBefore]);
   }
 
   /**

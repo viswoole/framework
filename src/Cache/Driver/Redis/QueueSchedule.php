@@ -55,24 +55,31 @@ trait QueueSchedule
   }
 
   /**
-   * 以 Redis 时间查询到期任务，读取不移除成员，认领依赖状态脚本去重。
-   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   * 查询指定窗口内的到期任务
+   *
+   * 读取不移除成员，认领依赖状态脚本去重；固定上界用于保证绕行窗口可以结束。
+   *
    * @param int $limit 单轮数量上限
+   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   * @param float|null $dueBefore 固定扫描时间上界，null 使用当前 Redis 时间，超过当前时间时自动截断
    * @return list<string> 到期任务标识
    * @throws \Throwable Redis 操作失败时抛出
    */
-  public function getDueQueue(int $limit = 100, int $offset = 0): array
+  public function getDueQueue(int $limit = 100, int $offset = 0, ?float $dueBefore = null): array
   {
     if ($limit < 1 || $limit > 1000) { throw new InvalidArgumentException('队列恢复批量大小必须在 1 到 1000 之间'); }
     if ($offset < 0) { throw new InvalidArgumentException('队列扫描偏移不能小于0'); }
+    if ($dueBefore !== null && (!is_finite($dueBefore) || $dueBefore < 0)) { throw new InvalidArgumentException('队列扫描时间上界必须为非负有限值'); }
     $script = <<<'LUA'
       local now = redis.call('TIME')
-      return redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', tonumber(now[1]) + tonumber(now[2]) / 1000000,
+      local observedAt = tonumber(now[1]) + tonumber(now[2]) / 1000000
+      local deadline = ARGV[3] == '' and observedAt or math.min(observedAt, tonumber(ARGV[3]))
+      return redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', deadline,
         'LIMIT', tonumber(ARGV[2]), tonumber(ARGV[1]))
       LUA;
     $ids = $this->withConnection(fn (\Redis $redis): mixed => $redis->eval(
       $script,
-      [$this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY), $limit, $offset],
+      [$this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY), $limit, $offset, $dueBefore === null ? '' : sprintf('%.6F', $dueBefore)],
       1
     ));
     if (!is_array($ids)) { throw new RuntimeException('查询到期队列任务失败'); }

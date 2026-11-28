@@ -76,13 +76,17 @@ interface QueueStoreInterface extends AtomicCacheDriverInterface
   public function getQueueAssignmentCount(string $instanceId): int;
 
   /**
-   * 获取到期任务标识，不读取业务载荷。
-   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   * 获取到期任务标识
+   *
+   * 不读取业务载荷；固定扫描上界只限制查询，不改变共享调度时间。
+   *
    * @param int $limit 单轮最多返回数量
+   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   * @param float|null $dueBefore 固定扫描时间上界，null 使用当前 Redis 时间，超过当前时间时自动截断
    * @return list<string> 到期任务标识
    * @throws \Throwable Redis 查询失败时抛出
    */
-  public function getDueQueue(int $limit = 100, int $offset = 0): array;
+  public function getDueQueue(int $limit = 100, int $offset = 0, ?float $dueBefore = null): array;
 
   /**
    * 读取任务元数据，常规认领与续租不恢复业务对象。
