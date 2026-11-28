@@ -16,13 +16,17 @@ declare(strict_types=1);
 
 namespace Viswoole\Database;
 
+use Closure;
 use PDO;
+use Swoole\Coroutine;
+use WeakReference;
 use Swoole\Database\MysqliProxy;
 use Swoole\Database\PDOProxy;
 use Throwable;
 use Viswoole\Core\Coroutine\Context;
 use Viswoole\Database\Channel\PDO\{DriverType, PDOChannel};
 use Viswoole\Database\Exception\DbException;
+use Viswoole\Database\Transaction\TransactionCallbacks;
 use Viswoole\Database\Transaction\XaBranchRollback;
 use Viswoole\Database\Transaction\XaBranchState;
 use Viswoole\Database\Transaction\XaContext;
@@ -68,6 +72,16 @@ class ConnectManager
   private bool $isRollbackOnly = false;
 
   /**
+   * @var TransactionCallbacks|null 当前协程事务的提交后回调，事务结束即丢弃
+   */
+  private ?TransactionCallbacks $commitCallbacks = null;
+
+  /**
+   * @var bool 当前管理器是否已登记协程退出清理，正常提交后仍保留至本协程退出
+   */
+  private bool $hasCoroutineCleanup = false;
+
+  /**
    * 获取当前协程中的连接管理器单例，首次调用时自动创建
    *
    * @return static 连接管理器实例
@@ -91,6 +105,57 @@ class ConnectManager
   public function transactionLevel(): int
   {
     return $this->transactionDepth;
+  }
+
+  /**
+   * 登记事务提交后回调
+   *
+   * 无事务时立即执行；有事务时等待最外层确认提交。回调故障只留痕，不改变提交结果。
+   * 回调仅在内存中保留，进程退出、提交回执未知或 XA 后台恢复均不会补执行。
+   *
+   * @param Closure $callback 无参数的提交后操作
+   * @return void 已登记或已立即尝试执行
+   * @throws DbException 当前事务已失效，仅允许回滚
+   */
+  public function afterCommit(Closure $callback): void
+  {
+    $this->assertUsableTransaction();
+    if ($this->transactionDepth === 0) {
+      TransactionCallbacks::invoke([$callback]);
+      return;
+    }
+    $this->commitCallbacks ??= new TransactionCallbacks();
+    $this->commitCallbacks->add($this->transactionDepth, $callback);
+  }
+
+  /**
+   * 注册当前协程的事务退出清理
+   *
+   * 回调可能捕获管理器形成循环引用，不能仅依赖析构回滚；使用弱引用避免退出钩子延长对象寿命。
+   * 每个管理器在当前协程只登记一次，正常提交不撤销钩子，以覆盖随后新开的事务。
+   *
+   * @return void 协程内已注册，非协程入口沿用显式收尾及析构清理
+   */
+  private function registerCoroutineCleanup(): void
+  {
+    if ($this->hasCoroutineCleanup || Coroutine::getCid() <= 0) {
+      return;
+    }
+    $reference = WeakReference::create($this);
+    Coroutine::defer(static function () use ($reference): void {
+      $manager = $reference->get();
+      if ($manager === null) {
+        return;
+      }
+      $manager->hasCoroutineCleanup = false;
+      try {
+        // 直接清理全部层级并丢弃回调，不能将协程结束误当作提交成功。
+        $manager->rollBackAll();
+      } catch (Throwable $error) {
+        DbLog::write('error', sprintf('协程退出事务清理失败：%s (%s)', $error::class, $error->getCode()));
+      }
+    });
+    $this->hasCoroutineCleanup = true;
   }
 
   /**
@@ -294,6 +359,7 @@ class ConnectManager
       return;
     }
     if ($this->transactionDepth > 1 && $this->isRollbackOnly) {
+      $this->commitCallbacks?->discard($this->transactionDepth);
       $this->transactionDepth--;
       return;
     }
@@ -309,6 +375,7 @@ class ConnectManager
         throw $error;
       } finally {
         // 中途异常也必须回退层级，避免后续 commit/rollBack 作用于错误层级
+        $this->commitCallbacks?->discard($this->transactionDepth);
         $this->transactionDepth--;
       }
       return;
@@ -407,6 +474,7 @@ class ConnectManager
       $this->isRollbackOnly = false;
       $this->connections = [];
       $this->xaContext = null;
+      $this->commitCallbacks = null;
     }
   }
 
@@ -424,6 +492,7 @@ class ConnectManager
   public function startXa(XaJournal $journal): void
   {
     $this->assertUsableTransaction();
+    $this->registerCoroutineCleanup();
     if ($this->transactionDepth > 0) {
       if ($this->xaContext !== null) {
         $this->start();
@@ -448,6 +517,7 @@ class ConnectManager
   public function start(): void
   {
     $this->assertUsableTransaction();
+    $this->registerCoroutineCleanup();
     $level = $this->transactionDepth + 1;
     if ($level > 1) {
       // 先声明保存点再提升层级计数：保存点创建失败（如连接失效）时
@@ -486,6 +556,7 @@ class ConnectManager
         foreach ($this->connections as $item) {
           $this->executeSavepointSql($item['connect'], $sql);
         }
+        $this->commitCallbacks?->release($this->transactionDepth);
       } catch (Throwable $error) {
         // 服务端可能已撤销整个事务；不能在外层捕获后继续复用已失去保存点的连接。
         $this->isRollbackOnly = true;
@@ -496,6 +567,22 @@ class ConnectManager
       }
       return;
     }
+    // 先分离回调，连接归还与状态清理成功后才允许执行；任何提交异常都直接丢弃。
+    $callbacks = $this->commitCallbacks?->detach() ?? [];
+    $this->commitOutermost();
+    TransactionCallbacks::invoke($callbacks);
+  }
+
+  /**
+   * 提交并清理最外层连接
+   *
+   * 普通及 XA 提交都必须确认成功；部分提交、回执未知和连接清理异常沿原路径传播。
+   *
+   * @return void 提交已确认且事务上下文已释放
+   * @throws Throwable 提交或连接清理故障，不执行提交后回调
+   */
+  private function commitOutermost(): void
+  {
     // 首层：真实提交。使用 try-finally 确保中途异常时也能重置事务状态并释放连接，避免连接泄漏
     if ($this->xaContext !== null) {
       // XA 首层：两阶段协议（XA END → journal → XA PREPARE → XA COMMIT），
@@ -511,7 +598,10 @@ class ConnectManager
     try {
       $array = $this->connections;
       foreach ($array as $key => $item) {
-        $item['connect']->commit();
+        // PDO 静默模式会返回 false；未确认提交不能触发成功回调，剩余连接交 finally 回滚清理。
+        if ($item['connect']->commit() === false) {
+          throw new DbException('数据库事务提交失败：驱动未确认提交成功');
+        }
         unset($this->connections[$key]);
         // 事务释放路径必须强制归还：此时事务标志尚未重置，
         // 走 put() 会落入"仅标记非活跃"分支导致连接滞留

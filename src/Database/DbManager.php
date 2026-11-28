@@ -384,6 +384,21 @@ class DbManager
   }
 
   /**
+   * 注册最外层提交成功后的回调
+   *
+   * 内层回滚删除本层回调；无事务时立即执行。回调异常单独留痕，不改变已提交结果。
+   * 该机制只用于提交后加速操作，不提供进程崩溃后的持久化补执行保证。
+   *
+   * @param Closure $callback 无参数的提交后操作
+   * @return void 回调已登记或已立即尝试执行
+   * @throws DbException 当前事务已失效，仅允许回滚
+   */
+  public function afterCommit(Closure $callback): void
+  {
+    ConnectManager::factory()->afterCommit($callback);
+  }
+
+  /**
    * 提交当前最内层事务
    *
    * 嵌套层提交仅释放该层保存点（数据仍受外层保护）；

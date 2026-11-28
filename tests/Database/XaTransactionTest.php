@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
+/* 职责：验证 XA 协议、分支恢复和提交后回调，不调用业务任务。 */
+
 namespace Viswoole\Tests\Database;
 
-use Exception;
 use Override;
 use PDO;
 use PDOStatement;
 use PHPUnit\Framework\TestCase;
 use ReflectionProperty;
 use RuntimeException;
-use function Swoole\Coroutine\run;
 use Viswoole\Core\App;
 use Viswoole\Core\Server\ServerEventHook;
 use Viswoole\Database\Channel;
@@ -26,6 +26,8 @@ use Viswoole\Database\Raw;
 use Viswoole\Database\Transaction\XaCoordinator;
 use Viswoole\Database\Transaction\XaJournal;
 use Viswoole\Database\Transaction\XaRecovery;
+
+use function Swoole\Coroutine\run;
 
 /**
  * XA 两阶段提交测试
@@ -56,21 +58,28 @@ class XaTransactionTest extends TestCase
   }
 
   /**
-   * 场景1：正常提交的两阶段协议时序
+   * 正常提交的两阶段协议时序与回调
+   *
+   * 所有分支提交并释放事务上下文后才执行成功回调。
+   *
+   * @return void 协议、连接归还与回调时机正确
    */
   public function testTwoPhaseCommitProtocolSequence(): void
   {
     $journalChannel = new XaRecordingChannel();
     $channelA = new XaRecordingChannel();
     $channelB = new XaRecordingChannel();
-    run(function () use ($journalChannel, $channelA, $channelB): void {
+    $callbackLevel = null;
+    run(function () use ($journalChannel, $channelA, $channelB, &$callbackLevel): void {
       $manager = ConnectManager::factory();
       $manager->startXa(new XaJournal($journalChannel, 'jt'));
       $manager->pop($channelA, 'write');
       $manager->pop($channelB, 'write');
+      $manager->afterCommit(function () use ($manager, &$callbackLevel): void { $callbackLevel = $manager->transactionLevel(); });
       $manager->commit();
       self::assertSame(0, $manager->transactionLevel());
     });
+    self::assertSame(0, $callbackLevel, '所有 XA 分支确认提交并清理后才执行回调');
     // 分支 xid 共享 gtrid 前缀且互不相同
     $startA = $this->firstSqlMatching($channelA->log, '/^XA START /');
     $startB = $this->firstSqlMatching($channelB->log, '/^XA START /');
@@ -98,8 +107,11 @@ class XaTransactionTest extends TestCase
   }
 
   /**
-   * 场景2（复现测试）：第二分支 XA COMMIT 失败——不得静默回滚已 prepared 分支，
-   * journal 留存 prepared 行交由恢复任务补齐，连接归还但事务在服务端保持未决
+   * 第二分支提交失败保留未决事务
+   *
+   * 不回滚 prepared 分支，不执行成功回调，日志留待恢复任务补齐。
+   *
+   * @return void 未决状态、连接归还与回调抑制正确
    */
   public function testCommitFailureOnSecondBranchKeepsInDoubtState(): void
   {
@@ -112,11 +124,13 @@ class XaTransactionTest extends TestCase
         throw new RuntimeException('模拟第二通道 XA COMMIT 失败');
       }
     };
-    run(function () use ($journalChannel, $channelA, $channelB): void {
+    $callbackCalled = false;
+    run(function () use ($journalChannel, $channelA, $channelB, &$callbackCalled): void {
       $manager = ConnectManager::factory();
       $manager->startXa(new XaJournal($journalChannel, 'jt'));
       $manager->pop($channelA, 'write');
       $manager->pop($channelB, 'write');
+      $manager->afterCommit(function () use (&$callbackCalled): void { $callbackCalled = true; });
       try {
         $manager->commit();
         self::fail('提交失败应向外抛出异常');
@@ -124,6 +138,7 @@ class XaTransactionTest extends TestCase
         // 预期异常：调用方感知失败，未决事务交由恢复任务收敛
       }
     });
+    self::assertFalse($callbackCalled, 'XA 部分提交不能执行成功回调');
     // 第一分支已 XA COMMIT（无法撤回），第二分支不得被回滚或提交
     self::assertNotNull($this->firstSqlMatching($channelA->log, '/^XA COMMIT /'));
     self::assertNull($this->firstSqlMatching($channelB->log, '/^XA COMMIT /'), '失败分支不应被继续提交');
@@ -135,6 +150,40 @@ class XaTransactionTest extends TestCase
     // 连接仍被归还（prepared 事务由服务端持有，连接可复用）
     self::assertCount(1, $channelA->puts);
     self::assertCount(1, $channelB->puts);
+  }
+
+  /**
+   * 协程退出主动清理捕获管理器的 XA 回调
+   *
+   * 未结束分支仍须执行 END 与 ROLLBACK，不能被循环引用延迟到 GC。
+   *
+   * @return void 分支已回滚且提交回调未执行
+   */
+  public function testCoroutineExitRollsBackXaDespiteCallbackCycle(): void
+  {
+    $journal = new XaRecordingChannel();
+    $channel = new XaRecordingChannel();
+    $wasGcEnabled = gc_enabled();
+    $called = false;
+    gc_disable();
+    try {
+      run(static function () use ($journal, $channel, &$called): void {
+        $manager = ConnectManager::factory();
+        $manager->startXa(new XaJournal($journal, 'jt'));
+        $manager->pop($channel, 'write');
+        $manager->afterCommit(static function () use ($manager, &$called): void {
+          $called = true;
+          $manager->transactionLevel();
+        });
+      });
+      $rollback = $this->firstSqlMatching($channel->log, '/^XA ROLLBACK /');
+    } finally {
+      gc_collect_cycles();
+      if ($wasGcEnabled) { gc_enable(); }
+    }
+    self::assertNotNull($rollback, 'XA 事务须在协程退出时回滚，而非等待循环 GC');
+    self::assertFalse($called);
+    self::assertCount(1, $channel->puts);
   }
 
   /**
@@ -407,14 +456,14 @@ class XaTransactionTest extends TestCase
   public function testJournalRejectsMalformedGtrid(): void
   {
     $journal = new XaJournal(new XaRecordingChannel(), 'jt');
-    $malformed = ["vw' OR '1'='1", "vw; DROP TABLE t--", "vw\nabc", ''];
+    $malformed = ["vw' OR '1'='1", 'vw; DROP TABLE t--', "vw\nabc", ''];
     $rejected = 0;
     foreach ($malformed as $gtrid) {
       foreach (
         [
-          fn() => $journal->recordPrepareStart($gtrid, []),
-          fn() => $journal->markPrepared($gtrid),
-          fn() => $journal->remove($gtrid),
+          fn () => $journal->recordPrepareStart($gtrid, []),
+          fn () => $journal->markPrepared($gtrid),
+          fn () => $journal->remove($gtrid),
         ] as $write
       ) {
         try {
@@ -675,7 +724,7 @@ class XaTransactionTest extends TestCase
     );
     // 目标分支被 XA COMMIT、目标行被删除
     self::assertNotNull($this->firstSqlMatching($channelTarget->log, '/^XA COMMIT /'));
-    self::assertStringContainsString("DELETE FROM", implode(';', $journalChannel->log));
+    self::assertStringContainsString('DELETE FROM', implode(';', $journalChannel->log));
     self::assertStringContainsString($gtridTarget, implode(';', $journalChannel->log));
     // 其他 gtrid 的分支不动、行不删
     self::assertNull($this->firstSqlMatching($channelOther->log, '/^XA (COMMIT|ROLLBACK) /'), '未过滤命中的分支不得被处置');
@@ -898,7 +947,7 @@ class XaTransactionTest extends TestCase
    */
   public function testCommitAbortsWhenCommitIntentRowMissing(): void
   {
-    $journalChannel = new class extends XaRecordingChannel {
+    $journalChannel = new class () extends XaRecordingChannel {
       #[Override]
       public function pop(string $type): PDO
       {
@@ -993,7 +1042,7 @@ class XaTransactionTest extends TestCase
    */
   public function testCommitHeartbeatFailureLeavesInDoubt(): void
   {
-    $journalChannel = new class extends XaRecordingChannel {
+    $journalChannel = new class () extends XaRecordingChannel {
       /** @var int 已执行的心跳刷新次数 */
       public int $heartbeats = 0;
 
@@ -1113,7 +1162,7 @@ class XaTransactionTest extends TestCase
   public function testRecoveryReReadsRowStateBeforeDisposal(): void
   {
     $gtrid = 'vw' . str_repeat('5c', 8);
-    $journalChannel = new class extends XaRecordingChannel {
+    $journalChannel = new class () extends XaRecordingChannel {
       #[Override]
       public function pop(string $type): PDO
       {
@@ -1128,8 +1177,8 @@ class XaTransactionTest extends TestCase
           #[Override]
           public function query(
             string $sql,
-            ?int   $fetchMode = null,
-            mixed  ...$fetchModeArgs
+            ?int $fetchMode = null,
+            mixed ...$fetchModeArgs
           ): PDOStatement|false {
             // stateOf 重读：返回协调者翻转后的 prepared 状态
             if (str_contains($sql, 'SELECT state FROM')) {
@@ -1170,7 +1219,7 @@ class XaTransactionTest extends TestCase
   public function testRecoverySkipsRowDeletedByConcurrentRecovery(): void
   {
     $gtrid = 'vw' . str_repeat('5d', 8);
-    $journalChannel = new class extends XaRecordingChannel {
+    $journalChannel = new class () extends XaRecordingChannel {
       #[Override]
       public function pop(string $type): PDO
       {
@@ -1185,8 +1234,8 @@ class XaTransactionTest extends TestCase
           #[Override]
           public function query(
             string $sql,
-            ?int   $fetchMode = null,
-            mixed  ...$fetchModeArgs
+            ?int $fetchMode = null,
+            mixed ...$fetchModeArgs
           ): PDOStatement|false {
             // stateOf 重读：行已被并发恢复任务删除
             if (str_contains($sql, 'SELECT state FROM')) {
@@ -1246,7 +1295,7 @@ class XaTransactionTest extends TestCase
   public function testMigrationRaceLoserRecoversViaReprobe(): void
   {
     $table = 'race' . uniqid(); // 独立表名：隔离本用例的 schema 模拟状态
-    $journalChannel = new class extends XaRecordingChannel {
+    $journalChannel = new class () extends XaRecordingChannel {
       /** @var int ALTER 尝试次数 */
       public int $alterAttempts = 0;
 
@@ -1302,7 +1351,7 @@ class XaTransactionTest extends TestCase
   private function firstSqlMatching(array $log, string $pattern): ?string
   {
     foreach ($log as $sql) {
-      if (preg_match($pattern, $sql) === 1) return $sql;
+      if (preg_match($pattern, $sql) === 1) { return $sql; }
     }
     return null;
   }
@@ -1326,7 +1375,7 @@ class XaTransactionTest extends TestCase
   private function registerChannels(array $channels): void
   {
     $db = App::factory()->make(DbManager::class);
-    foreach ($channels as $name => $channel) $db->addChannel($name, $channel);
+    foreach ($channels as $name => $channel) { $db->addChannel($name, $channel); }
   }
 
   /**
@@ -1343,14 +1392,14 @@ class XaTransactionTest extends TestCase
    */
   private function runRecoveryWith(
     array $channels,
-    bool   $youngRow = false,
+    bool $youngRow = false,
     ?array $journalRows = null,
     ?string $onlyGtrid = null,
-    bool   $dryRun = false
+    bool $dryRun = false
   ): string
   {
     $db = App::factory()->make(DbManager::class);
-    foreach ($channels as $name => $channel) $db->addChannel($name, $channel);
+    foreach ($channels as $name => $channel) { $db->addChannel($name, $channel); }
     $journalChannel = $channels['xa_journal'];
     if ($journalRows !== null) {
       $journalChannel->selectRows = $journalRows;
@@ -1358,7 +1407,7 @@ class XaTransactionTest extends TestCase
       // 按业务通道的未决 xid 推导 journal 模拟行
       $rows = [];
       foreach ($channels as $channel) {
-        if ($channel === $journalChannel) continue;
+        if ($channel === $journalChannel) { continue; }
         foreach ($channel->recoverRows as $xid) {
           $gtrid = preg_replace('/-b\d+$/', '', $xid);
           $rows[$gtrid] = [
@@ -1418,10 +1467,10 @@ class XaRecordingChannel extends Channel
 
   #[Override]
   public function execute(
-    string|Raw   $sql,
-    array        $bindings = [],
+    string|Raw $sql,
+    array $bindings = [],
     false|string $getId = false,
-    bool         $master = false
+    bool $master = false
   ): \Swoole\Database\PDOStatementProxy|PDOStatement|int|string
   {
     // 模拟 PDOChannel::execute 的事务接入行为：事务期间经 ConnectManager pop/put
@@ -1476,15 +1525,15 @@ class XaRecordingConnection extends PDO
 
   #[Override]
   public function query(
-    string        $sql,
-    ?int          $fetchMode = null,
-    mixed         ...$fetchModeArgs
+    string $sql,
+    ?int $fetchMode = null,
+    mixed ...$fetchModeArgs
   ): PDOStatement|false
   {
     $this->owner->log[] = $sql;
     if (preg_match('/^\s*XA\s+RECOVER/i', $sql) === 1) {
       return $this->statementFor(['formatID', 'gtrid_length', 'bqual_length', 'data'], array_map(
-        fn(string $xid): array => [
+        fn (string $xid): array => [
           'formatID' => 1,
           'gtrid_length' => strlen($xid),
           'bqual_length' => 0,
@@ -1517,16 +1566,16 @@ class XaRecordingConnection extends PDO
   protected function statementFor(array $columns, array $rows): PDOStatement
   {
     parent::exec('DROP TABLE IF EXISTS mock_result');
-    $definitions = implode(', ', array_map(fn(string $c): string => "\"$c\"", $columns));
+    $definitions = implode(', ', array_map(fn (string $c): string => "\"$c\"", $columns));
     parent::exec("CREATE TABLE mock_result ($definitions)");
     foreach ($rows as $row) {
       $values = implode(', ', array_map(
-        fn(mixed $v): string => is_int($v) ? (string)$v : parent::quote((string)$v),
+        fn (mixed $v): string => is_int($v) ? (string)$v : parent::quote((string)$v),
         array_values($row)
       ));
       parent::exec("INSERT INTO mock_result VALUES ($values)");
     }
-    $select = implode(', ', array_map(fn(string $c): string => "\"$c\"", $columns));
+    $select = implode(', ', array_map(fn (string $c): string => "\"$c\"", $columns));
     return parent::query("SELECT $select FROM mock_result");
   }
 }
