@@ -153,20 +153,28 @@ class TaskManager
         return false;
       }
     }
-    return new TaskQueueConsumer($this->taskQueue(), $this->instanceId)->execute($task, $server, [
-      'validate' => function () use ($topic, $task): void {
-        $this->has($topic);
-        if ($this->isExpired($task->data)) {
-          throw new RuntimeException('任务已过期');
-        }
-      },
-      'handle' => fn (TaskProxy $proxy, SwooleServer $server): mixed => ($this->topics[strtolower(
-        $topic
-      )])(
-        $proxy,
-        $server
-      ),
-    ]);
+    try {
+      $queue = $this->taskQueue();
+      return new TaskQueueConsumer($queue, $this->instanceId)->execute($task, $server, [
+        'validate' => function () use ($topic, $task, $queue): void {
+          $this->has($topic);
+          // 队列消费边界统一使用存储端时钟判定有效期，避免跨节点应用时钟偏差。
+          if ($queue->isExpired($task->data)) {
+            throw new RuntimeException('任务已过期');
+          }
+        },
+        'handle' => fn (TaskProxy $proxy, SwooleServer $server): mixed => ($this->topics[strtolower(
+          $topic
+        )])(
+          $proxy,
+          $server
+        ),
+      ]);
+    } catch (Throwable $exception) {
+      // 与非队列路径对齐：消费入口异常不得穿透到 Swoole onTask 回调。
+      TaskQueueLog::write('队列任务消费入口异常', ['exception' => (string)$exception]);
+      return false;
+    }
   }
 
   /**

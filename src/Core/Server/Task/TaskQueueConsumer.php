@@ -46,17 +46,38 @@ final readonly class TaskQueueConsumer
    */
   public function execute(Task $task, Server $server, array $callbacks): mixed
   {
-    $lease = $this->queue->consume($task->data, $this->instanceId, $server->worker_id);
+    try {
+      $lease = $this->queue->consume($task->data, $this->instanceId, $server->worker_id);
+    } catch (Throwable $exception) {
+      // 认领失败不改变受理事实；投递租约由恢复扫描到期接管，返回失败信号保持 Swoole 语义。
+      TaskQueueLog::write('任务消费认领异常，等待恢复投递：' . ($task->data['queueId'] ?? ''), [
+        'exception' => (string)$exception,
+      ]);
+      return false;
+    }
     if ($lease === null) { return false; }
     try {
       ($callbacks['validate'])();
     } catch (Throwable $exception) {
-      $this->queue->fail($lease, $exception->getMessage(), true);
+      try {
+        $this->queue->fail($lease, $exception->getMessage(), true);
+      } catch (Throwable $storageFailure) {
+        // 终态提交失败不能让异常穿透消费入口；租约到期由恢复扫描进入失败流程。
+        TaskQueueLog::write('校验失败状态提交异常，等待租约接管：' . $lease['queueId'], [
+          'exception' => (string)$storageFailure,
+        ]);
+      }
       return false;
     }
     $timer = $this->startRenewal($lease);
     try {
-      $task->data = $this->queue->decodeDelivery($task->data);
+      try {
+        $task->data = $this->queue->decodeDelivery($task->data);
+      } catch (Throwable $exception) {
+        // 载荷无法恢复的任务重试注定失败，直接终态进入失败队列供人工处置。
+        $this->recordFailure($lease, $exception, true);
+        return false;
+      }
       $proxy = new TaskProxy($task, fn (): bool => $this->queue->renew($lease));
       $result = ($callbacks['handle'])($proxy, $server);
       if (!$this->queue->ack($lease)) {
@@ -103,12 +124,13 @@ final readonly class TaskQueueConsumer
    * 记录任务执行失败并留痕原始异常
    * @param array $lease 当前执行令牌
    * @param Throwable $exception 原始异常
+   * @param bool $terminal 是否直接进入失败队列
    * @return void
    */
-  private function recordFailure(array $lease, Throwable $exception): void
+  private function recordFailure(array $lease, Throwable $exception, bool $terminal = false): void
   {
     try {
-      $this->queue->fail($lease, $exception::class . ': ' . $exception->getMessage());
+      $this->queue->fail($lease, $exception::class . ': ' . $exception->getMessage(), $terminal);
     } catch (Throwable $storageFailure) {
       TaskQueueLog::write(
         '记录任务失败状态异常，等待租约恢复',

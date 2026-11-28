@@ -288,5 +288,23 @@ final class TaskQueue
     return $this->store->decodeQueueDelivery($delivery);
   }
 
-
+  /**
+   * 以存储端时钟判定任务有效期
+   *
+   * 队列消费边界统一使用存储时钟，与租约、调度保持同一时钟域，
+   * 避免跨节点应用时钟偏差造成时效任务提前终态失败或延迟过期。
+   *
+   * @param array $taskData 任务数据（含 expire 与 dispatch_time）
+   * @return bool 已过期返回 true；未配置有效期、字段无效或未过期返回 false
+   * @throws \Throwable 存储时钟查询失败时抛出
+   */
+  public function isExpired(array $taskData): bool
+  {
+    $expire = $taskData['expire'] ?? null;
+    $dispatchTime = $taskData['dispatch_time'] ?? null;
+    // 0、null 或负数均视为长期有效（与缓存过期时间约定一致）
+    if (!is_numeric($expire) || (int)$expire <= 0) { return false; }
+    if (!is_numeric($dispatchTime)) { return false; }
+    return $this->store->now() > ((float)$dispatchTime + (int)$expire);
+  }
 }
