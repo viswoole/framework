@@ -131,6 +131,10 @@ final class AcceptanceManager extends TaskManager
 final class AcceptanceTransport
 {
   /**
+   * @var int 本机 IPC 调用数，持久化受理不应调用本机投递
+   */
+  public int $calls = 0;
+  /**
    * @var string IPC 故障模式
    */
   public string $mode = '';
@@ -148,6 +152,7 @@ final class AcceptanceTransport
    */
   public function task(array $data): int|false
   {
+    $this->calls++;
     if ($this->mode === 'throw') { throw new RuntimeException('IPC unavailable'); }
     if ($this->mode === 'retry-write') { $this->store->connection->mode = 'before'; }
     return $this->mode === '' ? 0 : false;

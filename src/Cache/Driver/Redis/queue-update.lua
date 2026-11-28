@@ -54,6 +54,34 @@ if nextValue ~= nil and stored ~= nil then
   end
   value = prefix .. cjson.encode(nextValue)
 end
+-- 节点容量与任务状态必须在同一个原子提交中检查和维护，不能只依赖领取前的数量快照。
+for index = 10, 11 do
+  local kind = redis.call('TYPE', KEYS[index]).ok
+  if kind ~= 'none' and kind ~= 'zset' then return redis.error_reply('Queue assignments must be a sorted set') end
+end
+local function hasAssignment(record)
+  return record and type(record.dispatchInstanceId) == 'string' and record.dispatchInstanceId ~= ''
+    and (record.queueState == 'dispatched' or record.queueState == 'running') and record.leaseUntil > 0
+end
+local nextMetadata = nextValue and nextValue.metadata or nil
+local clock = redis.call('TIME')
+local observedAt = tonumber(clock[1]) + tonumber(clock[2]) / 1000000
+local capacity = tonumber(ARGV[9]) or 0
+if capacity > 0 and hasAssignment(nextMetadata) then
+  local existing = tonumber(redis.call('ZSCORE', KEYS[11], ARGV[6])) or 0
+  if existing <= observedAt and redis.call('ZCOUNT', KEYS[11], '(' .. observedAt, '+inf') >= capacity then return 0 end
+end
+if stored and hasAssignment(stored.metadata) then
+  redis.call('ZREM', KEYS[10], ARGV[3])
+  if redis.call('ZCARD', KEYS[10]) == 0 then redis.call('DEL', KEYS[10]) end
+end
+if hasAssignment(nextMetadata) then
+  redis.call('ZREMRANGEBYSCORE', KEYS[11], '-inf', observedAt)
+  redis.call('ZADD', KEYS[11], nextMetadata.leaseUntil, ARGV[6])
+  -- 租约续期同步延长容量索引寿命；节点消失后索引自行回收，不能提前于其他任务租约失效。
+  local last = redis.call('ZREVRANGE', KEYS[11], 0, 0, 'WITHSCORES')
+  redis.call('PEXPIREAT', KEYS[11], math.ceil(tonumber(last[2]) * 1000) + 1000)
+end
 -- 查询投影和业务状态同一原子提交，ACK、删除及重放不得留下旧身份。
 redis.call('HDEL', KEYS[8], ARGV[3])
 redis.call('ZREM', KEYS[9], ARGV[3])

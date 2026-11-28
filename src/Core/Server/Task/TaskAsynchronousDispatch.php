@@ -1,7 +1,7 @@
 <?php
 
 /*
- * 职责：向生产者报告受理结果；首次 IPC 和补偿失败不改变已经确认的受理事实。
+ * 职责：持久化异步任务进入共享就绪队列；非持久化任务仍直接投给本机。
  */
 declare(strict_types=1);
 
@@ -19,7 +19,7 @@ trait TaskAsynchronousDispatch
   /**
    * 受理异步任务
    *
-   * 持久化成功后由框架负责恢复，首次 IPC 失败不能使调用方误判未受理。
+   * 持久化成功后进入共享就绪队列，由有容量的节点领取；本入口不发起首次 IPC。
    * 非持久化投递保持原生返回值和异常语义。
    *
    * @param string $topic 已注册主题
@@ -42,37 +42,8 @@ trait TaskAsynchronousDispatch
     ];
     if (!$queue) { return Server::getServer()->task($taskData); }
     $taskQueue = $this->taskQueue();
-    $queueId = $taskQueue->enqueue($taskData, $this->instanceId . ':' . Server::getWorkerId());
-    // 提交已获得可靠回执；后续任何失败只能影响首次投递，不能改报未受理。
-    $this->dispatchAccepted($taskQueue, $queueId);
-    return $queueId;
+    // 受理不绑定执行节点；各节点正常消费与故障恢复共用同一领取路径。
+    return $taskQueue->enqueue($taskData, $this->instanceId . ':' . Server::getWorkerId(), true);
   }
 
-  /**
-   * 尽力投递已受理任务
-   *
-   * 信封读取或补偿写入不可用时保留原投递租约，由到期扫描接管。
-   *
-   * @param TaskQueue $queue 持久化队列
-   * @param string $queueId 已确认受理的身份
-   * @return void 首次投递已尝试，恢复责任仍归框架
-   */
-  private function dispatchAccepted(TaskQueue $queue, string $queueId): void
-  {
-    try {
-      $delivery = $queue->delivery($queueId);
-      try {
-        if (Server::getServer()->task($delivery) !== false) { return; }
-        $reason = 'Swoole 首次投递失败';
-      } catch (Throwable $exception) {
-        $reason = $exception::class . ': ' . $exception->getMessage();
-      }
-      $queue->deliveryFailed($delivery, $reason);
-      TaskQueueLog::write('任务已受理，等待恢复投递：' . $queueId);
-    } catch (Throwable $exception) {
-      TaskQueueLog::write('任务已受理，首次投递未完成：' . $queueId, [
-        'exception' => (string)$exception,
-      ]);
-    }
-  }
 }

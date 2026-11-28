@@ -1,4 +1,5 @@
 <?php
+
 /**
  * 职责：查询到期任务、状态元数据和不透明投递信封；不恢复业务对象或修改状态。
  */
@@ -17,23 +18,65 @@ use RuntimeException;
 trait QueueSchedule
 {
   /**
+   * 读取节点有效任务数
+   *
+   * 先回收过期成员，时间统一采用 Redis TIME；此查询只作预筛，容量上限由提交脚本保证。
+   *
+   * @param string $instanceId 节点身份
+   * @return int 仍有有效投递或执行租约的数量
+   * @throws \Throwable Redis 查询失败或节点身份无效
+   */
+  public function getQueueAssignmentCount(string $instanceId): int
+  {
+    if ($instanceId === '') { throw new InvalidArgumentException('节点身份不能为空'); }
+    $script = <<<'LUA'
+      local now = redis.call('TIME')
+      redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', tonumber(now[1]) + tonumber(now[2]) / 1000000)
+      return redis.call('ZCARD', KEYS[1])
+      LUA;
+    return (int)$this->withConnection(fn (\Redis $redis): mixed => $redis->eval(
+      $script,
+      [$this->queueAssignmentKey(['dispatchInstanceId' => $instanceId])],
+      1
+    ));
+  }
+
+  /**
+   * 解析节点容量索引键
+   *
+   * 节点身份只作为哈希输入，索引与普通任务使用同一个商店前缀。
+   *
+   * @param array|null $record 任务状态或节点身份
+   * @return string 底层 Redis 键
+   */
+  private function queueAssignmentKey(?array $record): string
+  {
+    return $this->getCacheKey('$_TASK_NODE_ASSIGNMENTS_:' . hash('sha256', $record['dispatchInstanceId'] ?? ''));
+  }
+
+  /**
    * 以 Redis 时间查询到期任务，读取不移除成员，认领依赖状态脚本去重。
+   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
    * @param int $limit 单轮数量上限
    * @return list<string> 到期任务标识
    * @throws \Throwable Redis 操作失败时抛出
    */
-  public function getDueQueue(int $limit = 100): array
+  public function getDueQueue(int $limit = 100, int $offset = 0): array
   {
-    if ($limit < 1 || $limit > 1000) throw new InvalidArgumentException('队列恢复批量大小必须在 1 到 1000 之间');
+    if ($limit < 1 || $limit > 1000) { throw new InvalidArgumentException('队列恢复批量大小必须在 1 到 1000 之间'); }
+    if ($offset < 0) { throw new InvalidArgumentException('队列扫描偏移不能小于0'); }
     $script = <<<'LUA'
       local now = redis.call('TIME')
       return redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', tonumber(now[1]) + tonumber(now[2]) / 1000000,
-        'LIMIT', 0, tonumber(ARGV[1]))
+        'LIMIT', tonumber(ARGV[2]), tonumber(ARGV[1]))
       LUA;
-    $ids = $this->withConnection(fn(\Redis $redis): mixed => $redis->eval($script,
-      [$this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY), $limit], 1));
-    if (!is_array($ids)) throw new RuntimeException('查询到期队列任务失败');
-    return array_map(static fn(string $id): string => unserialize($id, ['allowed_classes' => false]), $ids);
+    $ids = $this->withConnection(fn (\Redis $redis): mixed => $redis->eval(
+      $script,
+      [$this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY), $limit, $offset],
+      1
+    ));
+    if (!is_array($ids)) { throw new RuntimeException('查询到期队列任务失败'); }
+    return array_map(static fn (string $id): string => unserialize($id, ['allowed_classes' => false]), $ids);
   }
 
   /**
@@ -44,7 +87,7 @@ trait QueueSchedule
    */
   public function now(): float
   {
-    $time = $this->withConnection(fn(\Redis $redis): array => $redis->time());
+    $time = $this->withConnection(fn (\Redis $redis): array => $redis->time());
     return (float)$time[0] + (float)$time[1] / 1000000;
   }
 
@@ -56,8 +99,8 @@ trait QueueSchedule
    */
   public function getQueueMetadata(string $key): ?array
   {
-    $raw = $this->withConnection(fn(\Redis $redis): mixed => $redis->get($this->getCacheKey($key)));
-    if ($raw === false) return null;
+    $raw = $this->withConnection(fn (\Redis $redis): mixed => $redis->get($this->getCacheKey($key)));
+    if ($raw === false) { return null; }
     return $this->decodeStoredQueue($key, $raw)['metadata'];
   }
 
@@ -69,8 +112,8 @@ trait QueueSchedule
    */
   public function getQueueDelivery(string $key): ?array
   {
-    $raw = $this->withConnection(fn(\Redis $redis): mixed => $redis->get($this->getCacheKey($key)));
-    if ($raw === false) return null;
+    $raw = $this->withConnection(fn (\Redis $redis): mixed => $redis->get($this->getCacheKey($key)));
+    if ($raw === false) { return null; }
     $envelope = $this->decodeStoredQueue($key, $raw);
     return $envelope['metadata'] + ['queuePayload' => $envelope['payload']];
   }
@@ -85,9 +128,9 @@ trait QueueSchedule
   private function decodeStoredQueue(string $key, string $raw): array
   {
     try {
-      if (!QueueRecord::isEncoded($raw)) throw new RuntimeException('队列信封标识无效');
+      if (!QueueRecord::isEncoded($raw)) { throw new RuntimeException('队列信封标识无效'); }
       $envelope = QueueRecord::decode($raw);
-      if ($envelope['metadata']['queueId'] !== $key) throw new RuntimeException('任务标识与存储键不一致');
+      if ($envelope['metadata']['queueId'] !== $key) { throw new RuntimeException('任务标识与存储键不一致'); }
       return $envelope;
     } catch (\JsonException|RuntimeException $exception) {
       throw new QueueRecordException($key, $raw, $exception);

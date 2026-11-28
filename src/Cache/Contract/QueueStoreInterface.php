@@ -65,12 +65,24 @@ interface QueueStoreInterface extends AtomicCacheDriverInterface
   public function supportsQueueOperations(): bool;
 
   /**
+   * 查询节点仍持有效租约的任务数量
+   *
+   * 同时计算已投递待消费与正在执行任务；原子领取仍须再次检查容量。
+   *
+   * @param string $instanceId 执行节点身份
+   * @return int 有效分配数量
+   * @throws \Throwable 存储查询失败
+   */
+  public function getQueueAssignmentCount(string $instanceId): int;
+
+  /**
    * 获取到期任务标识，不读取业务载荷。
+   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
    * @param int $limit 单轮最多返回数量
    * @return list<string> 到期任务标识
    * @throws \Throwable Redis 查询失败时抛出
    */
-  public function getDueQueue(int $limit = 100): array;
+  public function getDueQueue(int $limit = 100, int $offset = 0): array;
 
   /**
    * 读取任务元数据，常规认领与续租不恢复业务对象。
@@ -126,7 +138,7 @@ interface QueueStoreInterface extends AtomicCacheDriverInterface
   /**
    * 校验版本或执行权后更新任务及索引，null 原值表示要求键不存在。
    * @param string $key 任务键
-   * @param array{expected: ?array, value: ?array, remove?: string, add?: string, target?: string, deadline?: float|int} $change 状态与索引；deadline > 0 时按令牌、状态和存储中当前期限校验执行权；target 用于原子重放
+   * @param array{expected: ?array, value: ?array, remove?: string, add?: string, target?: string, deadline?: float|int, capacity?: int} $change 状态与索引；deadline > 0 时按令牌、状态和存储中当前期限校验执行权；target 用于原子重放；capacity > 0 时必须在同一提交中校验目标节点容量
    * @return bool 版本或执行权匹配且提交成功
    * @throws \Viswoole\Cache\Exception\QueueCommitUnknownException 命令可能已提交但未取得可靠回执时必须抛出
    * @throws \RuntimeException 提交前准备失败或明确拒绝时抛出

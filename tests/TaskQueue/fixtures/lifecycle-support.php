@@ -30,7 +30,7 @@ namespace Viswoole\Core\Server\Task {
   function random_int(int $minimum, int $maximum): int
   {
     $GLOBALS['queueTimerMinimum'] = $minimum;
-    if ($minimum > $maximum) throw new \ValueError('invalid timer range');
+    if ($minimum > $maximum) { throw new \ValueError('invalid timer range'); }
     return $minimum;
   }
 }
@@ -79,11 +79,19 @@ namespace {
   final class LifecycleBrokenRedis extends \Viswoole\Cache\Driver\Redis
   {
     /**
-     * @param int $limit 单轮查询上限
+     * 返回无在途任务，不连接 Redis，保留真实到期扫描故障路径。
+     * @param string $instanceId 节点身份
+     * @return int 固定零
+     */
+    public function getQueueAssignmentCount(string $instanceId): int { return 0; }
+
+    /**
+     * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
+   * @param int $limit 单轮查询上限
      * @return array 始终抛出索引查询错误
      * @throws \RuntimeException 固定注入的查询故障
      */
-    public function getDueQueue(int $limit = 100): array
+    public function getDueQueue(int $limit = 100, int $offset = 0): array
     {
       throw new \RuntimeException('injected scan failure');
     }

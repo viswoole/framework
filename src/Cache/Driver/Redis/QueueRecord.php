@@ -118,7 +118,7 @@ final class QueueRecord
     foreach (['queueId', 'queueGroup', 'queueToken', 'queueRevision', 'topic'] as $field) {
       if (!is_string($metadata[$field] ?? null)) { throw new RuntimeException('队列元数据字段无效：' . $field); }
     }
-    foreach (['producerInstanceId', 'executionInstanceId'] as $field) {
+    foreach (['producerInstanceId', 'executionInstanceId', 'dispatchInstanceId'] as $field) {
       if (isset($metadata[$field]) && (!is_string($metadata[$field]) || $metadata[$field] === '')) {
         throw new RuntimeException('队列实例身份无效：' . $field);
       }

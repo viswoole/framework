@@ -52,7 +52,7 @@ trait QueueOperations
     try {
       $result = $this->withConnection(function (\Redis $redis) use ($script, $arguments, &$isCommandStarted): mixed {
         $isCommandStarted = true;
-        return $redis->eval($script, $arguments, 9);
+        return $redis->eval($script, $arguments, 11);
       });
     } catch (Throwable $exception) {
       if (!$isCommandStarted) { throw $exception; }
@@ -75,7 +75,8 @@ trait QueueOperations
   {
     $remove = $change['remove'] ?? '';
     $add = $change['add'] ?? '';
-    $payload = $raw === false ? null : $this->decodeStoredQueue($key, $raw)['payload'];
+    $previous = $raw === false ? null : $this->decodeStoredQueue($key, $raw);
+    $payload = $previous['payload'] ?? null;
     $value = $change['value'];
     $encoded = $value === null ? '' : QueueRecord::encode(
       $value,
@@ -86,11 +87,12 @@ trait QueueOperations
       $this->getCacheKey($change['target'] ?? $key), $this->getCacheKey(QueueStoreInterface::SCHEDULE_KEY),
       $this->getCacheKey(QueueStoreInterface::DIRECTORY_KEY),
       $this->getCacheKey(QueueStoreInterface::QUERY_METADATA_KEY), $this->getCacheKey(QueueStoreInterface::QUERY_IDS_KEY),
+      $this->queueAssignmentKey($previous['metadata'] ?? null), $this->queueAssignmentKey($value),
       json_encode($change['expected'] === null ? null : QueueRecord::metadata($change['expected']), JSON_THROW_ON_ERROR), $encoded,
       serialize($key), $remove === '' ? '' : serialize($remove),
       $add === '' ? '' : serialize($add), serialize($change['target'] ?? $key),
       (string)($change['deadline'] ?? 0),
-      QueueRecord::PREFIX];
+      QueueRecord::PREFIX, (int)($change['capacity'] ?? 0)];
   }
 
   /**

@@ -44,7 +44,7 @@ Task::register('report.build', function (TaskProxy $task): array {
 
 **投递受理契约（破坏性变更）：**
 
-- `emit(..., queue: true): string|false`：持久化提交得到确认后返回稳定队列 ID（48 位十六进制字符串），不再返回 Swoole 整数 ID。首次 IPC 返回 false、抛异常、提交后的信封读取失败或补偿写入失败，均不改变已受理结果；框架保留恢复入口。
+- `emit(..., queue: true): string|false`：持久化提交得到确认后返回稳定队列 ID（48 位十六进制字符串），不再返回 Swoole 整数 ID。受理入口不发起本机首次 IPC；共享队列由有容量的节点领取，本机 IPC 失败不撤销受理，框架保留恢复入口。
 - 停机期间返回 `false`，表示本次调用未受理；未知主题、配置、序列化及提交前读取错误仍抛普通异常，尚未受理。
 - Redis 原子命令未取得可靠回执时抛 `Viswoole\Core\Server\Task\TaskAcceptanceUnknownException`，`queueId` 保存本次尝试身份，原始故障保留在异常链中。此时可能已受理，禁止按普通失败同步降级或创建新任务；应保留业务身份进行核对。原任务可能已完成并 ACK，查不到队列记录也不能单独证明未受理。
 - `emit(..., queue: false): int|false` 保持原生 Swoole 投递结果（包括任务 ID 0）及异常，不提供持久化恢复。
@@ -189,3 +189,9 @@ docker run --rm --network none -v "$PWD:/workspace:ro" --entrypoint php viswoole
 统计同样返回 errors 和 isComplete，数量只包含可正确读取且匹配的任务；isComplete=false 时是已知有效记录数量，不能展示成精确总数。损坏记录无法可靠判断筛选归属时也会报告，不静默假定其不匹配。单条详情损坏仍抛出包含 queueId 的明确异常，不把损坏伪装成不存在。查询不会删除、隔离或重建数据，存储连接故障仍正常抛出。
 
 `QueryCorruptionTest.php` 覆盖损坏 JSON、非对象、非有限数字、未知状态、非法租约、失败原因编码损坏、身份不一致、元数据缺失、统计不完整、游标继续及查询前后 Redis 字节不变。
+
+## 共享队列与多节点运行时
+
+`ClusterDispatchTest` 用随机 Redis 前缀测试容量 CAS、错误节点拒收、租约过期跨节点接管及人工重投身份关联。`ClusterRuntimeTest` 启动两个真实多进程 Swoole HTTP 服务，验证单生产节点的任务被双方执行、节点容量上限、强制终止执行节点后的恢复、原生停机排空及本机同步结果。所有子进程均通过独立进程组运行器校验并清理，结束后删除随机测试键。
+
+受理测试使用共享停机标记验证拒收；原生服务停机由真实生命周期场景验证，不对未启动的原生 Server 调用停机统计接口。

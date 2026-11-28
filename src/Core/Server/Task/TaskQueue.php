@@ -77,6 +77,20 @@ final class TaskQueue
   }
 
   /**
+   * 查询节点当前的有效分配数量
+   *
+   * 投递中与执行中任务共同占用额度，失效租约不再阻塞接管。
+   *
+   * @param string $instanceId 执行节点身份
+   * @return int 当前有效分配数量
+   * @throws \Throwable 存储查询失败
+   */
+  public function assignedCount(string $instanceId): int
+  {
+    return $this->store->getQueueAssignmentCount($instanceId);
+  }
+
+  /**
    * 配置失败重试参数
    * @param array $retry 重试参数
    * @return void
@@ -116,16 +130,17 @@ final class TaskQueue
    * 按比较交换语义原子提交状态与索引变更
    * @param array|null $before 期望旧状态
    * @param array|null $after 提交新状态
-   * @param bool $isLeaseRequired 是否由 Redis 再次校验租约未到期
+   * @param array<string,bool|int> $options 可省略的执行租约校验 leaseRequired 与节点容量 capacity
    * @return bool 是否提交成功
    * @throws \Throwable 存储操作或相关回调失败且无法在本层处理时抛出
    */
-  private function commit(?array $before, ?array $after, bool $isLeaseRequired = false): bool
+  private function commit(?array $before, ?array $after, array $options = []): bool
   {
     $record = $after ?? $before;
     return $this->store->updateQueue($record['queueId'], [
       'expected' => $before, 'value' => $after,
-      'deadline' => $isLeaseRequired ? $before['leaseUntil'] : 0,
+      'deadline' => ($options['leaseRequired'] ?? false) ? $before['leaseUntil'] : 0,
+      'capacity' => $options['capacity'] ?? 0,
       'remove' => $before === null ? '' : $this->index($before),
       'add' => $after === null ? '' : $this->index($after),
     ]);
@@ -161,12 +176,12 @@ final class TaskQueue
       throw new \InvalidArgumentException('执行实例或 Worker 身份无效');
     }
     $before = $this->owned($data, 'dispatched');
-    if ($before === null) { return null; }
+    if ($before === null || (isset($before['dispatchInstanceId']) && $before['dispatchInstanceId'] !== $instanceId)) { return null; }
     $after = $this->lease($before, 'running');
     $after['attempts'] = ($before['attempts'] ?? 0) + 1;
     $after['executionInstanceId'] = $instanceId;
     $after['executionWorkerId'] = $workerId;
-    return $this->commit($before, $after, true) ? $after : null;
+    return $this->commit($before, $after, ['leaseRequired' => true]) ? $after : null;
   }
 
   /**
@@ -193,7 +208,7 @@ final class TaskQueue
   public function ack(array $data): bool
   {
     $before = $this->owned($data);
-    return $before !== null && $this->commit($before, null, true);
+    return $before !== null && $this->commit($before, null, ['leaseRequired' => true]);
   }
 
   /**
@@ -208,7 +223,7 @@ final class TaskQueue
     if ($before === null) { return false; }
     $after = $before;
     $after['leaseUntil'] = $this->store->now() + $this->leaseSeconds;
-    return $this->commit($before, $after, true);
+    return $this->commit($before, $after, ['leaseRequired' => true]);
   }
 
   /**
@@ -244,7 +259,7 @@ final class TaskQueue
     $after['executionInstanceId'] = null;
     $after['executionWorkerId'] = null;
     $after['retryAt'] = $now + $this->delay($before['attempts']);
-    return $this->commit($before, $after, !($options['isExpired'] ?? false));
+    return $this->commit($before, $after, ['leaseRequired' => !($options['isExpired'] ?? false)]);
   }
 
   /**

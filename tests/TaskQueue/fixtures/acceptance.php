@@ -65,6 +65,7 @@ namespace {
       $store->hasReadFailure = false;
       $store->connection->mode = '';
     }
+    $results['sharedReady'] = $transport->calls === 0;
     foreach (['unknownCommitted' => 'after', 'unknownNotCommitted' => 'before', 'unknownFalse' => 'false'] as $name => $mode) {
       $store->connection->mode = $mode;
       try {
@@ -126,7 +127,8 @@ namespace {
     }
     $results['recoveredOnce'] = count($accepted) === 5 && $calls === 5;
     ShutdownRuntime::prepare();
-    ShutdownRuntime::stopping(new Swoole\Server('127.0.0.1', 0, SWOOLE_BASE));
+    // 仅验证受理入口读取共享停机标记；原生停机生命周期由真实服务场景覆盖。
+    (new ReflectionProperty(ShutdownRuntime::class, 'isStopping'))->getValue()->set(1);
     $before = count($store->connection->keys($prefix . '*'));
     $results['stoppingRejected'] = $manager->emit('demo', []) === false && $before === count($store->connection->keys($prefix . '*'));
     echo json_encode($results, JSON_THROW_ON_ERROR);

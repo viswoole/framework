@@ -136,15 +136,31 @@ final readonly class MonitoredDriver implements QueueStoreInterface
   }
 
   /**
+   * 转发节点容量查询
+   *
+   * 使用当前商店的任务命名空间，保持观察装饰器与底层驱动能力一致。
+   *
+   * @param string $instanceId 节点身份
+   * @return int 当前有效分配数量
+   * @throws \Throwable 查询失败
+   */
+  public function getQueueAssignmentCount(string $instanceId): int
+  {
+    if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列容量查询'); }
+    return $this->invoke('getQueueAssignmentCount', [$instanceId]);
+  }
+
+  /**
    * 透传到期任务查询
+   * @param int $offset 到期集合起始偏移，用于跳过本轮无法领取的任务
    * @param int $limit 单轮数量上限
    * @return array 底层驱动结果
    * @throws \Throwable 底层存储失败时抛出
    */
-  public function getDueQueue(int $limit = 100): array
+  public function getDueQueue(int $limit = 100, int $offset = 0): array
   {
     if (!$this->supportsQueueOperations()) { throw new RuntimeException('缓存驱动不支持可靠队列调度'); }
-    return $this->invoke('getDueQueue', [$limit]);
+    return $this->invoke('getDueQueue', [$limit, $offset]);
   }
 
   /**

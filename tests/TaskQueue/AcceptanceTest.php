@@ -53,7 +53,7 @@ final class AcceptanceTest extends TestCase
    */
   public static function provideBehaviors(): iterable
   {
-    foreach (['accepted', 'ipcFalse', 'ipcException', 'readFailure', 'retryWriteFailure',
+    foreach (['sharedReady', 'accepted', 'ipcFalse', 'ipcException', 'readFailure', 'retryWriteFailure',
       'unknownCommitted', 'unknownNotCommitted', 'unknownFalse', 'connectionRejected', 'serializationRejected',
       'directZero', 'directFalse', 'directException', 'stoppingRejected', 'recoveredOnce'] as $name) {
       yield $name => [$name];

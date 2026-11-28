@@ -11,6 +11,7 @@ set_error_handler(static function (int $severity, string $message): never {
 $logPath = tempnam(sys_get_temp_dir(), 'queue-lifecycle-');
 $previousLog = ini_set('error_log', $logPath);
 $server = new \Swoole\Server('127.0.0.1', 0, SWOOLE_BASE);
+$server->set(['task_worker_num' => 1]);
 $results = [];
 try {
   invokeWorkerStart(new LifecycleCache(), $server);

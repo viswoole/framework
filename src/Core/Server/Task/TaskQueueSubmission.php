@@ -24,11 +24,12 @@ trait TaskQueueSubmission
    *
    * @param array $data 业务载荷
    * @param string $group 原始实例分组
+   * @param bool $ready 是否等待共享节点领取，不预占生产节点投递租约
    * @return string 已确认持久化的队列 ID
    * @throws TaskAcceptanceUnknownException 存储未返回可靠提交结果
    * @throws \Throwable 提交前准备失败或存储明确拒绝
    */
-  public function enqueue(array $data, string $group): string
+  public function enqueue(array $data, string $group, bool $ready = false): string
   {
     TaskTopicName::validate($data['topic'] ?? null);
     $data['queueId'] = bin2hex(random_bytes(24));
@@ -40,6 +41,10 @@ trait TaskQueueSubmission
     $data['executionWorkerId'] = null;
     $data['attempts'] = 0;
     $data = $this->lease($data, 'dispatched');
+    if ($ready) {
+      $data['leaseUntil'] = 0;
+      $data['retryAt'] = $this->store->now();
+    }
     try {
       if (!$this->commit(null, $data)) { throw new RuntimeException('持久化队列任务失败'); }
     } catch (QueueCommitUnknownException $exception) {

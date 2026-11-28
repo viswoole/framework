@@ -29,7 +29,6 @@ use Viswoole\Cache\Contract\CacheDriverInterface;
 use Viswoole\Cache\Contract\QueueStoreInterface;
 use Viswoole\Core\Config;
 use Viswoole\Core\Server\ServerEventHook;
-use Viswoole\Core\Server\Shutdown\ShutdownRuntime;
 
 /**
  * 任务管理器
@@ -44,6 +43,7 @@ class TaskManager
   use TaskTopicRegistry;
   use TaskSynchronousDispatch;
   use TaskAsynchronousDispatch;
+  use TaskClusterDispatch;
 
   /**
    * @var array<string,callable> 任务主题
@@ -89,38 +89,6 @@ class TaskManager
   }
 
   /**
-   * 启动期解析失败只留痕；emit() 实际使用队列时仍明确报告配置错误。
-   *
-   * @param SwooleServer $server 服务实例
-   * @param int $workerId 本地 Worker ID
-   * @return void
-   */
-  protected function startQueueRecovery(SwooleServer $server, int $workerId): void
-  {
-    if ($server->taskworker || $workerId !== 0) {
-      return;
-    }
-    try {
-      if (!TaskQueue::isSupported($this->queueStore())) {
-        return;
-      }
-      $this->taskQueue();
-    } catch (Throwable $exception) {
-      TaskQueueLog::write(
-        '任务队列缓存商店不可用，恢复扫描已跳过',
-        ['exception' => (string)$exception]
-      );
-      return;
-    }
-    $recover = function () use ($server): void {
-      $this->recoverTasks($server);
-    };
-    $recover();
-    // 启动扫描之外持续错峰重试，才能接管持有租约时崩溃的实例。
-    TaskQueueRecoveryTimer::start(1000, $recover);
-  }
-
-  /**
    * 惰性解析任务队列专用缓存驱动
    *
    * 读取 task.store 配置指定缓存商店名称；未配置时使用默认通道。
@@ -156,39 +124,6 @@ class TaskManager
       $this->taskQueue = $queue;
     }
     return $this->taskQueue;
-  }
-
-  /**
-   * 扫描故障与单条投递故障分别留痕，日志故障不打断周期恢复。
-   * @param SwooleServer $server 服务实例
-   * @return void
-   */
-  protected function recoverTasks(SwooleServer $server): void
-  {
-    if (ShutdownRuntime::isStopping()) {
-      return;
-    }
-    try {
-      $this->taskQueue()->recover(function (array $data) use ($server): int|false {
-        try {
-          $result = $server->task($data);
-          if ($result === false) {
-            TaskQueueLog::write('队列任务恢复投递失败：' . $data['queueId'], [
-              'topic' => $data['topic'], 'attempts' => $data['attempts'] ?? 0,
-            ]);
-          }
-          return $result;
-        } catch (Throwable $exception) {
-          TaskQueueLog::write(
-            '队列任务恢复投递异常：' . $data['queueId'],
-            ['exception' => (string)$exception]
-          );
-          return false;
-        }
-      });
-    } catch (Throwable $exception) {
-      TaskQueueLog::write('队列恢复异常，将于下个周期重试', ['exception' => (string)$exception]);
-    }
   }
 
   /**
